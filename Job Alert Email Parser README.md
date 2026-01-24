@@ -1,10 +1,10 @@
-# Job Alert Email Parser v3-10
+# Job Alert Email Parser v3-11
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, and adds them to an Airtable database.
 
 ## Overview
 
-This workflow runs on a schedule (every minute) to:
+This workflow runs on a schedule (every 5 minutes) to:
 1. Fetch unread job alert emails from Gmail
 2. Identify the source of each email
 3. Parse job listings using source-specific parsers
@@ -54,7 +54,7 @@ The workflow filters jobs to only include **customer support/success leadership 
 ## Workflow Nodes
 
 ### 1. Schedule Trigger
-- Runs every 1 minute
+- Runs every 5 minutes
 - Triggers the workflow automatically
 
 ### 2. Get many messages (Gmail)
@@ -75,12 +75,14 @@ The workflow filters jobs to only include **customer support/success leadership 
 - Handles various email formats (HTML, plain text, base64 encoded)
 - Extracts: title, company, location, salary, job URL, job ID
 - Deduplicates jobs within each email
+- Includes try-catch error handling to prevent parser failures from breaking the workflow
 
 ### 6. Has Jobs (IF Node)
 - Filters out emails where no jobs were found
 
 ### 7. Search records (Airtable)
 - Retrieves existing job URLs and title+company combinations
+- Filters to records from last 30 days for performance
 - Used for deduplication
 
 ### 8. Merge Inputs
@@ -172,6 +174,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-11**: Added try-catch error handling, increased schedule to 5 minutes, added Airtable 30-day date filter
 - **v3-10**: Fixed LinkedIn parser to correctly split job listings by newlines
 - **v3-9**: Added role filtering, fixed email ID tracking for labeling, added Jobright and Google Careers support
 - **v3-8**: Added role filter for support/success leadership
