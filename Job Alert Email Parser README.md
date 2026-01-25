@@ -148,7 +148,11 @@ The workflow filters jobs to only include **customer support/success leadership 
 ### Anthropic API (Claude) Setup
 - Required for AI job fit scoring
 - Get an API key from [console.anthropic.com](https://console.anthropic.com)
-- Open the "Rate Job Fit" node and replace `YOUR_API_KEY_HERE` with your key
+- **Store the key in Airtable** (not in the workflow):
+  1. Create a new table called "Config" in your Airtable base
+  2. Add two fields: `Key` (text) and `Value` (text)
+  3. Add one row: Key = `ANTHROPIC_API_KEY`, Value = your API key
+  4. Copy the table ID and update the "Get Config" node in the workflow
 - Uses Claude 3 Haiku model (most cost-effective, ~$0.001 per job)
 
 ## Customization
