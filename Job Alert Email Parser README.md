@@ -148,8 +148,7 @@ The workflow filters jobs to only include **customer support/success leadership 
 ### Anthropic API (Claude) Setup
 - Required for AI job fit scoring
 - Get an API key from [console.anthropic.com](https://console.anthropic.com)
-- Set the `ANTHROPIC_API_KEY` environment variable in n8n settings, OR
-- Replace `YOUR_API_KEY_HERE` in the "Rate Job Fit" node code
+- Open the "Rate Job Fit" node and replace `YOUR_API_KEY_HERE` with your key
 - Uses Claude 3 Haiku model (most cost-effective, ~$0.001 per job)
 
 ## Customization
