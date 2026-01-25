@@ -100,9 +100,9 @@ The workflow filters jobs to only include **customer support/success leadership 
 
 ### 11. Rate Job Fit (Code Node)
 - Calls Claude AI (Haiku) to evaluate each job against candidate profile
+- **Dynamically fetches profile** from GitHub: `tide-pool-agent-lens.md`
 - Returns a **Tide-Pool Score** (0-100) and **Tide-Pool Rationale** (1-2 sentences)
-- Uses candidate profile with 18+ years of customer success/support leadership experience
-- Evaluates based on: role level, compensation, location, company type
+- Profile updates take effect immediately on new jobs (no workflow changes needed)
 
 ### 12. Filter Empty
 - Removes empty items from the flow
