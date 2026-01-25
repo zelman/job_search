@@ -100,7 +100,7 @@ The workflow filters jobs to only include **customer support/success leadership 
 
 ### 11. Rate Job Fit (Code Node)
 - Calls Claude AI (Haiku) to evaluate each job against candidate profile
-- Returns a **Fit Score** (0-100) and **Fit Rationale** (1-2 sentences)
+- Returns a **Tide-Pool Score** (0-100) and **Tide-Pool Rationale** (1-2 sentences)
 - Uses candidate profile with 18+ years of customer success/support leadership experience
 - Evaluates based on: role level, compensation, location, company type
 
@@ -109,7 +109,7 @@ The workflow filters jobs to only include **customer support/success leadership 
 
 ### 13. Add to Airtable
 - Appends new job records to the Airtable table
-- Fields: Job Title, Company, Location, Source, Job URL, Job ID, Salary Info, Date Found, Review Status, **Fit Score**, **Fit Rationale**
+- Fields: Job Title, Company, Location, Source, Job URL, Job ID, Salary Info, Date Found, Review Status, **Tide-Pool Score**, **Tide-Pool Rationale**
 
 ### 14. Add label to message (Gmail)
 - Labels processed emails with "Job Alerts/Processed"
@@ -128,8 +128,8 @@ The workflow filters jobs to only include **customer support/success leadership 
 | Salary Info | Text | Salary range if available |
 | Date Found | Date | When the job was added |
 | Review Status | Single Select | Default: "New" |
-| Fit Score | Number | AI-generated fit score (0-100) |
-| Fit Rationale | Long Text | AI explanation for the fit score |
+| Tide-Pool Score | Number | AI-generated fit score (0-100) |
+| Tide-Pool Rationale | Long Text | AI explanation for the fit score |
 
 ## Configuration
 
