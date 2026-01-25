@@ -1,4 +1,4 @@
-# Job Alert Email Parser v3-12
+# Job Alert Email Parser v3-13
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, uses AI to rate job fit, and adds them to an Airtable database.
 
@@ -193,6 +193,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-13**: Store API key in Airtable Config table (no secrets in workflow file)
 - **v3-12**: Added Claude AI integration to rate job fit (0-100 score with rationale)
 - **v3-11**: Added try-catch error handling, increased schedule to 5 minutes, added Airtable 30-day date filter
 - **v3-10**: Fixed LinkedIn parser to correctly split job listings by newlines
