@@ -1,6 +1,6 @@
-# Job Alert Email Parser v3-11
+# Job Alert Email Parser v3-12
 
-An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, and adds them to an Airtable database.
+An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, uses AI to rate job fit, and adds them to an Airtable database.
 
 ## Overview
 
@@ -10,8 +10,9 @@ This workflow runs on a schedule (every 5 minutes) to:
 3. Parse job listings using source-specific parsers
 4. Filter for customer support/success leadership roles only
 5. Deduplicate against existing Airtable records
-6. Add new jobs to Airtable
-7. Label processed emails in Gmail
+6. **Rate job fit using Claude AI** (0-100 score with rationale)
+7. Add new jobs to Airtable
+8. Label processed emails in Gmail
 
 ## Supported Job Sources
 
@@ -97,14 +98,20 @@ The workflow filters jobs to only include **customer support/success leadership 
 - **Applies role filter** (support/success + leadership keywords)
 - Preserves email ID for labeling
 
-### 11. Filter Empty
+### 11. Rate Job Fit (Code Node)
+- Calls Claude AI (Haiku) to evaluate each job against candidate profile
+- Returns a **Fit Score** (0-100) and **Fit Rationale** (1-2 sentences)
+- Uses candidate profile with 18+ years of customer success/support leadership experience
+- Evaluates based on: role level, compensation, location, company type
+
+### 12. Filter Empty
 - Removes empty items from the flow
 
-### 12. Add to Airtable
+### 13. Add to Airtable
 - Appends new job records to the Airtable table
-- Fields: Job Title, Company, Location, Source, Job URL, Job ID, Salary Info, Date Found, Review Status
+- Fields: Job Title, Company, Location, Source, Job URL, Job ID, Salary Info, Date Found, Review Status, **Fit Score**, **Fit Rationale**
 
-### 13. Add label to message (Gmail)
+### 14. Add label to message (Gmail)
 - Labels processed emails with "Job Alerts/Processed"
 - Uses tracked email ID from earlier in the pipeline
 
@@ -121,6 +128,8 @@ The workflow filters jobs to only include **customer support/success leadership 
 | Salary Info | Text | Salary range if available |
 | Date Found | Date | When the job was added |
 | Review Status | Single Select | Default: "New" |
+| Fit Score | Number | AI-generated fit score (0-100) |
+| Fit Rationale | Long Text | AI explanation for the fit score |
 
 ## Configuration
 
@@ -135,6 +144,13 @@ The workflow filters jobs to only include **customer support/success leadership 
 
 ### Gmail Label
 - Label ID: `Label_3146569228785124450` (Job Alerts/Processed)
+
+### Anthropic API (Claude) Setup
+- Required for AI job fit scoring
+- Get an API key from [console.anthropic.com](https://console.anthropic.com)
+- Set the `ANTHROPIC_API_KEY` environment variable in n8n settings, OR
+- Replace `YOUR_API_KEY_HERE` in the "Rate Job Fit" node code
+- Uses Claude 3 Haiku model (most cost-effective, ~$0.001 per job)
 
 ## Customization
 
@@ -174,6 +190,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-12**: Added Claude AI integration to rate job fit (0-100 score with rationale)
 - **v3-11**: Added try-catch error handling, increased schedule to 5 minutes, added Airtable 30-day date filter
 - **v3-10**: Fixed LinkedIn parser to correctly split job listings by newlines
 - **v3-9**: Added role filtering, fixed email ID tracking for labeling, added Jobright and Google Careers support
