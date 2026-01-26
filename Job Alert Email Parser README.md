@@ -130,6 +130,9 @@ The workflow filters jobs to only include **customer support/success leadership 
 | Review Status | Single Select | Default: "New" |
 | Tide-Pool Score | Number | AI-generated fit score (0-100) |
 | Tide-Pool Rationale | Long Text | AI explanation for the fit score |
+| Tide Pool Fit | Formula | Auto-calculated from score (Strong/Good/Moderate/Weak Fit) |
+| Industry | Text | AI-identified company industry |
+| Company Stage | Text | AI-identified funding stage (Seed, Series A, etc.) |
 
 ## Configuration
 
@@ -193,7 +196,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
-- **v3-14**: Updated Welcome to the Jungle parser to extract unique job URLs from SendGrid tracking links
+- **v3-14**: Updated Welcome to the Jungle parser to extract unique job URLs; fixed fetch() error; added Industry and Company Stage fields via Claude AI
 - **v3-13**: Store API key in Airtable Config table (no secrets in workflow file)
 - **v3-12**: Added Claude AI integration to rate job fit (0-100 score with rationale)
 - **v3-11**: Added try-catch error handling, increased schedule to 5 minutes, added Airtable 30-day date filter
