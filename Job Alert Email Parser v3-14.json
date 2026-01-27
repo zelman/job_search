@@ -288,34 +288,23 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "api-key-inject",
-              "name": "_apiKey",
-              "value": "={{ $env.ANTHROPIC_API_KEY }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {
-          "includeBinary": false
-        },
-        "includeOtherFields": true
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/zelman/tidepool/refs/heads/main/tide-pool-agent-lens.md",
+        "options": {}
       },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         -512,
         -32
       ],
-      "id": "inject-api-key",
-      "name": "Inject API Key"
+      "id": "fetch-profile",
+      "name": "Fetch Profile"
     },
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Rate Job Fit using Claude API with dynamic profile from GitHub\n// API key is passed from Inject API Key node (env vars not accessible in Code nodes on n8n Cloud)\n// Uses n8n's built-in HTTP helper instead of fetch()\n\n// GitHub raw URL for the career profile (edit this file to update scoring criteria)\nconst PROFILE_URL = 'https://raw.githubusercontent.com/zelman/tidepool/refs/heads/main/tide-pool-agent-lens.md';\n\nconst jobData = $json;\n\n// Skip empty items\nif (jobData._empty) {\n  return { json: jobData };\n}\n\n// Get API key from injected field (passed from Set node)\nconst apiKey = jobData._apiKey;\n\nif (!apiKey) {\n  return {\n    json: {\n      ...jobData,\n      'Tide-Pool Score': 0,\n      'Tide-Pool Rationale': 'Error: ANTHROPIC_API_KEY not injected - check Inject API Key node'\n    }\n  };\n}\n\nlet fitScore = 0;\nlet fitRationale = 'Unable to rate';\nlet industry = '';\nlet companyStage = '';\n\ntry {\n  // Fetch the career profile from GitHub using n8n's HTTP helper\n  const profileContent = await this.helpers.httpRequest({\n    method: 'GET',\n    url: PROFILE_URL,\n    returnFullResponse: false\n  });\n  \n  const prompt = `Rate how well this job matches the candidate profile. Also identify the company's industry and funding stage.\n\nReturn ONLY a JSON object with these fields:\n- score: 0-100 fit score\n- rationale: 1-2 sentence explanation\n- industry: company's industry (e.g., \"Healthcare Tech\", \"FinTech\", \"E-commerce\", \"SaaS\", \"EdTech\", etc.)\n- companyStage: funding stage (e.g., \"Seed\", \"Series A\", \"Series B\", \"Series C+\", \"Public\", \"Private/Bootstrapped\", \"Unknown\")\n\nCANDIDATE PROFILE:\n${profileContent}\n\nJOB TO EVALUATE:\nTitle: ${jobData['Job Title']}\nCompany: ${jobData['Company']}\nLocation: ${jobData['Location']}\nSalary: ${jobData['Salary Info']}\nSource: ${jobData['Source']}\n\nRespond with JSON only: {\"score\": NUMBER, \"rationale\": \"TEXT\", \"industry\": \"TEXT\", \"companyStage\": \"TEXT\"}`;\n\n  // Call Claude API using n8n's HTTP helper\n  const data = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.anthropic.com/v1/messages',\n    headers: {\n      'Content-Type': 'application/json',\n      'x-api-key': apiKey,\n      'anthropic-version': '2023-06-01'\n    },\n    body: {\n      model: 'claude-3-haiku-20240307',\n      max_tokens: 300,\n      messages: [{ role: 'user', content: prompt }]\n    },\n    json: true\n  });\n  \n  if (data.content && data.content[0] && data.content[0].text) {\n    const content = data.content[0].text;\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      const parsed = JSON.parse(jsonMatch[0]);\n      fitScore = parsed.score || 0;\n      fitRationale = parsed.rationale || 'No rationale provided';\n      industry = parsed.industry || '';\n      companyStage = parsed.companyStage || '';\n    }\n  } else if (data.error) {\n    fitRationale = 'API Error: ' + (data.error.message || JSON.stringify(data.error));\n  }\n} catch (e) {\n  fitRationale = 'Error: ' + e.message;\n}\n\n// Remove _apiKey before returning (don't send to Airtable)\nconst { _apiKey, ...cleanJobData } = jobData;\n\nreturn {\n  json: {\n    ...cleanJobData,\n    'Tide-Pool Score': fitScore,\n    'Tide-Pool Rationale': fitRationale,\n    'Industry': industry,\n    'Company Stage': companyStage\n  }\n};"
+        "jsCode": "// Build prompt for Claude API - store job data and profile for next node\nconst jobData = $('Map Fields for Airtable').item.json;\nconst profileContent = $('Fetch Profile').first().json.data || $('Fetch Profile').first().json;\n\n// Skip empty items\nif (jobData._empty) {\n  return { json: { ...jobData, _skip: true } };\n}\n\nconst prompt = `Rate how well this job matches the candidate profile. Also identify the company's industry and funding stage.\n\nReturn ONLY a JSON object with these fields:\n- score: 0-100 fit score\n- rationale: 1-2 sentence explanation\n- industry: company's industry (e.g., \"Healthcare Tech\", \"FinTech\", \"E-commerce\", \"SaaS\", \"EdTech\", etc.)\n- companyStage: funding stage (e.g., \"Seed\", \"Series A\", \"Series B\", \"Series C+\", \"Public\", \"Private/Bootstrapped\", \"Unknown\")\n\nCANDIDATE PROFILE:\n${typeof profileContent === 'string' ? profileContent : JSON.stringify(profileContent)}\n\nJOB TO EVALUATE:\nTitle: ${jobData['Job Title']}\nCompany: ${jobData['Company']}\nLocation: ${jobData['Location']}\nSalary: ${jobData['Salary Info']}\nSource: ${jobData['Source']}\n\nRespond with JSON only: {\"score\": NUMBER, \"rationale\": \"TEXT\", \"industry\": \"TEXT\", \"companyStage\": \"TEXT\"}`;\n\nreturn {\n  json: {\n    ...jobData,\n    _prompt: prompt\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -323,8 +312,58 @@
         -288,
         -32
       ],
-      "id": "rate-job-fit",
-      "name": "Rate Job Fit"
+      "id": "build-prompt",
+      "name": "Build Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-haiku-20240307\",\n  \"max_tokens\": 300,\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json._prompt) }}}]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -64,
+        -32
+      ],
+      "id": "call-claude",
+      "name": "Call Claude API",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parse Claude response and add scores to job data\nconst input = $json;\nconst jobData = $('Build Prompt').item.json;\n\n// Skip if marked to skip\nif (jobData._skip) {\n  return { json: jobData };\n}\n\nlet fitScore = 0;\nlet fitRationale = 'Unable to rate';\nlet industry = '';\nlet companyStage = '';\n\ntry {\n  if (input.content && input.content[0] && input.content[0].text) {\n    const content = input.content[0].text;\n    const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) {\n      const parsed = JSON.parse(jsonMatch[0]);\n      fitScore = parsed.score || 0;\n      fitRationale = parsed.rationale || 'No rationale provided';\n      industry = parsed.industry || '';\n      companyStage = parsed.companyStage || '';\n    }\n  } else if (input.error) {\n    fitRationale = 'API Error: ' + (input.error.message || JSON.stringify(input.error));\n  }\n} catch (e) {\n  fitRationale = 'Error: ' + e.message;\n}\n\n// Remove internal fields before returning\nconst { _prompt, _skip, ...cleanJobData } = jobData;\n\nreturn {\n  json: {\n    ...cleanJobData,\n    'Tide-Pool Score': fitScore,\n    'Tide-Pool Rationale': fitRationale,\n    'Industry': industry,\n    'Company Stage': companyStage\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -32
+      ],
+      "id": "parse-response",
+      "name": "Parse Response"
     },
     {
       "parameters": {
@@ -406,25 +445,47 @@
       "main": [
         [
           {
-            "node": "Inject API Key",
+            "node": "Fetch Profile",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Inject API Key": {
+    "Fetch Profile": {
       "main": [
         [
           {
-            "node": "Rate Job Fit",
+            "node": "Build Prompt",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Rate Job Fit": {
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Call Claude API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude API": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
       "main": [
         [
           {
