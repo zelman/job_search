@@ -1,0 +1,237 @@
+{
+  "name": "Work at a Startup Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [-800, 0],
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblofzQpzGEN8igVS",
+          "mode": "id"
+        },
+        "filterByFormula": "OR({Key} = 'BROWSERLESS_TOKEN', {Key} = 'YC_USER', {Key} = 'YC_PASSWORD')",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [-600, 0],
+      "id": "get-config",
+      "name": "Get Config",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "sempBDy7tuv1mA6y",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Extract config values\nconst items = $input.all();\nconst config = {};\n\nfor (const item of items) {\n  const key = item.json.fields?.Key || item.json.Key;\n  const value = item.json.fields?.Value || item.json.Value;\n  if (key && value) {\n    config[key] = value;\n  }\n}\n\nreturn [{ json: config }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-400, 0],
+      "id": "parse-config",
+      "name": "Parse Config"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chrome.browserless.io/function?token={{ $json.BROWSERLESS_TOKEN }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ context: { ycUser: $json.YC_USER, ycPassword: $json.YC_PASSWORD }, code: `module.exports = async ({ page, context }) => { const { ycUser, ycPassword } = context; const jobsUrl = 'https://www.workatastartup.com/companies?demographic=any&hasEquity=any&hasSalary=any&industry=any&interviewProcess=any&jobType=any&layout=list-compact&role=support&sortBy=keyword&tab=any&usVisaNotRequired=any'; try { await page.goto('https://account.ycombinator.com/', { waitUntil: 'networkidle2', timeout: 30000 }); await page.waitForSelector('input', { timeout: 10000 }); const inputs = await page.$$('input'); if (inputs.length >= 2) { await inputs[0].type(ycUser); await inputs[1].type(ycPassword); } const submitBtn = await page.$('button[type=\"submit\"], input[type=\"submit\"], button'); if (submitBtn) { await Promise.all([ page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}), submitBtn.click() ]); } await page.waitForTimeout(3000); await page.goto(jobsUrl, { waitUntil: 'networkidle2', timeout: 30000 }); await page.waitForTimeout(5000); for (let i = 0; i < 3; i++) { await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await page.waitForTimeout(2000); } const jobs = await page.evaluate(() => { const results = []; const cards = document.querySelectorAll('a[href*=\"/jobs/\"]'); const seen = new Set(); cards.forEach((card, idx) => { try { const href = card.getAttribute('href'); if (seen.has(href)) return; seen.add(href); const text = card.innerText || ''; const lines = text.split('\\\\n').map(l => l.trim()).filter(l => l.length > 0); let title = '', company = '', location = 'Not specified', salary = 'Not specified'; if (lines.length >= 1) title = lines[0]; if (lines.length >= 2) company = lines[1]; for (const line of lines) { if (line.includes('Remote') || line.includes(',') || line.match(/[A-Z]{2}$/)) { location = line; } if (line.includes('$') || line.includes('K')) { salary = line; } } const url = href.startsWith('http') ? href : 'https://www.workatastartup.com' + href; if (title && title.length > 3) { results.push({ title, company, location, salary, url, source: 'Work at a Startup', jobId: 'waas-' + Date.now() + '-' + idx }); } } catch(e) {} }); return results; }); return { type: 'application/json', data: jobs }; } catch (error) { return { type: 'application/json', data: [{ error: error.message }] }; } };` }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-200, 0],
+      "id": "browserless-scrape",
+      "name": "Scrape via Browserless"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Browserless response and filter jobs\nconst response = $input.first().json;\n\nlet jobs = [];\nif (Array.isArray(response)) {\n  jobs = response;\n} else if (response.data && Array.isArray(response.data)) {\n  jobs = response.data;\n} else if (response.error) {\n  return [{ json: { error: response.error } }];\n}\n\n// Filter for support/success leadership roles\nconst supportKeywords = ['support', 'success', 'customer', 'client', 'cx', 'experience'];\nconst leadershipKeywords = ['manager', 'director', 'vp', 'vice president', 'head', 'lead', 'chief', 'supervisor', 'team lead'];\n\nconst filteredJobs = jobs.filter(job => {\n  if (job.error) return false;\n  const title = (job.title || '').toLowerCase();\n  const hasSupport = supportKeywords.some(kw => title.includes(kw));\n  const hasLeadership = leadershipKeywords.some(kw => title.includes(kw));\n  return hasSupport && hasLeadership;\n});\n\nif (filteredJobs.length === 0) {\n  return [{ json: { _empty: true, _rawCount: jobs.length } }];\n}\n\nreturn filteredJobs.map(job => ({\n  json: {\n    \"Job Title\": job.title,\n    \"Company\": job.company,\n    \"Location\": job.location || 'Not specified',\n    \"Source\": 'Work at a Startup',\n    \"Job URL\": job.url,\n    \"Job ID\": job.jobId,\n    \"Salary Info\": job.salary || 'Not specified',\n    \"Date Found\": new Date().toISOString().split('T')[0],\n    \"Review Status\": \"New\"\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "parse-and-filter",
+      "name": "Parse & Filter"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._empty }}",
+              "operation": "notEqual",
+              "value2": true
+            },
+            {
+              "value1": "={{ $json.error }}",
+              "operation": "isEmpty"
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [200, 0],
+      "id": "has-jobs",
+      "name": "Has Jobs?"
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "append",
+        "application": "appFEzXvPWvRtXgRY",
+        "table": "tbl6ZV2rHjWz56pP3",
+        "addAllFields": false,
+        "fields": [
+          "Job Title",
+          "Company",
+          "Location",
+          "Source",
+          "Job URL",
+          "Job ID",
+          "Salary Info",
+          "Date Found",
+          "Review Status"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [400, -100],
+      "id": "add-to-airtable",
+      "name": "Add to Airtable",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "sempBDy7tuv1mA6y",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [400, 100],
+      "id": "no-jobs",
+      "name": "No Jobs/Error"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Config": {
+      "main": [
+        [
+          {
+            "node": "Parse Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Config": {
+      "main": [
+        [
+          {
+            "node": "Scrape via Browserless",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape via Browserless": {
+      "main": [
+        [
+          {
+            "node": "Parse & Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Filter": {
+      "main": [
+        [
+          {
+            "node": "Has Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Add to Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Jobs/Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "waas-v2",
+  "meta": {
+    "instanceId": "work-at-a-startup-scraper"
+  },
+  "id": "waas-scraper",
+  "tags": []
+}
