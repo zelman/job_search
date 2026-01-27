@@ -98,11 +98,14 @@ The workflow filters jobs to only include **customer support/success leadership 
 - **Applies role filter** (support/success + leadership keywords)
 - Preserves email ID for labeling
 
-### 11. Rate Job Fit (Code Node)
-- Calls Claude AI (Haiku) to evaluate each job against candidate profile
-- **Dynamically fetches profile** from GitHub: `tide-pool-agent-lens.md`
-- Returns a **Tide-Pool Score** (0-100) and **Tide-Pool Rationale** (1-2 sentences)
-- Profile updates take effect immediately on new jobs (no workflow changes needed)
+### 11. Rate Job Fit (4-node sequence)
+Calls Claude AI (Haiku) to evaluate each job against candidate profile:
+- **Fetch Profile** (HTTP Request) - Gets candidate profile from GitHub
+- **Build Prompt** (Code) - Constructs the evaluation prompt
+- **Call Claude API** (HTTP Request) - Sends request to Anthropic API using `$env.ANTHROPIC_API_KEY`
+- **Parse Response** (Code) - Extracts score, rationale, industry, company stage
+
+Returns a **Tide-Pool Score** (0-100) and **Tide-Pool Rationale** (1-2 sentences). Profile updates take effect immediately on new jobs.
 
 ### 12. Filter Empty
 - Removes empty items from the flow
@@ -200,6 +203,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-17**: Refactored Claude API to use HTTP Request node (n8n Cloud blocks env vars in Code/Set nodes); split into Fetch Profile → Build Prompt → Call Claude API → Parse Response
 - **v3-16**: Updated Jobright parser for new email format (Jan 2026) - supports inline styles instead of HTML IDs
 - **v3-15**: Moved ANTHROPIC_API_KEY to n8n environment variable for efficiency; removed Airtable Config dependency
 - **v3-14**: Updated Welcome to the Jungle parser to extract unique job URLs; fixed fetch() error; added Industry and Company Stage fields via Claude AI; fixed Jobright parser to detect salary vs location by content and ignore referral tags
