@@ -1,4 +1,4 @@
-# Work at a Startup Scraper v3
+# Work at a Startup Scraper v4
 
 An n8n workflow that scrapes YC's [Work at a Startup](https://www.workatastartup.com) job board for customer support/success leadership roles, with AI-powered job fit scoring.
 
@@ -53,29 +53,36 @@ Jobs are filtered to only include **customer support/success leadership roles**:
 
 ## Configuration
 
+### n8n Environment Variables
+
+Set these environment variables in your n8n instance (Settings > Variables):
+
+| Variable | Description |
+|----------|-------------|
+| BROWSERLESS_TOKEN | Your Browserless.io API token |
+| ANTHROPIC_API_KEY | Your Anthropic API key for Claude |
+
 ### Airtable Config Table
 
-Add these keys to your Airtable Config table (same one used by Job Alert Email Parser):
+Add these keys to your Airtable Config table (for user credentials):
 
 | Key | Value |
 |-----|-------|
-| BROWSERLESS_TOKEN | Your Browserless.io API token |
 | YC_USER | Your Y Combinator username |
 | YC_PASSWORD | Your Y Combinator password |
-| ANTHROPIC_API_KEY | Your Anthropic API key for Claude |
 
 ### Browserless.io Setup
 
 1. Sign up at [browserless.io](https://browserless.io)
 2. Get your API token from the dashboard
-3. Add it to Airtable Config as `BROWSERLESS_TOKEN`
+3. Add it as n8n environment variable `BROWSERLESS_TOKEN`
 
 Free tier includes 1000 sessions/month.
 
 ### Anthropic API Setup
 
 1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
-2. Add it to Airtable Config as `ANTHROPIC_API_KEY`
+2. Add it as n8n environment variable `ANTHROPIC_API_KEY`
 3. Uses Claude 3 Haiku model (~$0.001 per job)
 
 ### Airtable Setup
@@ -128,6 +135,7 @@ The workflow uses ES modules format (`export default`) for Browserless v2. If yo
 
 ## Version History
 
+- **v4**: Moved API keys to n8n environment variables (BROWSERLESS_TOKEN, ANTHROPIC_API_KEY) for efficiency; only YC credentials remain in Airtable
 - **v3**: Added Claude AI job rating (Tide-Pool Score, rationale, industry, company stage); extracts YC batch for Company Stage; extracts industry from page
 - **v2**: Fixed Browserless v2 compatibility (ES modules instead of CommonJS); fixed cross-domain auth flow
 - **v1**: Initial version using Browserless.io REST API
