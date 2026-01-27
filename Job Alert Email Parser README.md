@@ -4,7 +4,7 @@ An n8n workflow that automatically processes job alert emails from multiple sour
 
 ## Overview
 
-This workflow runs on a schedule (every 5 minutes) to:
+This workflow runs on a schedule (every hour) to:
 1. Fetch unread job alert emails from Gmail
 2. Identify the source of each email
 3. Parse job listings using source-specific parsers
@@ -203,6 +203,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-18**: Changed schedule from every 5 minutes to every hour (90% execution savings)
 - **v3-17**: Refactored Claude API to use HTTP Request node (n8n Cloud blocks env vars in Code/Set nodes); split into Fetch Profile → Build Prompt → Call Claude API → Parse Response
 - **v3-16**: Updated Jobright parser for new email format (Jan 2026) - supports inline styles instead of HTML IDs
 - **v3-15**: Moved ANTHROPIC_API_KEY to n8n environment variable for efficiency; removed Airtable Config dependency
