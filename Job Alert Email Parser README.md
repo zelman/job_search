@@ -148,14 +148,18 @@ The workflow filters jobs to only include **customer support/success leadership 
 ### Gmail Label
 - Label ID: `Label_3146569228785124450` (Job Alerts/Processed)
 
+### n8n Environment Variables
+
+Set this environment variable in your n8n instance (Settings > Variables):
+
+| Variable | Description |
+|----------|-------------|
+| ANTHROPIC_API_KEY | Your Anthropic API key for Claude |
+
 ### Anthropic API (Claude) Setup
 - Required for AI job fit scoring
 - Get an API key from [console.anthropic.com](https://console.anthropic.com)
-- **Store the key in Airtable** (not in the workflow):
-  1. Create a new table called "Config" in your Airtable base
-  2. Add two fields: `Key` (text) and `Value` (text)
-  3. Add one row: Key = `ANTHROPIC_API_KEY`, Value = your API key
-  4. Copy the table ID and update the "Get Config" node in the workflow
+- Add it as n8n environment variable `ANTHROPIC_API_KEY`
 - Uses Claude 3 Haiku model (most cost-effective, ~$0.001 per job)
 
 ## Customization
@@ -196,6 +200,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-15**: Moved ANTHROPIC_API_KEY to n8n environment variable for efficiency; removed Airtable Config dependency
 - **v3-14**: Updated Welcome to the Jungle parser to extract unique job URLs; fixed fetch() error; added Industry and Company Stage fields via Claude AI; fixed Jobright parser to detect salary vs location by content and ignore referral tags
 - **v3-13**: Store API key in Airtable Config table (no secrets in workflow file)
 - **v3-12**: Added Claude AI integration to rate job fit (0-100 score with rationale)
