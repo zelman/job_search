@@ -203,6 +203,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-19**: Fixed API key access - fetch from Airtable Config instead of env vars (n8n Cloud blocks all env var access)
 - **v3-18**: Changed schedule from every 5 minutes to every hour (90% execution savings)
 - **v3-17**: Refactored Claude API to use HTTP Request node (n8n Cloud blocks env vars in Code/Set nodes); split into Fetch Profile → Build Prompt → Call Claude API → Parse Response
 - **v3-16**: Updated Jobright parser for new email format (Jan 2026) - supports inline styles instead of HTML IDs
