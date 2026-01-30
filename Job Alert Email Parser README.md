@@ -203,6 +203,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-21**: Added 1-second wait between Claude API calls to prevent rate limiting
 - **v3-20**: Fixed LinkedIn parser - filter out email header lines ("Your job alert for...", "New jobs match your preferences")
 - **v3-19**: Fixed API key access - fetch from Airtable Config instead of env vars (n8n Cloud blocks all env var access)
 - **v3-18**: Changed schedule from every 5 minutes to every hour (90% execution savings)
