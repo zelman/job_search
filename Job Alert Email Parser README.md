@@ -203,6 +203,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-23**: Increased rate limit wait to 4 seconds (2 seconds still triggered rate limiting)
 - **v3-22**: Increased rate limit wait to 2 seconds (1 second wasn't enough)
 - **v3-21**: Added 1-second wait between Claude API calls to prevent rate limiting
 - **v3-20**: Fixed LinkedIn parser - filter out email header lines ("Your job alert for...", "New jobs match your preferences")
