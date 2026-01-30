@@ -203,6 +203,8 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-25**: Limited Gmail fetch to 10 emails per run to prevent API rate limiting; keeps 10-second delay
+- **v3-24**: Increased rate limit wait to 10 seconds (4 seconds still triggered rate limiting with batch jobs)
 - **v3-23**: Increased rate limit wait to 4 seconds (2 seconds still triggered rate limiting)
 - **v3-22**: Increased rate limit wait to 2 seconds (1 second wasn't enough)
 - **v3-21**: Added 1-second wait between Claude API calls to prevent rate limiting
