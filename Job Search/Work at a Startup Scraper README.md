@@ -1,4 +1,4 @@
-# Work at a Startup Scraper v4
+# Work at a Startup Scraper v5
 
 An n8n workflow that scrapes YC's [Work at a Startup](https://www.workatastartup.com) job board for customer support/success leadership roles, with AI-powered job fit scoring.
 
@@ -53,36 +53,29 @@ Jobs are filtered to only include **customer support/success leadership roles**:
 
 ## Configuration
 
-### n8n Environment Variables
-
-Set these environment variables in your n8n instance (Settings > Variables):
-
-| Variable | Description |
-|----------|-------------|
-| BROWSERLESS_TOKEN | Your Browserless.io API token |
-| ANTHROPIC_API_KEY | Your Anthropic API key for Claude |
-
 ### Airtable Config Table
 
-Add these keys to your Airtable Config table (for user credentials):
+Add these keys to your Airtable Config table (n8n Cloud blocks env var access):
 
 | Key | Value |
 |-----|-------|
 | YC_USER | Your Y Combinator username |
 | YC_PASSWORD | Your Y Combinator password |
+| BROWSERLESS_TOKEN | Your Browserless.io API token |
+| ANTHROPIC_API_KEY | Your Anthropic API key for Claude |
 
 ### Browserless.io Setup
 
 1. Sign up at [browserless.io](https://browserless.io)
 2. Get your API token from the dashboard
-3. Add it as n8n environment variable `BROWSERLESS_TOKEN`
+3. Add it to Airtable Config table as `BROWSERLESS_TOKEN`
 
 Free tier includes 1000 sessions/month.
 
 ### Anthropic API Setup
 
 1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
-2. Add it as n8n environment variable `ANTHROPIC_API_KEY`
+2. Add it to Airtable Config table as `ANTHROPIC_API_KEY`
 3. Uses Claude 3 Haiku model (~$0.001 per job)
 
 ### Airtable Setup
@@ -135,6 +128,7 @@ The workflow uses ES modules format (`export default`) for Browserless v2. If yo
 
 ## Version History
 
+- **v5**: Enhanced AI scoring with penalties for: (1) large/established companies, (2) IT Customer Success roles, (3) on-site roles outside preferred locations (Remote preferred; on-site OK in Providence RI, Boston, NYC Metro, LA Metro, SF Bay Area, EU/UK); fixed n8n Cloud compatibility (all credentials via Airtable Config, not env vars)
 - **v4**: Moved API keys to n8n environment variables (BROWSERLESS_TOKEN, ANTHROPIC_API_KEY) for efficiency; only YC credentials remain in Airtable
 - **v3**: Added Claude AI job rating (Tide-Pool Score, rationale, industry, company stage); extracts YC batch for Company Stage; extracts industry from page
 - **v2**: Fixed Browserless v2 compatibility (ES modules instead of CommonJS); fixed cross-domain auth flow

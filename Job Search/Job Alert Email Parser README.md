@@ -1,4 +1,4 @@
-# Job Alert Email Parser v3-14
+# Job Alert Email Parser v3-26
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, uses AI to rate job fit, and adds them to an Airtable database.
 
@@ -203,6 +203,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-26**: Enhanced AI scoring with penalties for: (1) large/established companies (1000+ employees, 10+ years, Fortune 500, public), (2) IT Customer Success roles (internal IT support vs external product success), (3) on-site roles outside preferred locations (Remote preferred; on-site OK in Providence RI, Boston, NYC Metro, LA Metro, SF Bay Area, EU/UK)
 - **v3-25**: Limited Gmail fetch to 10 emails per run to prevent API rate limiting; keeps 10-second delay
 - **v3-24**: Increased rate limit wait to 10 seconds (4 seconds still triggered rate limiting with batch jobs)
 - **v3-23**: Increased rate limit wait to 4 seconds (2 seconds still triggered rate limiting)
