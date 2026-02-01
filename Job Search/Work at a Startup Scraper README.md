@@ -1,4 +1,4 @@
-# Work at a Startup Scraper v5
+# Work at a Startup Scraper v6
 
 An n8n workflow that scrapes YC's [Work at a Startup](https://www.workatastartup.com) job board for customer support/success leadership roles, with AI-powered job fit scoring.
 
@@ -128,6 +128,7 @@ The workflow uses ES modules format (`export default`) for Browserless v2. If yo
 
 ## Version History
 
+- **v6**: Added deduplication against Airtable - fetches existing jobs from last 30 days and filters out duplicates by URL and title+company combination before adding new jobs
 - **v5**: Enhanced AI scoring with penalties for: (1) large/established companies, (2) IT Customer Success roles, (3) on-site roles outside preferred locations (Remote preferred; on-site OK in Providence RI, Boston, NYC Metro, LA Metro, SF Bay Area, EU/UK); fixed n8n Cloud compatibility (all credentials via Airtable Config, not env vars)
 - **v4**: Moved API keys to n8n environment variables (BROWSERLESS_TOKEN, ANTHROPIC_API_KEY) for efficiency; only YC credentials remain in Airtable
 - **v3**: Added Claude AI job rating (Tide-Pool Score, rationale, industry, company stage); extracts YC batch for Company Stage; extracts industry from page

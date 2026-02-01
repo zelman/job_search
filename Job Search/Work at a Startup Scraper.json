@@ -36,9 +36,37 @@
       },
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [-600, 0],
+      "position": [-600, -100],
       "id": "get-config",
       "name": "Get Config",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "sempBDy7tuv1mA6y",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "id"
+        },
+        "filterByFormula": "IS_AFTER({Date Found}, DATEADD(TODAY(), -30, 'days'))",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [-600, 100],
+      "id": "search-existing",
+      "name": "Search Existing Jobs",
       "credentials": {
         "airtableTokenApi": {
           "id": "sempBDy7tuv1mA6y",
@@ -53,7 +81,7 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-400, 0],
+      "position": [-400, -100],
       "id": "parse-config",
       "name": "Parse Config"
     },
@@ -70,7 +98,7 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [-200, 0],
+      "position": [-200, -100],
       "id": "browserless-scrape",
       "name": "Scrape via Browserless"
     },
@@ -81,9 +109,30 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [0, -100],
       "id": "parse-and-filter",
       "name": "Parse & Filter"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [200, 0],
+      "id": "merge-for-dedup",
+      "name": "Merge for Dedup"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Dedup scraped jobs against existing Airtable records\n\nconst normalize = (str) => {\n  if (!str) return '';\n  return str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();\n};\n\nconst allItems = $input.all();\n\n// Separate new jobs from existing Airtable records\nconst newJobs = allItems.filter(item => \n  item.json['Job Title'] && item.json['Source'] === 'Work at a Startup' && !item.json.fields\n);\n\nconst existingRecords = allItems.filter(item => \n  item.json.fields || (item.json['Job URL'] && !item.json['_ycBatch'])\n);\n\n// Build sets of existing URLs and normalized title+company keys\nconst existingUrls = new Set();\nconst existingKeys = new Set();\n\nfor (const item of existingRecords) {\n  const fields = item.json.fields || item.json;\n  \n  // Add URL (normalized - remove trailing slashes, params)\n  let url = fields['Job URL'] || '';\n  if (url) {\n    url = url.split('?')[0].replace(/\\/$/, '');\n    existingUrls.add(url);\n  }\n  \n  // Add normalized title+company key\n  const title = normalize(fields['Job Title'] || '');\n  const company = normalize(fields['Company'] || '');\n  if (title && company) {\n    existingKeys.add(title + '|' + company);\n  }\n}\n\n// Filter new jobs against existing\nconst results = [];\nconst addedUrls = new Set();\nconst addedKeys = new Set();\n\nfor (const job of newJobs) {\n  // Skip empty markers\n  if (job.json._empty) continue;\n  \n  // Normalize URL\n  let url = job.json['Job URL'] || '';\n  if (url) {\n    url = url.split('?')[0].replace(/\\/$/, '');\n  }\n  \n  // Normalize title and company\n  const title = normalize(job.json['Job Title'] || '');\n  const company = normalize(job.json['Company'] || '');\n  const key = title + '|' + company;\n  \n  // Skip if URL already exists in Airtable or this batch\n  if (url && (existingUrls.has(url) || addedUrls.has(url))) continue;\n  \n  // Skip if title+company combo exists\n  if (existingKeys.has(key) || addedKeys.has(key)) continue;\n  \n  // Add to tracking sets\n  if (url) addedUrls.add(url);\n  addedKeys.add(key);\n  \n  results.push(job);\n}\n\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 0],
+      "id": "dedup-airtable",
+      "name": "Dedup Against Airtable"
     },
     {
       "parameters": {
@@ -104,7 +153,7 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [200, 0],
+      "position": [600, 0],
       "id": "has-jobs",
       "name": "Has Jobs?"
     },
@@ -134,7 +183,7 @@
       },
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 1,
-      "position": [600, -100],
+      "position": [1000, -100],
       "id": "add-to-airtable",
       "name": "Add to Airtable",
       "credentials": {
@@ -148,7 +197,7 @@
       "parameters": {},
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [600, 100],
+      "position": [1000, 100],
       "id": "no-jobs",
       "name": "No Jobs/Error"
     },
@@ -159,7 +208,7 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [400, -100],
+      "position": [800, -100],
       "id": "rate-job-fit",
       "name": "Rate Job Fit"
     }
@@ -170,6 +219,11 @@
         [
           {
             "node": "Get Config",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search Existing Jobs",
             "type": "main",
             "index": 0
           }
@@ -210,6 +264,39 @@
       ]
     },
     "Parse & Filter": {
+      "main": [
+        [
+          {
+            "node": "Merge for Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Existing Jobs": {
+      "main": [
+        [
+          {
+            "node": "Merge for Dedup",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge for Dedup": {
+      "main": [
+        [
+          {
+            "node": "Dedup Against Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Against Airtable": {
       "main": [
         [
           {
@@ -254,7 +341,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "waas-v4",
+  "versionId": "waas-v5",
   "meta": {
     "instanceId": "work-at-a-startup-scraper"
   },
