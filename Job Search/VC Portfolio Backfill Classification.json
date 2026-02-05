@@ -1,0 +1,225 @@
+{
+  "name": "VC Portfolio Backfill Classification",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200],
+      "id": "backfill-trigger",
+      "name": "Run Once (Manual)"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list",
+          "cachedResultName": "Funding Alerts"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [220, 200],
+      "id": "backfill-get-records",
+      "name": "Get All Records"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.fields['Industry'] }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 200],
+      "id": "backfill-filter-unclassified",
+      "name": "Needs Classification?"
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "options": {
+          "maxTokensToSample": 500,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [660, 400],
+      "id": "backfill-claude-model",
+      "name": "Claude Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic",
+          "name": "Anthropic"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "prompt": {
+          "values": {
+            "string": [
+              {
+                "name": "text",
+                "value": "Analyze this startup company and classify it.\n\nCompany Name: {{ $json.fields['Company Name'] }}\nVC Firm: {{ $json.fields['VC Firm'] }}\nDescription: {{ $json.fields['Company Description'] }}\nWebsite: {{ $json.fields['Company URL'] }}\n\nProvide:\n1. Industry/Vertical (e.g., Healthcare, AI/ML, Climate/Environment, EdTech, Developer Tools, Enterprise Software, Fintech, Consumer, Defense/Military, etc.)\n\n2. Mission Score (1-5) based on these priorities:\n   - 5: Strong mission around healthcare, environment/climate, or education\n   - 4: Moderate alignment with healthcare, environment, or education  \n   - 3: Neutral - general tech, enterprise software, consumer apps, AI/ML tools\n   - 2: Lower priority - fintech, adtech, crypto\n   - 1: Lowest priority - military, defense, weapons\n\n3. Brief explanation of the score\n\nRespond with ONLY valid JSON (no markdown, no code blocks):\n{\"industry\": \"Industry Name\", \"mission_score\": 3, \"mission_notes\": \"Brief explanation\"}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [660, 200],
+      "id": "backfill-classify",
+      "name": "Classify Company"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's classification response\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Get the record ID for updating\n  const recordId = data.id;\n  \n  // The LLM response is in the 'text' field\n  let llmResponse = data.text || data.response || '';\n  \n  // Default values\n  let industry = 'Unknown';\n  let missionScore = 3;\n  let missionNotes = 'Unable to classify';\n  \n  try {\n    // Clean up the response - remove any markdown code blocks\n    llmResponse = llmResponse.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    \n    // Try to parse JSON\n    const parsed = JSON.parse(llmResponse);\n    \n    if (parsed.industry) industry = parsed.industry;\n    if (parsed.mission_score) missionScore = parseInt(parsed.mission_score) || 3;\n    if (parsed.mission_notes) missionNotes = parsed.mission_notes;\n  } catch (e) {\n    // If JSON parsing fails, try to extract values with regex\n    const industryMatch = llmResponse.match(/\"industry\"\\s*:\\s*\"([^\"]+)\"/i);\n    const scoreMatch = llmResponse.match(/\"mission_score\"\\s*:\\s*(\\d)/i);\n    const notesMatch = llmResponse.match(/\"mission_notes\"\\s*:\\s*\"([^\"]+)\"/i);\n    \n    if (industryMatch) industry = industryMatch[1];\n    if (scoreMatch) missionScore = parseInt(scoreMatch[1]);\n    if (notesMatch) missionNotes = notesMatch[1];\n  }\n  \n  results.push({\n    json: {\n      recordId: recordId,\n      'Industry': industry,\n      'Mission Score': missionScore,\n      'Mission Notes': missionNotes\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 200],
+      "id": "backfill-parse",
+      "name": "Parse Classification"
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list",
+          "cachedResultName": "Funding Alerts"
+        },
+        "id": "={{ $json.recordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Industry": "={{ $json['Industry'] }}",
+            "Mission Score": "={{ $json['Mission Score'] }}",
+            "Mission Notes": "={{ $json['Mission Notes'] }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1100, 200],
+      "id": "backfill-update",
+      "name": "Update Record"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 50],
+      "id": "backfill-already-done",
+      "name": "Already Classified"
+    }
+  ],
+  "connections": {
+    "Run Once (Manual)": {
+      "main": [
+        [
+          {
+            "node": "Get All Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Records": {
+      "main": [
+        [
+          {
+            "node": "Needs Classification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs Classification?": {
+      "main": [
+        [
+          {
+            "node": "Classify Company",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Already Classified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Company",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Company": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Update Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
