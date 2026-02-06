@@ -1,0 +1,630 @@
+{
+  "name": "VC Portfolio Scraper v16",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1,4"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 400],
+      "id": "vc-schedule-trigger",
+      "name": "Schedule Trigger (Mon/Thu 8am)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://unusual.vc/portfolio\",\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 30000\n  },\n  \"waitForSelector\": {\n    \"selector\": \"h4\",\n    \"timeout\": 10000\n  }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 200],
+      "id": "vc-browserless-unusual",
+      "name": "Browserless Unusual",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "browserless-token",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Browserless /content response for Unusual Ventures\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Unusual Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = '';\n  if (typeof item.json === 'string') {\n    html = item.json;\n  } else if (item.json.data) {\n    html = item.json.data;\n  } else {\n    html = JSON.stringify(item.json);\n  }\n  \n  const h4Pattern = /<h4[^>]*>([^<]+)<\\/h4>/gi;\n  let match;\n  \n  while ((match = h4Pattern.exec(html)) !== null) {\n    const text = match[1].trim();\n    if (text.length < 10) continue;\n    if (text.toLowerCase().includes('visit website')) continue;\n    if (text.toLowerCase().includes('portfolio')) continue;\n    \n    const parts = text.split(/\\s+is\\s+/i);\n    if (parts.length < 2) continue;\n    \n    const name = parts[0].trim();\n    const key = name.toLowerCase();\n    \n    if (name.length >= 2 && name.length <= 50 && !seen.has(key)) {\n      seen.add(key);\n      \n      const startIdx = Math.max(0, match.index - 1000);\n      const endIdx = Math.min(html.length, match.index + 1000);\n      const context = html.substring(startIdx, endIdx);\n      \n      let url = '';\n      const visitMatch = context.match(/href=[\"'](https?:\\/\\/(?!(?:www\\.)?(?:linkedin|twitter|facebook|x)\\.com)[^\"']+)[\"'][^>]*>(?:[^<]*(?:visit|website)[^<]*)</i);\n      if (visitMatch) {\n        url = visitMatch[1];\n      } else {\n        const extMatch = context.match(/href=[\"'](https?:\\/\\/(?!(?:www\\.)?(?:unusual\\.vc|linkedin|twitter|facebook|x)\\.com)[^\"']+)[\"']/i);\n        if (extMatch) {\n          url = extMatch[1];\n        }\n      }\n      \n      results.push({\n        json: {\n          'Company Name': name,\n          'VC Firm': vcName,\n          'Company Description': text,\n          'Company URL': url,\n          'Logo URL': '',\n          'Status': 'New',\n          'First Seen Date': today,\n          'Source': 'VC Portfolio'\n        }\n      });\n    }\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { _empty: true, _message: 'No companies found', vcName: vcName } }];\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 200],
+      "id": "vc-parse-unusual",
+      "name": "Parse Unusual Ventures"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://m6i10uln.api.sanity.io/v2021-10-21/data/query/production?query=*[_type==\"company\"]{title,website,slug,statement}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 350],
+      "id": "vc-fetch-firstround",
+      "name": "Fetch First Round (Sanity API)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse First Round Capital - Sanity API JSON response\nconst items = $input.all();\nconst results = [];\nconst vcName = 'First Round Capital';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const companies = item.json.result || [];\n  \n  for (const company of companies) {\n    const name = company.title || '';\n    if (!name || name.length < 2) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    const website = company.website || '';\n    \n    let description = '';\n    if (company.statement && Array.isArray(company.statement)) {\n      for (const block of company.statement) {\n        if (block.children && Array.isArray(block.children)) {\n          for (const child of block.children) {\n            if (child.text) {\n              description += child.text + ' ';\n            }\n          }\n        }\n      }\n      description = description.trim();\n    }\n    \n    if (!description) {\n      description = `${name} - First Round Capital portfolio company`;\n    }\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': description,\n        'Company URL': website,\n        'Logo URL': '',\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { _empty: true, _message: 'No companies found', vcName: vcName } }];\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 350],
+      "id": "vc-parse-firstround",
+      "name": "Parse First Round"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.essencevc.fund/companies",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 500],
+      "id": "vc-fetch-essence",
+      "name": "Fetch Essence VC"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Essence VC - Squarespace HTML\n// Company pattern: <a href=\"https://company.com\"><img alt=\"Company Name\" ...></a>\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Essence VC';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = '';\n  if (typeof item.json === 'string') {\n    html = item.json;\n  } else if (item.json.data) {\n    html = item.json.data;\n  } else {\n    html = JSON.stringify(item.json);\n  }\n  \n  // Pattern 1: <a href=\"url\"><img alt=\"Company Name\" ...></a>\n  const imgLinkPattern = /<a[^>]*href=[\"'](https?:\\/\\/[^\"']+)[\"'][^>]*>[^<]*<img[^>]*alt=[\"']([^\"']+)[\"'][^>]*>[^<]*<\\/a>/gi;\n  let match;\n  \n  while ((match = imgLinkPattern.exec(html)) !== null) {\n    const url = match[1].trim();\n    let name = match[2].trim();\n    \n    // Skip non-company URLs\n    if (url.includes('squarespace')) continue;\n    if (url.includes('essencevc')) continue;\n    if (url.includes('linkedin.com')) continue;\n    if (url.includes('twitter.com')) continue;\n    if (url.includes('x.com/')) continue;\n    if (url.includes('facebook.com')) continue;\n    if (url.includes('instagram.com')) continue;\n    if (url.includes('youtube.com')) continue;\n    \n    // Clean up name\n    if (!name || name.length < 2 || name.length > 60) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2) continue;\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': `${name} - Essence VC portfolio company`,\n        'Company URL': url,\n        'Logo URL': '',\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n  \n  // Pattern 2: Also look for img alt with nearby href (different HTML structure)\n  if (results.length < 10) {\n    const imgAltPattern = /<img[^>]*alt=[\"']([^\"']{2,50})[\"'][^>]*src=[\"']([^\"']*squarespace-cdn[^\"']*)[\"']/gi;\n    while ((match = imgAltPattern.exec(html)) !== null) {\n      const name = match[1].trim();\n      const logoUrl = match[2];\n      \n      if (!name || name.length < 2) continue;\n      if (name.toLowerCase().includes('logo')) continue;\n      if (name.toLowerCase().includes('icon')) continue;\n      \n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (key.length < 2) continue;\n      if (seen.has(key)) continue;\n      \n      // Look for nearby external URL\n      const startIdx = Math.max(0, match.index - 300);\n      const endIdx = Math.min(html.length, match.index + 300);\n      const context = html.substring(startIdx, endIdx);\n      \n      const urlMatch = context.match(/href=[\"'](https?:\\/\\/(?!.*(?:squarespace|essencevc|linkedin|twitter|facebook|instagram))[^\"']+)[\"']/i);\n      if (!urlMatch) continue;\n      \n      const url = urlMatch[1];\n      seen.add(key);\n      \n      results.push({\n        json: {\n          'Company Name': name,\n          'VC Firm': vcName,\n          'Company Description': `${name} - Essence VC portfolio company`,\n          'Company URL': url,\n          'Logo URL': logoUrl,\n          'Status': 'New',\n          'First Seen Date': today,\n          'Source': 'VC Portfolio'\n        }\n      });\n    }\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { _empty: true, _message: 'No companies found', vcName: vcName } }];\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 500],
+      "id": "vc-parse-essence",
+      "name": "Parse Essence VC"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://costanoa.vc/sitemap.xml",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 650],
+      "id": "vc-fetch-costanoa",
+      "name": "Fetch Costanoa Sitemap"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Costanoa Ventures - Sitemap XML\n// URLs are like: https://costanoa.vc/portfolio/alation\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Costanoa Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let xml = '';\n  if (typeof item.json === 'string') {\n    xml = item.json;\n  } else if (item.json.data) {\n    xml = item.json.data;\n  } else {\n    xml = JSON.stringify(item.json);\n  }\n  \n  // Find all portfolio company URLs in sitemap\n  // Pattern: <loc>https://costanoa.vc/portfolio/company-name</loc>\n  const locPattern = /<loc>https?:\\/\\/costanoa\\.vc\\/portfolio\\/([^<\\/]+)<\\/loc>/gi;\n  let match;\n  \n  while ((match = locPattern.exec(xml)) !== null) {\n    const slug = match[1].trim();\n    \n    // Skip non-company pages\n    if (!slug || slug.length < 2) continue;\n    if (slug === 'portfolio') continue;\n    \n    // Convert slug to company name (kebab-case to Title Case)\n    const name = slug\n      .split('-')\n      .map(word => word.charAt(0).toUpperCase() + word.slice(1))\n      .join(' ');\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    // Company URL is the Costanoa portfolio page (no external URL available from sitemap)\n    const companyPageUrl = `https://costanoa.vc/portfolio/${slug}`;\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': `${name} - Costanoa Ventures portfolio company`,\n        'Company URL': companyPageUrl,\n        'Logo URL': '',\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { _empty: true, _message: 'No companies found', vcName: vcName } }];\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 650],
+      "id": "vc-parse-costanoa",
+      "name": "Parse Costanoa"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [660, 275],
+      "id": "vc-merge-1",
+      "name": "Merge Unusual + First Round"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [660, 575],
+      "id": "vc-merge-2",
+      "name": "Merge Essence + Costanoa"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [880, 425],
+      "id": "vc-merge-all",
+      "name": "Combine All VCs"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._empty }}",
+              "operation": "notEqual",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1100, 425],
+      "id": "vc-filter-valid",
+      "name": "Filter Valid"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark new companies\nconst newCompanies = $input.all();\n\nreturn newCompanies.map(item => ({\n  json: {\n    ...item.json,\n    _isNewCompany: true\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 425],
+      "id": "vc-mark-new",
+      "name": "Mark as New"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list",
+          "cachedResultName": "Funding Alerts"
+        },
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1320, 625],
+      "id": "vc-get-existing",
+      "name": "Get Existing Companies"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [1540, 525],
+      "id": "vc-merge-for-dedup",
+      "name": "Merge for Dedup"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dedup: compare new companies against existing Airtable records\nconst allItems = $input.all();\n\nconst newCompanies = [];\nconst existingRecords = [];\n\nfor (const item of allItems) {\n  if (item.json._isNewCompany) {\n    newCompanies.push(item);\n  } else if (item.json.fields && item.json.fields['Company Name']) {\n    existingRecords.push(item);\n  } else if (item.json.id && item.json['Company Name']) {\n    existingRecords.push({ json: { fields: item.json } });\n  }\n}\n\nconst normalize = (str) => {\n  if (!str) return '';\n  return String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim();\n};\n\nconst existingNames = new Set();\nfor (const item of existingRecords) {\n  const fields = item.json.fields || item.json;\n  const name = fields['Company Name'] || '';\n  if (name) {\n    existingNames.add(normalize(name));\n  }\n}\n\nconst uniqueCompanies = [];\nconst addedNames = new Set();\n\nfor (const company of newCompanies) {\n  const name = company.json['Company Name'];\n  if (!name) continue;\n  \n  const normalizedName = normalize(name);\n  if (!normalizedName) continue;\n  \n  if (existingNames.has(normalizedName) || addedNames.has(normalizedName)) {\n    continue;\n  }\n  \n  addedNames.add(normalizedName);\n  \n  const cleanCompany = { ...company.json };\n  delete cleanCompany._isNewCompany;\n  uniqueCompanies.push({ json: cleanCompany });\n}\n\nif (uniqueCompanies.length === 0) {\n  return [{ json: { _empty: true, _message: 'No new companies found' } }];\n}\n\nreturn uniqueCompanies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 525],
+      "id": "vc-dedup",
+      "name": "Dedup Against Existing"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._empty }}",
+              "operation": "notEqual",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1980, 525],
+      "id": "vc-has-new",
+      "name": "Has New Companies?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 500,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze this startup company and classify it.\\n\\nCompany Name: {{ $json['Company Name'] }}\\nVC Firm: {{ $json['VC Firm'] }}\\nDescription: {{ $json['Company Description'] }}\\nWebsite: {{ $json['Company URL'] }}\\n\\nProvide:\\n1. Industry/Vertical (e.g., Healthcare, AI/ML, Climate/Environment, EdTech, Developer Tools, Enterprise Software, Fintech, Consumer, Defense/Military, etc.)\\n\\n2. Mission Score (1-5) based on these priorities:\\n   - 5: Strong mission around healthcare, environment/climate, or education\\n   - 4: Moderate alignment with healthcare, environment, or education\\n   - 3: Neutral - general tech, enterprise software, consumer apps, AI/ML tools\\n   - 2: Lower priority - fintech, adtech, crypto\\n   - 1: Lowest priority - military, defense, weapons\\n\\n3. Brief explanation of the score\\n\\nRespond with ONLY valid JSON (no markdown, no code blocks):\\n{\\\"industry\\\": \\\"Industry Name\\\", \\\"mission_score\\\": 3, \\\"mission_notes\\\": \\\"Brief explanation\\\"}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 60000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2200, 525],
+      "id": "vc-classify-api",
+      "name": "Classify via Anthropic API",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic-header",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Anthropic API response and merge with original company data\nconst items = $input.all();\nconst results = [];\n\nconst originalCompanies = $('Has New Companies?').all().filter(item => !item.json._empty);\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const original = originalCompanies[i]?.json || {};\n  \n  let industry = 'Unknown';\n  let missionScore = 3;\n  let missionNotes = 'Unable to classify';\n  \n  try {\n    const responseText = item.json.content?.[0]?.text || '';\n    const cleanedResponse = responseText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    const parsed = JSON.parse(cleanedResponse);\n    \n    if (parsed.industry) industry = parsed.industry;\n    if (parsed.mission_score) missionScore = parseInt(parsed.mission_score) || 3;\n    if (parsed.mission_notes) missionNotes = parsed.mission_notes;\n  } catch (e) {\n    const responseText = item.json.content?.[0]?.text || JSON.stringify(item.json);\n    const industryMatch = responseText.match(/\"industry\"\\s*:\\s*\"([^\"]+)\"/i);\n    const scoreMatch = responseText.match(/\"mission_score\"\\s*:\\s*(\\d)/i);\n    const notesMatch = responseText.match(/\"mission_notes\"\\s*:\\s*\"([^\"]+)\"/i);\n    \n    if (industryMatch) industry = industryMatch[1];\n    if (scoreMatch) missionScore = parseInt(scoreMatch[1]);\n    if (notesMatch) missionNotes = notesMatch[1];\n  }\n  \n  results.push({\n    json: {\n      'Company Name': original['Company Name'] || '',\n      'VC Firm': original['VC Firm'] || '',\n      'Company Description': original['Company Description'] || '',\n      'Company URL': original['Company URL'] || '',\n      'Logo URL': original['Logo URL'] || '',\n      'Status': original['Status'] || 'New',\n      'First Seen Date': original['First Seen Date'] || new Date().toISOString().split('T')[0],\n      'Source': original['Source'] || 'VC Portfolio',\n      'Industry': industry,\n      'Mission Score': missionScore,\n      'Mission Notes': missionNotes\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 525],
+      "id": "vc-parse-classification",
+      "name": "Parse Classification"
+    },
+    {
+      "parameters": {
+        "authentication": "airtableTokenApi",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list",
+          "cachedResultName": "Funding Alerts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json['Company Name'] }}",
+            "VC Firm": "={{ $json['VC Firm'] }}",
+            "Company Description": "={{ $json['Company Description'] }}",
+            "Company URL": "={{ $json['Company URL'] }}",
+            "Logo URL": "={{ $json['Logo URL'] }}",
+            "Status": "={{ $json['Status'] }}",
+            "First Seen Date": "={{ $json['First Seen Date'] }}",
+            "Source": "={{ $json['Source'] }}",
+            "Industry": "={{ $json['Industry'] }}",
+            "Mission Score": "={{ $json['Mission Score'] }}",
+            "Mission Notes": "={{ $json['Mission Notes'] }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [2640, 525],
+      "id": "vc-add-to-airtable",
+      "name": "Add to Airtable"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1320, 275],
+      "id": "vc-no-valid",
+      "name": "No Valid Companies"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2200, 375],
+      "id": "vc-no-new",
+      "name": "All Duplicates"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Mon/Thu 8am)": {
+      "main": [
+        [
+          {
+            "node": "Browserless Unusual",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch First Round (Sanity API)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Essence VC",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Costanoa Sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Existing Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Unusual": {
+      "main": [
+        [
+          {
+            "node": "Parse Unusual Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Unusual Ventures": {
+      "main": [
+        [
+          {
+            "node": "Merge Unusual + First Round",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch First Round (Sanity API)": {
+      "main": [
+        [
+          {
+            "node": "Parse First Round",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse First Round": {
+      "main": [
+        [
+          {
+            "node": "Merge Unusual + First Round",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch Essence VC": {
+      "main": [
+        [
+          {
+            "node": "Parse Essence VC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Essence VC": {
+      "main": [
+        [
+          {
+            "node": "Merge Essence + Costanoa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Costanoa Sitemap": {
+      "main": [
+        [
+          {
+            "node": "Parse Costanoa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Costanoa": {
+      "main": [
+        [
+          {
+            "node": "Merge Essence + Costanoa",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Unusual + First Round": {
+      "main": [
+        [
+          {
+            "node": "Combine All VCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Essence + Costanoa": {
+      "main": [
+        [
+          {
+            "node": "Combine All VCs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Combine All VCs": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid": {
+      "main": [
+        [
+          {
+            "node": "Mark as New",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Valid Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as New": {
+      "main": [
+        [
+          {
+            "node": "Merge for Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Companies": {
+      "main": [
+        [
+          {
+            "node": "Merge for Dedup",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge for Dedup": {
+      "main": [
+        [
+          {
+            "node": "Dedup Against Existing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Against Existing": {
+      "main": [
+        [
+          {
+            "node": "Has New Companies?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Companies?": {
+      "main": [
+        [
+          {
+            "node": "Classify via Anthropic API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "All Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify via Anthropic API": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Add to Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
