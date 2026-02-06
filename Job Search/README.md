@@ -8,6 +8,7 @@ An n8n workflow that automatically scrapes portfolio companies from mission-alig
 - Deduplicates against existing Airtable records
 - AI-powered classification via Anthropic Claude API:
   - Industry/vertical detection
+  - Company stage detection (Seed/Early, Growth, Late/Public)
   - Mission alignment scoring (1-5 scale)
 - Automated scheduling (Mon/Thu at 8am)
 
@@ -21,6 +22,13 @@ An n8n workflow that automatically scrapes portfolio companies from mission-alig
 | Costanoa Ventures | Sitemap XML | Enterprise |
 | Khosla Ventures | Browserless | Climate, cleantech, healthcare |
 | Kapor Capital | Sitemap XML | Social impact, diversity |
+
+## Stage Guide
+
+- **Seed/Early**: New startup, pre-product or early product, small team, not widely known
+- **Growth**: Scaling company, established product, Series B-D, growing but not dominant
+- **Late/Public**: Large company, IPO'd, acquired by major company, or household name (e.g., Uber, DoorDash, Stripe)
+- **Unknown**: Cannot determine stage
 
 ## Mission Score Guide
 
@@ -48,6 +56,7 @@ Required fields:
 - First Seen Date (date)
 - Source (single select)
 - Industry (text)
+- Stage (single select: Seed/Early, Growth, Late/Public, Unknown)
 - Mission Score (number)
 - Mission Notes (text)
 
