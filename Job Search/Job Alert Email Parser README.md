@@ -1,6 +1,6 @@
-# Job Alert Email Parser v3-26
+# Job Alert Email Parser v3-29
 
-An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, uses AI to rate job fit, and adds them to an Airtable database.
+An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, enriches company data via Brave Search, uses AI to rate job fit with builder vs maintainer classification, and adds them to an Airtable database.
 
 ## Overview
 
@@ -10,9 +10,12 @@ This workflow runs on a schedule (every hour) to:
 3. Parse job listings using source-specific parsers
 4. Filter for customer support/success leadership roles only
 5. Deduplicate against existing Airtable records
-6. **Rate job fit using Claude AI** (0-100 score with rationale)
-7. Add new jobs to Airtable
-8. Label processed emails in Gmail
+6. **Prefilter** jobs using builder vs maintainer signals
+7. **Enrich company data via Brave Search** (employee count, funding, PE/VC backing, founded year)
+8. **Rate job fit using Claude AI** with Tide Pool scoring (0-100 score with builder/maintainer classification)
+9. Auto-disqualify: PE-backed, 1000+ employees, $500M+ funding, public companies
+10. Add new jobs to Airtable
+11. Label processed emails in Gmail
 
 ## Supported Job Sources
 
@@ -27,6 +30,7 @@ This workflow runs on a schedule (every hour) to:
 | Welcome to the Jungle | welcometothejungle.com | Title, Company, Location, Salary, Job URL |
 | Google Careers | careers-noreply@google.com | Title, Company (Google), Location, Job URL |
 | Jobright | jobright.ai | Title, Company, Location, Salary, Job URL |
+| Bloomberry | bloomberry.com | Title, Company, Location, Salary, Job URL |
 
 ## Role Filtering
 
@@ -98,14 +102,40 @@ The workflow filters jobs to only include **customer support/success leadership 
 - **Applies role filter** (support/success + leadership keywords)
 - Preserves email ID for labeling
 
-### 11. Rate Job Fit (4-node sequence)
-Calls Claude AI (Haiku) to evaluate each job against candidate profile:
-- **Fetch Profile** (HTTP Request) - Gets candidate profile from GitHub
-- **Build Prompt** (Code) - Constructs the evaluation prompt
-- **Call Claude API** (HTTP Request) - Sends request to Anthropic API using `$env.ANTHROPIC_API_KEY`
-- **Parse Response** (Code) - Extracts score, rationale, industry, company stage
+### 11. Prefilter: Builder vs Maintainer (Code Node)
+- Quick signal check before expensive LLM calls
+- Counts builder signals (build from scratch, first hire, greenfield, series A/B, etc.)
+- Counts maintainer signals (book of business, retention targets, established processes, etc.)
+- Hard rejects obvious IC titles without seniority level
 
-Returns a **Tide-Pool Score** (0-100) and **Tide-Pool Rationale** (1-2 sentences). Profile updates take effect immediately on new jobs.
+### 12. IF: Should Process
+- Routes jobs that pass prefilter to enrichment
+- Skips filtered jobs
+
+### 13. Brave Search Company (HTTP Request)
+- Queries Brave Search API for company funding/employee data
+- Searches: `"Company Name" funding series employees site:crunchbase.com OR site:pitchbook.com OR site:tracxn.com`
+- Requires Brave Search API credentials (Header Auth)
+
+### 14. Parse Enrichment (Code Node)
+- Extracts from search results: employee count, funding stage, total funding, PE/VC backing, founded year
+- Calculates auto-disqualifiers: PE-backed, 1000+ employees, $500M+ funding, public company
+- Formats large funding amounts (e.g., $805.8B instead of $805800M)
+
+### 15. Rate Job Fit (4-node sequence)
+Calls Claude AI (Haiku) to evaluate each job against candidate profile:
+- **Fetch Profile** (HTTP Request) - Gets Tide Pool agent lens from GitHub (runs at workflow start)
+- **Build Prompt** (Code) - Constructs evaluation prompt with enrichment data
+- **Wait (Rate Limit)** - 30-second delay between API calls
+- **Call Claude API** (HTTP Request) - Sends request to Anthropic API
+- **Parse Response** (Code) - Extracts score, rationale, role type, builder/maintainer evidence; includes regex fallback for malformed JSON
+
+Returns:
+- **Tide-Pool Score** (0-100)
+- **Tide-Pool Rationale** (with enrichment data appended)
+- **Role Type** (builder/maintainer/hybrid)
+- **Builder Evidence** / **Maintainer Evidence**
+- **Recommendation** (apply/research/skip)
 
 ### 12. Filter Empty
 - Removes empty items from the flow
@@ -132,10 +162,14 @@ Returns a **Tide-Pool Score** (0-100) and **Tide-Pool Rationale** (1-2 sentences
 | Date Found | Date | When the job was added |
 | Review Status | Single Select | Default: "New" |
 | Tide-Pool Score | Number | AI-generated fit score (0-100) |
-| Tide-Pool Rationale | Long Text | AI explanation for the fit score |
+| Tide-Pool Rationale | Long Text | AI explanation + enrichment data (employees, funding, PE/VC, founded) |
 | Tide Pool Fit | Formula | Auto-calculated from score (Strong/Good/Moderate/Weak Fit) |
 | Industry | Text | AI-identified company industry |
 | Company Stage | Text | AI-identified funding stage (Seed, Series A, etc.) |
+| Role Type | Text | builder, maintainer, or hybrid |
+| Builder Evidence | Long Text | Signals suggesting builder role |
+| Maintainer Evidence | Long Text | Signals suggesting maintainer role |
+| Recommendation | Text | apply, research, or skip |
 
 ## Configuration
 
@@ -162,8 +196,16 @@ Set this environment variable in your n8n instance (Settings > Variables):
 ### Anthropic API (Claude) Setup
 - Required for AI job fit scoring
 - Get an API key from [console.anthropic.com](https://console.anthropic.com)
-- Add it as n8n environment variable `ANTHROPIC_API_KEY`
+- Store in Airtable Config table (Key: `ANTHROPIC_API_KEY`, Value: your key)
 - Uses Claude 3 Haiku model (most cost-effective, ~$0.001 per job)
+
+### Brave Search API Setup
+- Required for company enrichment (employee count, funding, PE/VC backing)
+- Get an API key from [brave.com/search/api](https://brave.com/search/api/)
+- In n8n, create a "Header Auth" credential:
+  - Name: `X-Subscription-Token`
+  - Value: your Brave API key
+- Assign this credential to the "Brave Search Company" node
 
 ## Customization
 
@@ -203,6 +245,9 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-29**: Fixed funding amount parsing (only match explicit "billion" not "b" which conflicted with "Series B"); improved display formatting for large amounts ($805.8B instead of $805800M); added regex fallback for malformed Claude JSON responses
+- **v3-28**: Added Brave Search company enrichment (employee count, funding stage, total funding, PE/VC backing, founded year); added auto-disqualifiers (PE-backed, 1000+ employees, $500M+ funding, public); added builder vs maintainer prefilter and classification; enrichment data appended to Tide-Pool Rationale; reduced Gmail batch to 5 emails; increased rate limit wait to 30 seconds
+- **v3-27**: Added Bloomberry job source support
 - **v3-26**: Enhanced AI scoring with penalties for: (1) large/established companies (1000+ employees, 10+ years, Fortune 500, public), (2) IT Customer Success roles (internal IT support vs external product success), (3) on-site roles outside preferred locations (Remote preferred; on-site OK in Providence RI, Boston, NYC Metro, LA Metro, SF Bay Area, EU/UK)
 - **v3-25**: Limited Gmail fetch to 10 emails per run to prevent API rate limiting; keeps 10-second delay
 - **v3-24**: Increased rate limit wait to 10 seconds (4 seconds still triggered rate limiting with batch jobs)
