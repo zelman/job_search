@@ -4,7 +4,7 @@ An n8n workflow that automatically scrapes portfolio companies from mission-alig
 
 ## Features
 
-- Scrapes portfolio pages from 6 VC firms
+- Scrapes portfolio pages from 14 VC firms
 - Deduplicates against existing Airtable records
 - AI-powered classification via Anthropic Claude API:
   - Industry/vertical detection
@@ -14,14 +14,22 @@ An n8n workflow that automatically scrapes portfolio companies from mission-alig
 
 ## Supported VCs
 
-| VC Firm | Method | Focus |
-|---------|--------|-------|
-| Unusual Ventures | Browserless | Enterprise, B2B |
-| First Round Capital | Sanity CMS API | Seed stage |
-| Essence VC | HTTP + HTML parsing | Early stage |
-| Costanoa Ventures | Sitemap XML | Enterprise |
-| Khosla Ventures | Browserless | Climate, cleantech, healthcare |
-| Kapor Capital | Sitemap XML | Social impact, diversity |
+| VC Firm | Method | Focus | Connection |
+|---------|--------|-------|------------|
+| Unusual Ventures | Browserless | Enterprise, B2B | - |
+| First Round Capital | Sanity CMS API | Seed stage | - |
+| Essence VC | HTTP + HTML parsing | Early stage | - |
+| Costanoa Ventures | Sitemap XML | Enterprise | - |
+| Khosla Ventures | Browserless | Climate, cleantech, healthcare | - |
+| Kapor Capital | Sitemap XML | Social impact, diversity | - |
+| WhatIf Ventures | Browserless | Healthcare | Peripherally know founder |
+| WXR Fund | HTTP + HTML parsing | XR/spatial computing | Know Martina the founder |
+| Leadout Capital | Browserless | Healthcare, femtech | Healthcare focus |
+| Golden Ventures | HTTP + URL parsing | Canadian early-stage | Mental health startup connection |
+| Notable Capital | Browserless | Global, early-growth | Mental health investments |
+| Headline | Browserless | Global fintech/enterprise | Mental health investments |
+| Pioneer Square Labs | HTTP + URL parsing | Seattle-based | Can get intros |
+| Trilogy Equity Partners | HTTP + HTML parsing | Seattle enterprise/consumer | Enterprise focus |
 
 ## Stage Guide
 
@@ -73,5 +81,11 @@ Required fields:
 
 ## Files
 
-- `VC Portfolio Scraper v17.json` - Current version with 6 VCs
-- `VC Portfolio Scraper v16.json` - Previous version with 4 VCs
+- `VC Portfolio Scraper v18.json` - Current version with 14 VCs
+- `VC Portfolio Scraper v17.json` - Previous version with 6 VCs
+
+## Version History
+
+- **v18**: Added 8 new VCs from career coach recommendations: WhatIf Ventures, WXR Fund, Leadout Capital, Golden Ventures, Notable Capital, Headline, Pioneer Square Labs, Trilogy Equity Partners. Note: ANIMO Ventures portfolio only shows logos without text company names, making it impractical to scrape.
+- **v17**: Added Khosla Ventures and Kapor Capital
+- **v16**: Initial version with 4 VCs (Unusual, First Round, Essence, Costanoa)
