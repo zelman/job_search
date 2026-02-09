@@ -182,7 +182,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"https://www.whatif.vc/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 },\n  \"waitForSelector\": { \"selector\": \"a[href*='Visit']\", \"timeout\": 15000 }\n}",
+        "jsonBody": "={\n  \"url\": \"https://www.whatif.vc/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
         "options": { "timeout": 120000 }
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -236,7 +236,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"https://www.leadoutcapital.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 },\n  \"waitForSelector\": { \"selector\": \".text-block\", \"timeout\": 15000 }\n}",
+        "jsonBody": "={\n  \"url\": \"https://www.leadoutcapital.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
         "options": { "timeout": 120000 }
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -290,7 +290,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"https://notablecap.com/companies\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 },\n  \"waitForSelector\": { \"selector\": \".swiper-slide\", \"timeout\": 15000 }\n}",
+        "jsonBody": "={\n  \"url\": \"https://notablecap.com/companies\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
         "options": { "timeout": 120000 }
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -322,7 +322,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"https://headline.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 },\n  \"waitForSelector\": { \"selector\": \"[class*='company']\", \"timeout\": 15000 }\n}",
+        "jsonBody": "={\n  \"url\": \"https://headline.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
         "options": { "timeout": 120000 }
       },
       "type": "n8n-nodes-base.httpRequest",
