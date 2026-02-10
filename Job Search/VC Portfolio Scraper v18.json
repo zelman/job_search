@@ -366,15 +366,25 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://trilogyequity.com/portfolio",
-        "options": { "timeout": 60000 }
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/json" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://trilogyequity.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 60000 }\n}",
+        "options": { "timeout": 120000 }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [220, 2150],
       "id": "vc-fetch-trilogy",
-      "name": "Fetch Trilogy Equity"
+      "name": "Browserless Trilogy",
+      "credentials": { "httpQueryAuth": { "id": "browserless-token", "name": "Browserless API" } }
     },
     {
       "parameters": {
@@ -655,7 +665,7 @@
         { "node": "Browserless Notable", "type": "main", "index": 0 },
         { "node": "Browserless Headline", "type": "main", "index": 0 },
         { "node": "Fetch PSL (Pioneer Square)", "type": "main", "index": 0 },
-        { "node": "Fetch Trilogy Equity", "type": "main", "index": 0 },
+        { "node": "Browserless Trilogy", "type": "main", "index": 0 },
         { "node": "Get Existing Companies", "type": "main", "index": 0 }
       ]]
     },
@@ -685,7 +695,7 @@
     "Parse Headline": { "main": [[{ "node": "Merge Notable + Headline", "type": "main", "index": 1 }]] },
     "Fetch PSL (Pioneer Square)": { "main": [[{ "node": "Parse PSL", "type": "main", "index": 0 }]] },
     "Parse PSL": { "main": [[{ "node": "Merge PSL + Trilogy", "type": "main", "index": 0 }]] },
-    "Fetch Trilogy Equity": { "main": [[{ "node": "Parse Trilogy Equity", "type": "main", "index": 0 }]] },
+    "Browserless Trilogy": { "main": [[{ "node": "Parse Trilogy Equity", "type": "main", "index": 0 }]] },
     "Parse Trilogy Equity": { "main": [[{ "node": "Merge PSL + Trilogy", "type": "main", "index": 1 }]] },
     "Merge Unusual + First Round": { "main": [[{ "node": "Merge Groups 1+2", "type": "main", "index": 0 }]] },
     "Merge Essence + Costanoa": { "main": [[{ "node": "Merge Groups 1+2", "type": "main", "index": 1 }]] },
