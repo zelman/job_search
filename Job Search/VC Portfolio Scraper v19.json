@@ -593,7 +593,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst results = [];\nconst originalCompanies = $('Has New Companies?').all().filter(item => !item.json._empty);\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const original = originalCompanies[i]?.json || {};\n  let industry = 'Unknown', stage = 'Unknown', missionScore = 3, missionNotes = 'Unable to classify';\n  try {\n    const responseText = item.json.content?.[0]?.text || '';\n    const parsed = JSON.parse(responseText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim());\n    if (parsed.industry) industry = parsed.industry;\n    if (parsed.stage) stage = parsed.stage;\n    if (parsed.mission_score) missionScore = parseInt(parsed.mission_score) || 3;\n    if (parsed.mission_notes) missionNotes = parsed.mission_notes;\n  } catch (e) {\n    const rt = item.json.content?.[0]?.text || '';\n    const im = rt.match(/\"industry\"\\s*:\\s*\"([^\"]+)\"/i);\n    const stm = rt.match(/\"stage\"\\s*:\\s*\"([^\"]+)\"/i);\n    const sm = rt.match(/\"mission_score\"\\s*:\\s*(\\d)/i);\n    const nm = rt.match(/\"mission_notes\"\\s*:\\s*\"([^\"]+)\"/i);\n    if (im) industry = im[1]; if (stm) stage = stm[1]; if (sm) missionScore = parseInt(sm[1]); if (nm) missionNotes = nm[1];\n  }\n  results.push({ json: { 'Company Name': original['Company Name'] || '', 'VC Firm': original['VC Firm'] || '', 'Company Description': original['Company Description'] || '', 'Company URL': original['Company URL'] || '', 'Portfolio Addition Date': original['Portfolio Addition Date'] || '', 'Status': original['Status'] || 'New', 'First Seen Date': original['First Seen Date'] || new Date().toISOString().split('T')[0], 'Source': original['Source'] || 'VC Portfolio', 'Industry': industry, 'Stage': stage, 'Mission Score': missionScore, 'Mission Notes': missionNotes } });\n}\nreturn results;"
+        "jsCode": "const items = $input.all();\nconst results = [];\nconst originalCompanies = $('Has New Companies?').all().filter(item => !item.json._empty);\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const original = originalCompanies[i]?.json || {};\n  let industry = 'Unknown', stage = 'Unknown', missionScore = 3, missionNotes = 'Unable to classify';\n  try {\n    const responseText = item.json.content?.[0]?.text || '';\n    const parsed = JSON.parse(responseText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim());\n    if (parsed.industry) industry = parsed.industry;\n    if (parsed.stage) stage = parsed.stage;\n    if (parsed.mission_score) missionScore = parseInt(parsed.mission_score) || 3;\n    if (parsed.mission_notes) missionNotes = parsed.mission_notes;\n  } catch (e) {\n    const rt = item.json.content?.[0]?.text || '';\n    const im = rt.match(/\"industry\"\\s*:\\s*\"([^\"]+)\"/i);\n    const stm = rt.match(/\"stage\"\\s*:\\s*\"([^\"]+)\"/i);\n    const sm = rt.match(/\"mission_score\"\\s*:\\s*(\\d)/i);\n    const nm = rt.match(/\"mission_notes\"\\s*:\\s*\"([^\"]+)\"/i);\n    if (im) industry = im[1]; if (stm) stage = stm[1]; if (sm) missionScore = parseInt(sm[1]); if (nm) missionNotes = nm[1];\n  }\n  const result = { 'Company Name': original['Company Name'] || '', 'VC Firm': original['VC Firm'] || '', 'Company Description': original['Company Description'] || '', 'Company URL': original['Company URL'] || '', 'Status': original['Status'] || 'New', 'First Seen Date': original['First Seen Date'] || new Date().toISOString().split('T')[0], 'Source': original['Source'] || 'VC Portfolio', 'Industry': industry, 'Stage': stage, 'Mission Score': missionScore, 'Mission Notes': missionNotes };\n  if (original['Portfolio Addition Date']) result['Portfolio Addition Date'] = original['Portfolio Addition Date'];\n  results.push({ json: result });\n}\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -608,21 +608,8 @@
         "base": { "__rl": true, "value": "appFEzXvPWvRtXgRY", "mode": "id" },
         "table": { "__rl": true, "value": "Funding Alerts", "mode": "list", "cachedResultName": "Funding Alerts" },
         "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Company Name": "={{ $json['Company Name'] }}",
-            "VC Firm": "={{ $json['VC Firm'] }}",
-            "Company Description": "={{ $json['Company Description'] }}",
-            "Company URL": "={{ $json['Company URL'] }}",
-            "Portfolio Addition Date": "={{ $json['Portfolio Addition Date'] }}",
-            "Status": "={{ $json['Status'] }}",
-            "First Seen Date": "={{ $json['First Seen Date'] }}",
-            "Source": "={{ $json['Source'] }}",
-            "Industry": "={{ $json['Industry'] }}",
-            "Stage": "={{ $json['Stage'] }}",
-            "Mission Score": "={{ $json['Mission Score'] }}",
-            "Mission Notes": "={{ $json['Mission Notes'] }}"
-          }
+          "mappingMode": "autoMapInputData",
+          "value": {}
         },
         "options": {}
       },
