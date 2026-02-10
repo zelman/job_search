@@ -1,0 +1,220 @@
+{
+  "name": "VC Date Enrichment v5",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "id": "date-manual-trigger",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": { "__rl": true, "value": "appFEzXvPWvRtXgRY", "mode": "id" },
+        "table": { "__rl": true, "value": "Funding Alerts", "mode": "list", "cachedResultName": "Funding Alerts" },
+        "filterByFormula": "AND({Portfolio Addition Date} = BLANK(), {VC Firm} != '')",
+        "returnAll": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [220, 300],
+      "id": "date-get-missing",
+      "name": "Get Companies Missing Dates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst results = [];\n\n// PASTE YOUR BRAVE API KEY HERE\nconst braveApiKey = 'PASTE_YOUR_BRAVE_API_KEY_HERE';\n\n// PASTE YOUR AIRTABLE API KEY HERE  \nconst airtableApiKey = 'PASTE_YOUR_AIRTABLE_API_KEY_HERE';\n\nif (braveApiKey === 'PASTE_YOUR_BRAVE_API_KEY_HERE' || airtableApiKey === 'PASTE_YOUR_AIRTABLE_API_KEY_HERE') {\n  return [{ json: { _error: true, _message: 'Please edit the Prepare Search Queries node and paste your API keys' } }];\n}\n\nfor (const item of items) {\n  const companyName = item.json['Company Name'] || '';\n  const vcFirm = item.json['VC Firm'] || '';\n  const recordId = item.json.id || '';\n  \n  if (!companyName || !vcFirm || !recordId) continue;\n  \n  const query = `${companyName} ${vcFirm} funding`;\n  \n  results.push({\n    json: {\n      recordId,\n      companyName,\n      vcFirm,\n      searchQuery: query,\n      _braveKey: braveApiKey,\n      _airtableKey: airtableApiKey\n    }\n  });\n}\n\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies to process' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "id": "date-prepare-search",
+      "name": "Prepare Search Queries"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json._empty }}", "operation": "notEqual", "value2": true },
+            { "value1": "={{ $json._error }}", "operation": "notEqual", "value2": true }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [660, 300],
+      "id": "date-has-companies",
+      "name": "Has Companies?"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [880, 250],
+      "id": "date-batch",
+      "name": "Batch (5 at a time)"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.search.brave.com/res/v1/web/search?q={{ encodeURIComponent($json.searchQuery) }}&count=5",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Subscription-Token", "value": "={{ $json._braveKey }}" },
+            { "name": "Accept", "value": "application/json" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 250],
+      "id": "date-brave-search",
+      "name": "Brave Search",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst batchItems = $('Batch (5 at a time)').all();\nconst results = [];\n\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const batchItem = batchItems[i]?.json || {};\n  \n  const recordId = batchItem.recordId || '';\n  const companyName = batchItem.companyName || '';\n  const vcFirm = batchItem.vcFirm || '';\n  const airtableKey = batchItem._airtableKey || '';\n  \n  if (item.json.error || !item.json.web) {\n    results.push({ json: { _noDate: true, recordId, companyName, vcFirm, _reason: 'No web results' } });\n    continue;\n  }\n  \n  let investmentDate = '';\n  let investmentYear = '';\n  \n  const webResults = item.json.web?.results || [];\n  \n  for (const result of webResults) {\n    const text = (result.title || '') + ' ' + (result.description || '');\n    \n    const yearPatterns = [\n      /(?:raised|funding|investment|invested|series\\s*[a-e]|seed|round).*?(20[0-2][0-9])/i,\n      /(20[0-2][0-9]).*?(?:raised|funding|investment|series|seed|round)/i,\n      /(?:announced|closed|led|participated).*?(20[0-2][0-9])/i,\n      /(?:\\$[\\d.]+[mb]|million|billion).*?(20[0-2][0-9])/i,\n      /(20[0-2][0-9]).*?(?:\\$[\\d.]+[mb]|million|billion)/i\n    ];\n    \n    for (const pattern of yearPatterns) {\n      const match = text.match(pattern);\n      if (match && match[1]) {\n        const year = parseInt(match[1]);\n        if (year >= 2005 && year <= new Date().getFullYear()) {\n          investmentYear = match[1];\n          investmentDate = `${match[1]}-01-01`;\n          break;\n        }\n      }\n    }\n    if (investmentYear) break;\n  }\n  \n  if (investmentDate) {\n    results.push({ json: { recordId, companyName, vcFirm, investmentDate, _airtableKey: airtableKey } });\n  } else {\n    results.push({ json: { _noDate: true, recordId, companyName, vcFirm } });\n  }\n}\n\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 250],
+      "id": "date-parse-results",
+      "name": "Parse Dates"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.investmentDate }}", "operation": "isNotEmpty" }]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1540, 250],
+      "id": "date-has-results",
+      "name": "Has Date?"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.recordId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json._airtableKey }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"fields\": { \"Portfolio Addition Date\": \"{{ $json.investmentDate }}\" } }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1760, 200],
+      "id": "date-update-airtable",
+      "name": "Update Airtable with Date",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1760, 350],
+      "id": "date-no-dates",
+      "name": "No Date Found"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $('Batch (5 at a time)').context.noItemsLeft }}", "operation": "equal", "value2": false }]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1980, 250],
+      "id": "date-more-batches",
+      "name": "More Batches?"
+    },
+    {
+      "parameters": { "amount": 2 },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2200, 200],
+      "id": "date-wait",
+      "name": "Wait 2s"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 400],
+      "id": "date-done-empty",
+      "name": "Done"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "Get Companies Missing Dates", "type": "main", "index": 0 }]]
+    },
+    "Get Companies Missing Dates": {
+      "main": [[{ "node": "Prepare Search Queries", "type": "main", "index": 0 }]]
+    },
+    "Prepare Search Queries": {
+      "main": [[{ "node": "Has Companies?", "type": "main", "index": 0 }]]
+    },
+    "Has Companies?": {
+      "main": [
+        [{ "node": "Batch (5 at a time)", "type": "main", "index": 0 }],
+        [{ "node": "Done", "type": "main", "index": 0 }]
+      ]
+    },
+    "Batch (5 at a time)": {
+      "main": [
+        [],
+        [{ "node": "Brave Search", "type": "main", "index": 0 }]
+      ]
+    },
+    "Brave Search": {
+      "main": [[{ "node": "Parse Dates", "type": "main", "index": 0 }]]
+    },
+    "Parse Dates": {
+      "main": [[{ "node": "Has Date?", "type": "main", "index": 0 }]]
+    },
+    "Has Date?": {
+      "main": [
+        [{ "node": "Update Airtable with Date", "type": "main", "index": 0 }],
+        [{ "node": "No Date Found", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Airtable with Date": {
+      "main": [[{ "node": "More Batches?", "type": "main", "index": 0 }]]
+    },
+    "No Date Found": {
+      "main": [[{ "node": "More Batches?", "type": "main", "index": 0 }]]
+    },
+    "More Batches?": {
+      "main": [
+        [{ "node": "Wait 2s", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Wait 2s": {
+      "main": [[{ "node": "Batch (5 at a time)", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "meta": { "templateCredsSetupCompleted": true },
+  "tags": []
+}
