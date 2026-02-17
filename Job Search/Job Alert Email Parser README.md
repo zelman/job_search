@@ -1,4 +1,4 @@
-# Job Alert Email Parser v3-30
+# Job Alert Email Parser v3-31
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, enriches company data via Brave Search, uses AI to rate job fit with builder vs maintainer classification, and adds them to an Airtable database.
 
@@ -245,6 +245,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-31**: Added "zombie company" auto-disqualifier for stalled companies (7+ years old, still at Seed/Pre-Seed/Bootstrapped, <100 employees). Companies like Project Expedition (10yr old, $500K seed, never progressed) now flagged automatically.
 - **v3-30**: Improved filtering accuracy: expanded CSM/IC title exclusions (Customer Engagement Manager, Escalation Manager, etc.); added 30+ PE firm names for detection (KKR, Bain, TPG, etc.); added known large company list (Anthropic, Pinterest, Google, etc.) for auto-flagging; added healthcare compliance skills mismatch detection (HIPAA/PHI requirements)
 - **v3-29**: Fixed funding amount parsing (only match explicit "billion" not "b" which conflicted with "Series B"); improved display formatting for large amounts ($805.8B instead of $805800M); added regex fallback for malformed Claude JSON responses
 - **v3-28**: Added Brave Search company enrichment (employee count, funding stage, total funding, PE/VC backing, founded year); added auto-disqualifiers (PE-backed, 1000+ employees, $500M+ funding, public); added builder vs maintainer prefilter and classification; enrichment data appended to Tide-Pool Rationale; reduced Gmail batch to 5 emails; increased rate limit wait to 30 seconds
