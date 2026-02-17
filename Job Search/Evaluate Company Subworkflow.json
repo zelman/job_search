@@ -1,0 +1,255 @@
+{
+  "name": "Evaluate Company Subworkflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "input-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse input from parent workflow\nconst input = $input.all()[0].json;\n\n// Extract company data\nconst company = {\n  name: input.company_name || input.name || 'Unknown',\n  url: input.company_url || input.url || '',\n  description: input.description || '',\n  funding_stage: input.funding_stage || input.stage || 'Unknown',\n  total_funding: input.total_funding || '',\n  employee_count: parseInt(input.employee_count) || 0,\n  investors: input.investors || '',\n  sector: input.sector || '',\n  founded_year: parseInt(input.founded_year) || 0,\n  pe_backed: input.pe_backed || false,\n  acquired: input.acquired || false,\n  job_title: input.job_title || '',\n  job_url: input.job_url || '',\n  compensation: input.compensation || '',\n  source: input.source || input.vc_firm || 'Unknown'\n};\n\nreturn [{ json: company }];"
+      },
+      "id": "parse-input",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// PE FIRM KEYWORDS - Priority 1 Disqualifier\nconst PE_FIRMS = [\n  'private equity', 'PE-backed', 'PE backed', 'portfolio company of',\n  'Accel-KKR', 'LLR Partners', 'Vista Equity', 'Thoma Bravo', 'Silver Lake',\n  'Warburg Pincus', 'KKR', 'Blackstone', 'Carlyle', 'Apollo', 'TPG',\n  'Bain Capital', 'Advent', 'Hellman & Friedman', 'Francisco Partners',\n  'Insight Partners', 'CD Private Equity', 'Encore Consumer Capital',\n  'Welsh Carson', 'GTCR', 'Providence Equity', 'Leonard Green', 'Clearlake'\n];\n\n// DISQUALIFIED SECTORS\nconst SECTOR_DISQUALIFIERS = {\n  payer_healthcare: ['health plan', 'health plans', 'payer', 'payers', 'utilization management', \n    'claims processing', 'member experience', 'insurance', 'managed care', 'Medicare Advantage', 'Medicaid'],\n  dtc_consumer: ['DTC', 'direct to consumer', 'Shopify', 'ecommerce', 'retail', 'Target', \n    'Walmart', 'Amazon storefront', 'consumer products', 'supplements', 'personal care', 'beauty brand', 'CPG'],\n  defense_gov: ['DoD', 'Department of Defense', 'Navy', 'Army', 'Air Force', 'military', \n    'defense contractor', 'government contract', 'federal', 'defense tech', 'national security'],\n  hardware: ['hardware company', 'physical product', 'manufacturing', 'IoT device', 'sensor hardware', 'robotics'],\n  agtech: ['agriculture', 'agtech', 'farming', 'commodity trading', 'coffee export', 'grain', 'livestock']\n};\n\n// RENEWALS/AM FOCUS KEYWORDS\nconst RENEWALS_KEYWORDS = [\n  'renewals', 'renewal rate', 'retention ARR', 'expansion ARR',\n  'NRR', 'GRR', 'net revenue retention', 'gross revenue retention',\n  'upsell', 'cross-sell', 'expansion revenue', 'account management',\n  'book of business', 'quota', 'sales target', 'revenue target'\n];\n\nconst company = $input.all()[0].json;\nconst textToSearch = `${company.name} ${company.description} ${company.investors} ${company.sector} ${company.job_title}`.toLowerCase();\n\nlet disqualified = false;\nlet disqualify_rule = '';\nlet disqualify_reason = '';\nconst disqualifiers_checked = [];\n\n// Priority 1: PE-backed check\nconst peMatch = PE_FIRMS.find(pe => textToSearch.includes(pe.toLowerCase()));\nif (company.pe_backed || peMatch) {\n  disqualified = true;\n  disqualify_rule = 'PE_BACKED';\n  disqualify_reason = `Private equity backed${peMatch ? ` (detected: ${peMatch})` : ''} - instant disqualify`;\n}\ndisqualifiers_checked.push({ rule: 'PE_BACKED', result: disqualified ? 'fail' : 'pass', evidence: peMatch || 'none' });\n\n// Priority 2: Too large\nif (!disqualified) {\n  if (company.employee_count >= 1000) {\n    disqualified = true;\n    disqualify_rule = 'TOO_LARGE';\n    disqualify_reason = `${company.employee_count} employees - too large (threshold: 1000)`;\n  } else {\n    const fundingNum = parseFloat(company.total_funding.replace(/[^0-9.]/g, ''));\n    const fundingMult = company.total_funding.toLowerCase().includes('b') ? 1000000000 : \n                        company.total_funding.toLowerCase().includes('m') ? 1000000 : 1;\n    if (fundingNum * fundingMult >= 500000000) {\n      disqualified = true;\n      disqualify_rule = 'TOO_LARGE';\n      disqualify_reason = `${company.total_funding} funding - too large (threshold: $500M)`;\n    }\n  }\n  disqualifiers_checked.push({ rule: 'TOO_LARGE', result: disqualified && disqualify_rule === 'TOO_LARGE' ? 'fail' : 'pass' });\n}\n\n// Priority 3: Sector mismatch\nif (!disqualified) {\n  for (const [sectorType, keywords] of Object.entries(SECTOR_DISQUALIFIERS)) {\n    const sectorMatch = keywords.find(kw => textToSearch.includes(kw.toLowerCase()));\n    if (sectorMatch) {\n      disqualified = true;\n      disqualify_rule = 'SECTOR_MISMATCH';\n      disqualify_reason = `Sector mismatch: ${sectorType} (detected: ${sectorMatch})`;\n      break;\n    }\n  }\n  disqualifiers_checked.push({ rule: 'SECTOR_MISMATCH', result: disqualified && disqualify_rule === 'SECTOR_MISMATCH' ? 'fail' : 'pass' });\n}\n\n// Priority 4: Renewals/AM focus (if job description provided)\nif (!disqualified && company.job_title) {\n  const renewalsMatch = RENEWALS_KEYWORDS.filter(kw => textToSearch.includes(kw.toLowerCase()));\n  // Only disqualify if multiple renewals keywords found (indicates primary focus)\n  if (renewalsMatch.length >= 2) {\n    disqualified = true;\n    disqualify_rule = 'RENEWALS_AM_FOCUS';\n    disqualify_reason = `Role primarily renewals/AM focused (detected: ${renewalsMatch.join(', ')})`;\n  }\n  disqualifiers_checked.push({ rule: 'RENEWALS_AM_FOCUS', result: disqualified && disqualify_rule === 'RENEWALS_AM_FOCUS' ? 'fail' : 'pass' });\n}\n\n// Priority 5: Acquired company\nif (!disqualified && company.acquired) {\n  disqualified = true;\n  disqualify_rule = 'ACQUIRED';\n  disqualify_reason = 'Company has been acquired - not a build opportunity';\n  disqualifiers_checked.push({ rule: 'ACQUIRED', result: 'fail' });\n}\n\n// Priority 6: Founded too early (before 2017)\nif (!disqualified && company.founded_year && company.founded_year < 2017) {\n  disqualified = true;\n  disqualify_rule = 'FOUNDED_TOO_EARLY';\n  disqualify_reason = `Founded ${company.founded_year} - company too established (threshold: 2017)`;\n  disqualifiers_checked.push({ rule: 'FOUNDED_TOO_EARLY', result: 'fail' });\n}\n\nreturn [{\n  json: {\n    ...company,\n    disqualified,\n    disqualify_rule,\n    disqualify_reason,\n    disqualifiers_checked\n  }\n}];"
+      },
+      "id": "disqualifier-check",
+      "name": "Check Disqualifiers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.disqualified }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-disqualified",
+      "name": "IF Disqualified",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format disqualified result\nconst company = $input.all()[0].json;\n\nreturn [{\n  json: {\n    company_name: company.name,\n    company_url: company.url,\n    description: company.description,\n    source: company.source,\n    bucket: 'PASS',\n    disqualified: true,\n    disqualify_rule: company.disqualify_rule,\n    disqualify_reason: company.disqualify_reason,\n    disqualifiers_checked: company.disqualifiers_checked,\n    total_score: 0,\n    scores: {},\n    positive_signals: [],\n    red_flags: [company.disqualify_reason],\n    summary: `Auto-disqualified: ${company.disqualify_reason}`,\n    watch_triggers: [],\n    job_title: company.job_title,\n    job_url: company.job_url,\n    compensation: company.compensation,\n    funding_stage: company.funding_stage,\n    total_funding: company.total_funding,\n    employee_count: company.employee_count,\n    investors: company.investors,\n    founded_year: company.founded_year\n  }\n}];"
+      },
+      "id": "format-disqualified",
+      "name": "Format Disqualified",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://tidepool.getzelman.workers.dev/api/profile",
+        "options": {}
+      },
+      "id": "fetch-tide-pool",
+      "name": "Fetch Tide Pool Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "const company = $('Check Disqualifiers').all()[0].json;\nconst tidePoolProfile = $input.all()[0].json;\n\n// Build the evaluation prompt using the Customer Journey Leader framework\nconst evaluationPrompt = `You are evaluating a company for job search fit using the Customer Journey Leader framework.\n\n**CANDIDATE PROFILE (from Tide Pool):**\n${JSON.stringify(tidePoolProfile, null, 2)}\n\n**COMPANY TO EVALUATE:**\nCompany: ${company.name}\nWebsite: ${company.url}\nDescription: ${company.description}\nFunding Stage: ${company.funding_stage}\nTotal Funding: ${company.total_funding}\nEmployee Count: ${company.employee_count}\nInvestors: ${company.investors}\nFounded Year: ${company.founded_year || 'Unknown'}\nSource: ${company.source}\n${company.job_title ? `Job Title: ${company.job_title}` : ''}\n${company.job_url ? `Job URL: ${company.job_url}` : ''}\n${company.compensation ? `Compensation: ${company.compensation}` : ''}\n\n**SCORING DIMENSIONS (0-10 each, max 80 total):**\n1. build_opportunity: 10=likely first CX hire (0-to-1), 7=small team (1-3), 4=scaling existing, 2=managing established, 0=PE optimization\n2. company_stage: 10=Seed/Series A, 8=Series B, 5=Series C, 2=Series D+, 0=late stage/PE\n3. company_size: 10=10-30 employees (ideal), 8=30-50, 6=50-100, 4=100-200, 2=200-500, 0=500+\n4. title_level: 10=SVP/VP/Head, 7=Director, 3=Sr Manager, 0=Manager (only if job title provided)\n5. sector_fit: 10=healthcare SaaS (provider-side) or life sciences, 9=developer tools, 7=technical B2B SaaS, 5=general B2B, 2=B2C with enterprise, 0=mismatch\n6. technical_complexity: 10=APIs/clinical data/data infrastructure, 8=enterprise SaaS with integrations, 5=mid-market SaaS, 3=simple SaaS, 0=non-technical\n7. compensation_fit: Only score if compensation provided. 10=$150K+, 8=$140-150K, 6=$125-140K, 4=$110-125K, 2=<$110K\n8. customer_journey_scope: 10=full post-sale ownership, 7=2-3 areas, 4=narrow support, 0=renewals-focused\n\n**BUCKET THRESHOLDS:**\n- Score 50+: APPLY\n- Score 35-49: WATCH  \n- Score <35: PASS\n\n**THREE QUESTIONS (for APPLY bucket - answer yes/maybe/no):**\n1. Does this fill the pool or require emptying? (Energy)\n2. Can I be sincere or must I perform? (Authenticity)\n3. Does this create conditions for flourishing or just process flow? (Purpose)\n\n**OUTPUT JSON ONLY:**\n\\`\\`\\`json\n{\n  \"bucket\": \"APPLY\" | \"WATCH\" | \"PASS\",\n  \"scores\": {\n    \"build_opportunity\": N,\n    \"company_stage\": N,\n    \"company_size\": N,\n    \"title_level\": N,\n    \"sector_fit\": N,\n    \"technical_complexity\": N,\n    \"compensation_fit\": N,\n    \"customer_journey_scope\": N\n  },\n  \"total_score\": N,\n  \"three_questions\": {\n    \"fills_pool\": { \"answer\": \"yes|maybe|no\", \"reasoning\": \"...\" },\n    \"can_be_sincere\": { \"answer\": \"yes|maybe|no\", \"reasoning\": \"...\" },\n    \"creates_flourishing\": { \"answer\": \"yes|maybe|no\", \"reasoning\": \"...\" }\n  },\n  \"sector_match\": \"target\" | \"adjacent\" | \"unrelated\",\n  \"cs_hire_likelihood\": \"high\" | \"medium\" | \"low\" | \"unlikely\",\n  \"product_type\": \"high-touch enterprise\" | \"mid-market\" | \"self-serve\" | \"consumer\",\n  \"positive_signals\": [\"signal1\", \"signal2\"],\n  \"red_flags\": [\"flag1\", \"flag2\"],\n  \"flourishing_indicators\": [\"indicator1\"],\n  \"warning_indicators\": [\"warning1\"],\n  \"summary\": \"2-3 sentence explanation\",\n  \"watch_triggers\": [\"trigger1\"] // only if WATCH bucket\n}\n\\`\\`\\``;\n\nreturn [{\n  json: {\n    company,\n    evaluationPrompt\n  }\n}];"
+      },
+      "id": "build-prompt",
+      "name": "Build Evaluation Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1500,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": $json.evaluationPrompt\n    }\n  ]\n} }}",
+        "options": {}
+      },
+      "id": "evaluate-anthropic",
+      "name": "Evaluate via Anthropic API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1400, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_YOUR_ANTHROPIC_CREDENTIAL",
+          "name": "Anthropic API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const company = $('Build Evaluation Prompt').all()[0].json.company;\nconst response = $input.all()[0].json;\n\n// Extract and parse the JSON from Claude's response\nlet evaluation;\ntry {\n  const content = response.content[0].text;\n  const jsonMatch = content.match(/```json\\n([\\s\\S]*?)\\n```/) || \n                    content.match(/```\\n([\\s\\S]*?)\\n```/) ||\n                    content.match(/\\{[\\s\\S]*\\}/);\n  \n  if (jsonMatch) {\n    const jsonStr = jsonMatch[1] || jsonMatch[0];\n    evaluation = JSON.parse(jsonStr);\n  } else {\n    throw new Error('No JSON found in response');\n  }\n} catch (e) {\n  // Fallback if parsing fails\n  evaluation = {\n    bucket: 'WATCH',\n    scores: {},\n    total_score: 0,\n    summary: 'Evaluation parsing failed - manual review needed',\n    positive_signals: [],\n    red_flags: ['AI evaluation parsing error'],\n    watch_triggers: ['Manual review']\n  };\n}\n\n// Derive status from bucket\nconst statusMap = {\n  'APPLY': 'Apply',\n  'WATCH': 'Monitor',\n  'PASS': 'Skip'\n};\n\n// Derive next steps from bucket\nconst nextStepsMap = {\n  'APPLY': 'Apply Now',\n  'WATCH': 'Watch for Jobs',\n  'PASS': 'Skip'\n};\n\nreturn [{\n  json: {\n    company_name: company.name,\n    company_url: company.url,\n    description: company.description,\n    source: company.source,\n    bucket: evaluation.bucket,\n    status: statusMap[evaluation.bucket] || 'Research',\n    next_steps: nextStepsMap[evaluation.bucket] || 'Research More',\n    disqualified: false,\n    disqualify_rule: null,\n    disqualify_reason: null,\n    disqualifiers_checked: company.disqualifiers_checked,\n    total_score: evaluation.total_score,\n    scores: evaluation.scores,\n    three_questions: evaluation.three_questions,\n    sector_match: evaluation.sector_match,\n    cs_hire_likelihood: evaluation.cs_hire_likelihood,\n    product_type: evaluation.product_type,\n    positive_signals: evaluation.positive_signals || [],\n    red_flags: evaluation.red_flags || [],\n    flourishing_indicators: evaluation.flourishing_indicators || [],\n    warning_indicators: evaluation.warning_indicators || [],\n    summary: evaluation.summary,\n    watch_triggers: evaluation.watch_triggers || [],\n    job_title: company.job_title,\n    job_url: company.job_url,\n    compensation: company.compensation,\n    funding_stage: company.funding_stage,\n    total_funding: company.total_funding,\n    employee_count: company.employee_count,\n    investors: company.investors,\n    founded_year: company.founded_year\n  }\n}];"
+      },
+      "id": "parse-evaluation",
+      "name": "Parse Evaluation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 400]
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch"
+      },
+      "id": "merge-output",
+      "name": "Merge Output",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [1800, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Check Disqualifiers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Disqualifiers": {
+      "main": [
+        [
+          {
+            "node": "IF Disqualified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Disqualified": {
+      "main": [
+        [
+          {
+            "node": "Format Disqualified",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Tide Pool Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Disqualified": {
+      "main": [
+        [
+          {
+            "node": "Merge Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tide Pool Profile": {
+      "main": [
+        [
+          {
+            "node": "Build Evaluation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Evaluation Prompt": {
+      "main": [
+        [
+          {
+            "node": "Evaluate via Anthropic API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate via Anthropic API": {
+      "main": [
+        [
+          {
+            "node": "Parse Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Merge Output",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1.0",
+  "triggerCount": 0
+}
