@@ -2,7 +2,9 @@
 
 Three n8n workflows that scrape portfolio companies from sector-focused venture capital firms.
 
-**v21 workflows** use the shared "Evaluate Company Subworkflow" for consistent evaluation logic across all scrapers.
+**v22 workflows** (recommended) use the shared "Enrich & Evaluate Pipeline" - just 3 nodes each!
+
+**v21 workflows** use the shared "Evaluate Company Subworkflow" for evaluation only.
 
 ## Workflows
 
@@ -44,14 +46,22 @@ All v21 workflows include:
 - **Score-based buckets** (APPLY/WATCH/PASS)
 - **Deduplication** against existing Airtable records
 
-## Workflow Architecture (v21)
+## Workflow Architecture
+
+### v22 Architecture (Recommended - 3 nodes!)
+
+```
+Schedule Trigger --> VC Portfolio Data --> Execute "Enrich & Evaluate Pipeline"
+```
+
+That's it! The pipeline handles everything: dedup, Brave Search, disqualification, Claude evaluation, Airtable writes.
+
+### v21 Architecture (Evaluate subworkflow only)
 
 ```
 Schedule Trigger
     |
-[VC Scrapers in parallel] --> Merge --> Dedup Against Existing
-    |
-Build Search Query --> Brave Search Company --> Parse Enrichment
+[VC Scrapers] --> Merge --> Dedup --> Brave Search --> Parse Enrichment
     |
 IF: Auto-Disqualify
     | (true)                         | (false)
@@ -60,42 +70,51 @@ Airtable: Auto-Disqualified     Execute Evaluate Subworkflow
                                 Airtable: Create Evaluated Record
 ```
 
-The key difference from v20: Instead of inline evaluation logic (Fetch Tide Pool, Build Prompt, Claude API, Parse), v21 workflows call the shared subworkflow with a single "Execute Workflow" node.
-
 ## Setup
 
-1. **Import the subworkflow first:**
-   - Import `Evaluate Company Subworkflow.json` into n8n
-   - Note its workflow ID
+### v22 Setup (Recommended - credentials in ONE place)
 
-2. **Import the v21 sector workflows:**
-   - `VC Scraper - Healthcare v21.json`
-   - `VC Scraper - Climate Tech v21.json`
-   - `VC Scraper - Social Justice v21.json`
+1. **Import the pipeline subworkflow:**
+   - Import `Enrich & Evaluate Pipeline.json` into n8n
+   - **Configure credentials ONCE in the pipeline:**
+     - Airtable API token (3 nodes use this)
+     - Brave Search API (Header Auth with `X-Subscription-Token`)
+     - Anthropic API Key (Header Auth with `x-api-key`)
+   - Note the workflow ID
 
-3. **Configure the subworkflow connection:**
-   - In each v21 workflow, find the "Execute Evaluate Subworkflow" node
-   - Set the workflow ID to match your imported subworkflow
+2. **Import v22 sector workflows:**
+   - `VC Scraper - Healthcare v22.json`
+   - `VC Scraper - Climate Tech v22.json`
+   - `VC Scraper - Social Justice v22.json`
 
-4. **Configure credentials:**
-   - **Browserless API** (Header Auth) - if using Browserless scrapers
-   - **Brave Search API** (Header Auth with `X-Subscription-Token`)
-   - **Anthropic API Key** (Header Auth with `x-api-key`) - configured in subworkflow
-   - **Airtable API** token
+3. **Configure each v22 workflow:**
+   - Set the "Execute Enrich & Evaluate Pipeline" node's workflow ID
+   - **No other credentials needed!**
 
-5. **Test and enable:**
-   - Test run the workflow
-   - Enable the schedule trigger
+4. **Test and enable the schedule triggers**
+
+### v21 Setup (Legacy)
+
+1. Import `Evaluate Company Subworkflow.json`, note its workflow ID
+2. Import v21 sector workflows
+3. Configure subworkflow connection in each
+4. Configure credentials in EACH workflow (Browserless, Brave, Anthropic, Airtable)
 
 ## Files
 
-### v21 (Current - shared subworkflow)
-- `Evaluate Company Subworkflow.json` - Shared evaluation logic
+### v22 (Recommended - full pipeline subworkflow)
+- `Enrich & Evaluate Pipeline.json` - Complete pipeline: dedup, Brave, Claude, Airtable
+- `VC Scraper - Healthcare v22.json` (3 nodes)
+- `VC Scraper - Climate Tech v22.json` (3 nodes)
+- `VC Scraper - Social Justice v22.json` (3 nodes)
+
+### v21 (Evaluate subworkflow only)
+- `Evaluate Company Subworkflow.json` - Evaluation logic only
 - `VC Scraper - Healthcare v21.json`
 - `VC Scraper - Climate Tech v21.json`
 - `VC Scraper - Social Justice v21.json`
 
-### v20 (Legacy - inline evaluation)
+### v20 (Legacy - inline everything)
 - `VC Scraper - Healthcare.json`
 - `VC Scraper - Climate Tech.json`
 - `VC Scraper - Social Justice.json`
@@ -111,19 +130,21 @@ The key difference from v20: Instead of inline evaluation logic (Fetch Tide Pool
 - Brave Search limited to 1.5s between calls
 - v21 workflows are simpler to maintain - update the subworkflow and all scrapers benefit
 
-## Benefits of v21 Architecture
+## Architecture Comparison
 
-| Aspect | v20 (Inline) | v21 (Subworkflow) |
-|--------|--------------|-------------------|
-| Evaluation logic | Duplicated in each workflow | Single subworkflow |
-| Updates | Edit every workflow | Edit subworkflow once |
-| Consistency | Manual sync required | Automatic |
-| Config source | Hardcoded in prompts | evaluation-config.json |
-| Complexity | ~40 nodes per workflow | ~25 nodes + subworkflow |
+| Aspect | v20 (Inline) | v21 (Eval Subworkflow) | v22 (Full Pipeline) |
+|--------|--------------|------------------------|---------------------|
+| Nodes per scraper | ~40 | ~25 | **3** |
+| Credential configs | 4 per workflow | 3 per workflow | **1 (pipeline only)** |
+| Dedup logic | Per workflow | Per workflow | **Pipeline** |
+| Brave Search | Per workflow | Per workflow | **Pipeline** |
+| Claude eval | Per workflow | Subworkflow | **Pipeline** |
+| Airtable writes | Per workflow | Per workflow | **Pipeline** |
+| To add new VC | Copy 40 nodes | Copy 25 nodes | **Add to data array** |
 
 ## Version History
 
-- **Feb 2026 (v21)**: Refactored to use shared "Evaluate Company Subworkflow". Added evaluation-config.json governance. Simplified sector workflows.
-- **Feb 2026 (v20)**: Updated to use Tide Pool evaluation framework
-- **Feb 2026**: Added Brave Search enrichment and auto-disqualification
+- **Feb 2026 (v22)**: Full pipeline subworkflow. Scrapers reduced to 3 nodes. Credentials configured once in pipeline. Added "Enrich & Evaluate Pipeline.json".
+- **Feb 2026 (v21)**: Evaluate-only subworkflow. Still had dedup/Brave/Airtable in each scraper.
+- **Feb 2026 (v20)**: Tide Pool evaluation framework with inline logic.
 - **Jan 2026**: Initial versions with simple classification
