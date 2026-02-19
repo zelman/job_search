@@ -81,7 +81,7 @@
     {
       "parameters": {
         "source": "database",
-        "workflowId": {"__rl": true, "value": "CONFIGURE_PIPELINE_ID", "mode": "id"},
+        "workflowId": {"__rl": true, "value": "rcMNDrfZR6csHRsYKFn0W", "mode": "id"},
         "options": {"waitForSubWorkflow": true}
       },
       "type": "n8n-nodes-base.executeWorkflow",
