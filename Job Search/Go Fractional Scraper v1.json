@@ -21,7 +21,7 @@
         "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"https://www.gofractional.com/jobs/remote\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 60000 },\n  \"waitForSelector\": { \"selector\": \"a[href*='/jobs/']\", \"timeout\": 30000 }\n}",
+        "jsonBody": "={\n  \"url\": \"https://www.gofractional.com/jobs/remote\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 90000 },\n  \"waitForTimeout\": 5000\n}",
         "options": {"timeout": 120000}
       },
       "type": "n8n-nodes-base.httpRequest",
