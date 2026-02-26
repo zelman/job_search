@@ -1,0 +1,152 @@
+{
+  "name": "Dedup Check Subworkflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "dedup-check-trigger",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Generate normalized dedup key\nconst input = $json;\n\nconst company = input.company || '';\nconst title = input.title || '';\nconst recordType = input.recordType || 'job';\nconst source = input.source || 'Unknown';\n\n// Normalize: lowercase, remove non-alphanumeric, trim\nconst normalize = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, '').trim();\n\nconst normCompany = normalize(company);\nconst normTitle = normalize(title);\n\n// Generate key based on record type\nlet key;\nif (recordType === 'company') {\n  key = `company:${normCompany}`;\n} else {\n  key = `job:${normCompany}:${normTitle}`;\n}\n\nreturn {\n  json: {\n    ...input,\n    _dedupKey: key,\n    _normCompany: normCompany,\n    _normTitle: normTitle,\n    _isKeyData: true\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "dedup-generate-key",
+      "name": "Generate Dedup Key"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbll8igHTftSqsTtQ",
+          "mode": "id"
+        },
+        "filterByFormula": "={Key}=\"{{ $json._dedupKey }}\"",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [440, -100],
+      "id": "dedup-query-seen",
+      "name": "Query Seen Opportunities",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [440, 100],
+      "id": "dedup-passthrough",
+      "name": "Pass Through"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [660, 0],
+      "id": "dedup-merge",
+      "name": "Merge Results"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Process all items and determine duplicates\nconst allItems = $input.all();\n\n// Separate key data items from Airtable results\nconst keyDataItems = allItems.filter(item => item.json._isKeyData === true);\nconst airtableResults = allItems.filter(item => item.json.id && !item.json._isKeyData);\n\n// Build a map of found duplicates by key\nconst foundKeys = new Map();\nfor (const result of airtableResults) {\n  const fields = result.json.fields || result.json;\n  const key = fields.Key || fields['Key'];\n  if (key) {\n    foundKeys.set(key, {\n      id: result.json.id,\n      allSources: fields['All Sources'] || fields['First Source'] || '',\n      firstSeen: fields['First Seen'] || null,\n      jobRecordId: fields['Job Record ID'] || null,\n      companyRecordId: fields['Company Record ID'] || null\n    });\n  }\n}\n\n// Process each key data item\nconst output = [];\nfor (const item of keyDataItems) {\n  const inputData = item.json;\n  const key = inputData._dedupKey;\n  const found = foundKeys.get(key);\n  \n  if (found) {\n    output.push({\n      json: {\n        isDuplicate: true,\n        key: key,\n        existingRecordId: found.id,\n        allSources: found.allSources,\n        firstSeen: found.firstSeen,\n        jobRecordId: found.jobRecordId,\n        companyRecordId: found.companyRecordId,\n        _originalInput: {\n          company: inputData.company,\n          title: inputData.title,\n          source: inputData.source,\n          recordType: inputData.recordType\n        },\n        _originalJobData: inputData._originalJobData || null\n      }\n    });\n  } else {\n    output.push({\n      json: {\n        isDuplicate: false,\n        key: key,\n        existingRecordId: null,\n        allSources: null,\n        _originalInput: {\n          company: inputData.company,\n          title: inputData.title,\n          source: inputData.source,\n          recordType: inputData.recordType\n        },\n        _originalJobData: inputData._originalJobData || null\n      }\n    });\n  }\n}\n\nreturn output;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0],
+      "id": "dedup-check-result",
+      "name": "Check Result"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Dedup Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Dedup Key": {
+      "main": [
+        [
+          {
+            "node": "Query Seen Opportunities",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Pass Through",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Seen Opportunities": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pass Through": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Check Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

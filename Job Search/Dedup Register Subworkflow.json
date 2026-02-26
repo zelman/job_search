@@ -1,0 +1,100 @@
+{
+  "name": "Dedup Register Subworkflow",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "dedup-register-trigger",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbll8igHTftSqsTtQ",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Key": "={{ $json.key }}",
+            "Company": "={{ $json.company }}",
+            "Title": "={{ $json.title || '' }}",
+            "Record Type": "={{ $json.recordType }}",
+            "First Source": "={{ $json.source }}",
+            "All Sources": "={{ $json.source }}",
+            "First Seen": "={{ $now.toISO() }}",
+            "Job Record ID": "={{ $json.recordType === 'job' ? $json.airtableRecordId : '' }}",
+            "Company Record ID": "={{ $json.recordType === 'company' ? $json.airtableRecordId : '' }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [220, 0],
+      "id": "dedup-register-create",
+      "name": "Create Seen Record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Return confirmation of registration\nconst airtableResult = $json;\nlet inputData = {};\ntry { inputData = $('Execute Workflow Trigger').item?.json || {}; } catch(e) { inputData = {}; }\n\nreturn {\n  json: {\n    registered: true,\n    key: inputData.key,\n    seenRecordId: airtableResult.id,\n    company: inputData.company,\n    title: inputData.title,\n    source: inputData.source,\n    recordType: inputData.recordType,\n    airtableRecordId: inputData.airtableRecordId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "dedup-register-confirm",
+      "name": "Confirm Registration"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Create Seen Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Seen Record": {
+      "main": [
+        [
+          {
+            "node": "Confirm Registration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
