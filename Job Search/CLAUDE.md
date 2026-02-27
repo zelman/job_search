@@ -16,8 +16,8 @@ Current versions (as of Feb 2026):
 - `VC Scraper - Healthcare.json` (v25)
 - `vc-portfolio-scraper-v26-enriched.json` (v26 - Enterprise/Generalist)
 - `VC Scraper - Climate Tech.json` (v23)
-- `VC Scraper - Social Justice.json` (v24)
-- `VC Scraper - Micro-VC v7.json` (v7) - Pear VC, Floodgate, Afore, Unshackled, 2048 (batched, fixed 2048 parser)
+- `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
+- `VC Scraper - Micro-VC v12.json` (v12) - Pear VC, Floodgate, Afore, Unshackled, 2048 (batched, 2048 uses /function endpoint for infinite scroll, extracts company URLs with news domain filtering)
 - `Enrich & Evaluate Pipeline v2.json` (shared subworkflow - companies, with cross-source dedup)
 - `Job Evaluation Pipeline v2.json` (shared subworkflow - jobs, with JD fetching and cross-source dedup)
 - `Dedup Check Subworkflow.json` (cross-source deduplication lookup)
