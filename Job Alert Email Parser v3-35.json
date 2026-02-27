@@ -1,0 +1,439 @@
+{
+  "name": "Job Alert Email Parser v3-35",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Route based on email sender - reference original email data from Get many messages\nconst emailData = $('Get many messages').item.json;\nlet from = emailData.from || emailData.From || '';\n\n// Handle object format (Gmail returns {value: [{address, name}], text, html})\nif (from && typeof from === 'object') {\n  from = from.text || (from.value && from.value[0] && from.value[0].address) || '';\n}\n\n// If not found, check payload.headers (Gmail API format)\nif (!from && emailData.payload && emailData.payload.headers) {\n  const headers = emailData.payload.headers;\n  const fromHeader = headers.find(h => h.name.toLowerCase() === 'from');\n  if (fromHeader) from = fromHeader.value;\n}\n\nconst fromLower = (from || '').toLowerCase();\n\nlet source = 'Other';\nif (fromLower.includes('indeed')) source = 'Indeed';\nelse if (fromLower.includes('linkedin')) source = 'LinkedIn';\nelse if (fromLower.includes('wellfound')) source = 'Wellfound';\nelse if (fromLower.includes('builtin') || fromLower.includes('built-in') || fromLower.includes('built in')) source = 'Built In';\nelse if (fromLower.includes('remotive')) source = 'Remotive';\nelse if (fromLower.includes('himalayas')) source = 'Himalayas';\nelse if (fromLower.includes('welcometothejungle')) source = 'Welcome to the Jungle';\nelse if (fromLower.includes('jobright')) source = 'Jobright';\nelse if (fromLower.includes('careers-noreply@google.com') || fromLower.includes('google.com/about/careers')) source = 'Google Careers';\nelse if (fromLower.includes('bloomberry')) source = 'Bloomberry';\nreturn { json: { ...emailData, _source: source } };"
+      },
+      "id": "96aae314-91a9-4399-833b-95f3852bd51d",
+      "name": "Identify Source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4624,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Jobs - Multi-source parser v9 (Run Once for All Items mode)\n// Process all emails and collect all jobs into one output array\n\nconst allEmails = $input.all();\nconst allJobs = [];\n\n// Helper function to decode base64url (Gmail API format)\nconst decodeBase64Url = (data) => {\n  if (!data) return '';\n  if (/\\s{2,}/.test(data) && /[a-z]{4,}\\s+[a-z]{4,}/i.test(data)) return data;\n  const sample = data.substring(0, 100);\n  if (!/\\s/.test(sample) && /^[A-Za-z0-9_-]+=*$/.test(sample.replace(/\\s/g, ''))) {\n    try {\n      const cleaned = data.replace(/\\s/g, '');\n      const base64 = cleaned.replace(/-/g, '+').replace(/_/g, '/');\n      const decoded = Buffer.from(base64, 'base64').toString('utf-8');\n      if (/[a-z]{3,}/i.test(decoded) && !/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]/.test(decoded)) return decoded;\n    } catch (e) {}\n  }\n  return data;\n};\n\n// Helper to strip HTML tags\nconst stripHtml = (html) => {\n  if (!html) return '';\n  return html\n    .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/\\s+/g, ' ')\n    .trim();\n};\n\n// Helper to recursively find text content in MIME parts\nconst extractTextFromParts = (parts) => {\n  if (!parts || !Array.isArray(parts)) return '';\n\n  for (const part of parts) {\n    const mimeType = part.mimeType || '';\n\n    if (mimeType === 'text/plain' && part.body && part.body.data) {\n      return decodeBase64Url(part.body.data);\n    }\n\n    if (mimeType.startsWith('multipart/') && part.parts) {\n      const nested = extractTextFromParts(part.parts);\n      if (nested) return nested;\n    }\n  }\n\n  // Fallback to text/html\n  for (const part of parts) {\n    if (part.mimeType === 'text/html' && part.body && part.body.data) {\n      const html = decodeBase64Url(part.body.data);\n      return stripHtml(html);\n    }\n    if (part.parts) {\n      const nested = extractTextFromParts(part.parts);\n      if (nested) return nested;\n    }\n  }\n\n  return '';\n};\n\n// Helper to extract raw HTML from email (for URL extraction)\nconst extractHtmlFromParts = (parts) => {\n  if (!parts || !Array.isArray(parts)) return '';\n\n  for (const part of parts) {\n    if (part.mimeType === 'text/html' && part.body && part.body.data) {\n      return decodeBase64Url(part.body.data);\n    }\n    if (part.parts) {\n      const nested = extractHtmlFromParts(part.parts);\n      if (nested) return nested;\n    }\n  }\n  return '';\n};\n\n// Process each email\nfor (const emailItem of allEmails) {\n  const email = emailItem.json;\n  const source = email._source || 'Other';\n  \n  // Try multiple possible locations for email body content\n  let textContent = '';\n  let htmlContent = '';\n\n  // 1. Check common field names first (n8n Gmail node simplified output)\n  if (email.textPlain) textContent = email.textPlain;\n  if (email.textHtml) htmlContent = email.textHtml;\n  else if (email.html) htmlContent = email.html;\n  if (email.text) textContent = email.text;\n\n  // 2. Check Gmail-specific structure: payload\n  if (email.payload) {\n    const payload = email.payload;\n    if (payload.mimeType === 'text/html' && payload.body && payload.body.data) {\n      htmlContent = decodeBase64Url(payload.body.data);\n      if (!textContent) textContent = stripHtml(htmlContent);\n    }\n    else if (payload.parts && payload.parts.length > 0) {\n      if (!htmlContent) htmlContent = extractHtmlFromParts(payload.parts);\n      if (!textContent) textContent = extractTextFromParts(payload.parts);\n    }\n    else if (payload.body && payload.body.data) {\n      if (!textContent) textContent = decodeBase64Url(payload.body.data);\n    }\n  }\n\n  // 3. Fallback to snippet\n  if (!textContent && email.snippet) textContent = email.snippet;\n\n  // 4. Final fallback: convert HTML to text if still no text content\n  if (!textContent && htmlContent) textContent = stripHtml(htmlContent);\n\n  const jobs = [];\n  let parserError = null;\n\n// === SOURCE-SPECIFIC PARSERS ===\n\ntry {\n\nif (source === 'LinkedIn') {\n  const sections = textContent.split(/[-]{10,}/);\n\n  for (const section of sections) {\n    const urlMatch = section.match(/linkedin\\.com\\/(?:comm\\/)?jobs\\/view\\/(\\d+)/);\n    if (!urlMatch) continue;\n\n    const jobId = urlMatch[1];\n    const jobUrl = `https://www.linkedin.com/jobs/view/${jobId}`;\n\n    const textBefore = section.split(/View job/i)[0].trim();\n\n    const parts = textBefore\n      .replace(/https?:\\/\\/[^\\s]+/g, '')\n      .split(/\\n/)\n      .map(p => p.replace(/\\s+/g, ' ').trim())\n      .filter(p => p.length > 1);\n\n    const noise = ['high skills match', 'fast growing', 'actively hiring', 'connections', 'posted', 'applicants', 'promoted', 'apply with resume', 'this company is', 'school alum', 'connection', 'top job picks', 'your job alert', 'new jobs match your preferences', 'match your preferences'];\n    const cleanParts = parts.filter(p => !noise.some(n => p.toLowerCase().includes(n)));\n\n    if (cleanParts.length >= 2) {\n      jobs.push({\n        title: cleanParts[0],\n        company: cleanParts[1],\n        location: cleanParts[2] || 'United States',\n        salary: 'Not specified',\n        source: 'LinkedIn',\n        url: jobUrl,\n        jobId: `linkedin-${jobId}`\n      });\n    }\n  }\n}\n\nelse if (source === 'Himalayas') {\n  const seenJobs = new Set();\n\n  let decodedContent = textContent;\n  try {\n    decodedContent = decodeURIComponent(decodeURIComponent(textContent));\n  } catch (e) {\n    try {\n      decodedContent = decodeURIComponent(textContent);\n    } catch (e2) {}\n  }\n\n  const urlPattern = /himalayas\\.app\\/companies\\/([^\\/]+)\\/jobs\\/([^\\s\\/\\]\"&<>]+)/gi;\n  let urlMatch;\n\n  while ((urlMatch = urlPattern.exec(decodedContent)) !== null) {\n    const companySlug = urlMatch[1];\n    const titleSlug = urlMatch[2];\n\n    const company = companySlug\n      .split('-')\n      .map(w => w.charAt(0).toUpperCase() + w.slice(1))\n      .join(' ');\n\n    const title = titleSlug\n      .replace(/-\\d+$/, '')\n      .split('-')\n      .map(w => w.charAt(0).toUpperCase() + w.slice(1))\n      .join(' ');\n\n    if (title.length < 3 || company.length < 2) continue;\n\n    const key = `${title.toLowerCase()}-${company.toLowerCase()}`;\n    if (seenJobs.has(key)) continue;\n    seenJobs.add(key);\n\n    jobs.push({\n      title: title,\n      company: company,\n      location: 'Remote',\n      salary: 'Not specified',\n      source: 'Himalayas',\n      url: `https://himalayas.app/companies/${companySlug}/jobs/${titleSlug}`,\n      jobId: `himalayas-${Date.now()}-${jobs.length}`\n    });\n  }\n}\n\nelse if (source === 'Wellfound') {\n  const urlMatches = [...textContent.matchAll(/wellfound\\.com\\/jobs\\?job_listing_slug=(\\d+[^\\s>\"'\\]]*)/gi)];\n  const jobSlugs = urlMatches.map(m => m[1]);\n\n  const jobPattern = /([A-Za-z][A-Za-z\\s&\\-,\\(\\)]+?(?:Manager|Director|Specialist|Associate|Coordinator|Analyst|Engineer|Representative|Support|Success)(?:[A-Za-z\\s&\\-,\\(\\)]*?))\\s+([A-Z][A-Za-z0-9\\s&\\.\\-']+?)\\s*\\/\\s*(\\d+[-\u2013]\\d+|\\d+\\+?)\\s*Employees/gi;\n\n  let match;\n  let index = 0;\n  while ((match = jobPattern.exec(textContent)) !== null) {\n    const title = match[1].trim();\n    const company = match[2].trim();\n    const size = match[3];\n\n    const afterMatch = textContent.substring(match.index + match[0].length, match.index + match[0].length + 100);\n    const locationMatch = afterMatch.match(/\\|\\s*([^|]+?)(?:\\s*\\||$)/);\n    const location = locationMatch ? locationMatch[1].trim() : 'Remote';\n\n    jobs.push({\n      title: title,\n      company: company,\n      location: location,\n      salary: 'Not specified',\n      source: 'Wellfound',\n      url: jobSlugs[index] ? `https://wellfound.com/jobs?job_listing_slug=${jobSlugs[index]}` : 'https://wellfound.com',\n      jobId: jobSlugs[index] ? `wellfound-${jobSlugs[index].split('-')[0]}` : `wellfound-${Date.now()}-${index}`,\n      _companySize: `${size} Employees`\n    });\n    index++;\n  }\n}\n\nelse if (source === 'Built In') {\n  let searchContent = htmlContent || textContent;\n  \n  searchContent = searchContent\n    .replace(/=\\r?\\n/g, '')\n    .replace(/=3D/g, '=')\n    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));\n  \n  const builtInUrls = [];\n  const urlEncodedPattern = /builtin\\.com%2Fjob%2F([^%]+)%2F(\\d+)/gi;\n  let urlMatch;\n  while ((urlMatch = urlEncodedPattern.exec(searchContent)) !== null) {\n    const slug = urlMatch[1];\n    const jobId = urlMatch[2];\n    builtInUrls.push(`https://builtin.com/job/${slug}/${jobId}`);\n  }\n  \n  const directUrlPattern = /https?:\\/\\/(?:www\\.)?builtin\\.com\\/job\\/[^\\s\"'<>]+/gi;\n  while ((urlMatch = directUrlPattern.exec(searchContent)) !== null) {\n    const url = urlMatch[0].replace(/&amp;/g, '&');\n    if (!builtInUrls.includes(url)) builtInUrls.push(url);\n  }\n  \n  const seenJobs = new Set();\n  \n  const jobCardPattern = /font-size:16px>([^<]+)<\\/div><div style=margin-bottom:8px;font-size:20px;font-weight:700>([^<]+)<\\/div>/gi;\n  let cardMatch;\n  let jobIndex = 0;\n  \n  while ((cardMatch = jobCardPattern.exec(searchContent)) !== null) {\n    const company = cardMatch[1].trim();\n    const title = cardMatch[2].trim();\n    \n    if (!company || !title || company.length < 2 || title.length < 3) continue;\n    \n    const key = `${title.toLowerCase()}-${company.toLowerCase()}`;\n    if (seenJobs.has(key)) continue;\n    seenJobs.add(key);\n    \n    const contextAfter = searchContent.substring(cardMatch.index, cardMatch.index + 1000);\n    const salaryMatch = contextAfter.match(/\\$(\\d{1,3}(?:,\\d{3})*(?:-\\$?\\d{1,3}(?:,\\d{3})*)?)/i);\n    const salary = salaryMatch ? '$' + salaryMatch[1] : 'Not specified';\n    \n    const locationMatch = contextAfter.match(/>(?:Remote|Hybrid|Multiple Locations|[A-Z][a-z]+(?:,\\s*[A-Z]{2})?)</i);\n    const location = locationMatch ? locationMatch[0].replace(/[><]/g, '').trim() : 'Not specified';\n    \n    jobs.push({\n      title: title,\n      company: company,\n      location: location,\n      salary: salary,\n      source: 'Built In',\n      url: builtInUrls[jobIndex] || 'https://builtin.com/jobs',\n      jobId: `builtin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n    });\n    jobIndex++;\n  }\n  \n  if (jobs.length === 0) {\n    const atPattern = /([A-Za-z\\s,\\/&]+(?:Support|Success|Director|Manager|Head|VP|Lead|Engineer|Representative|Specialist)[A-Za-z\\s,\\/&]*)\\s+at\\s+([A-Za-z0-9\\s&.,'\\\\-]+?)(?:\\s+in\\s+([A-Za-z\\s,]+?))?(?:\\n|$)/gi;\n    let match;\n    let fallbackIdx = 0;\n    while ((match = atPattern.exec(textContent)) !== null) {\n      const title = match[1].trim();\n      const company = match[2].trim();\n      const key = `${title.toLowerCase()}-${company.toLowerCase()}`;\n      if (seenJobs.has(key)) continue;\n      seenJobs.add(key);\n      \n      jobs.push({\n        title: title,\n        company: company,\n        location: match[3] ? match[3].trim() : 'Not specified',\n        salary: 'Not specified',\n        source: 'Built In',\n        url: builtInUrls[fallbackIdx] || 'https://builtin.com/jobs',\n        jobId: `builtin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n      });\n      fallbackIdx++;\n    }\n  }\n}\n\nelse if (source === 'Remotive') {\n  let searchContent = htmlContent || textContent;\n\n  searchContent = searchContent\n    .replace(/=\\r?\\n/g, '')\n    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));\n\n  const liPattern = /<li[^>]*>([\\s\\S]*?)<\\/li>/gi;\n  let liMatch;\n\n  while ((liMatch = liPattern.exec(searchContent)) !== null) {\n    const liContent = liMatch[1];\n\n    const urlMatch = liContent.match(/href=[\"']https?:\\/\\/track\\.pstmrk\\.it\\/3s\\/([^\\/]+(?:%2F[^\\/]+)*)\\/eHy2/i);\n    if (!urlMatch) continue;\n\n    const encodedUrl = urlMatch[1];\n\n    let jobUrl;\n    try {\n      jobUrl = 'https://' + decodeURIComponent(encodedUrl);\n    } catch (e) {\n      jobUrl = 'https://' + encodedUrl.replace(/%2F/gi, '/').replace(/%3A/gi, ':');\n    }\n\n    if (jobUrl.includes('remotive.com') && !jobUrl.includes('remote-jobs/')) continue;\n    if (jobUrl.includes('linkedin.com/company')) continue;\n    if (jobUrl.includes('twitter.com')) continue;\n    if (jobUrl.includes('unsubscribe')) continue;\n\n    const titleMatch = liContent.match(/<span[^>]*font-weight:\\s*bold[^>]*>([^<]+)<\\/span>/i);\n    const title = titleMatch ? titleMatch[1].trim() : '';\n\n    const companyMatch = liContent.match(/at\\s*<span[^>]*>([^<]+)<\\/span>/i);\n    const company = companyMatch ? companyMatch[1].trim() : '';\n\n    const locationMatch = liContent.match(/(?:&#x1F4CD;|\\u{1F4CD})\\s*([A-Za-z\\s,]+)/iu);\n    const location = locationMatch ? locationMatch[1].trim() : 'Remote';\n\n    if (title && company) {\n      jobs.push({\n        title: title,\n        company: company,\n        location: location,\n        salary: 'Not specified',\n        source: 'Remotive',\n        url: jobUrl,\n        jobId: `remotive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n      });\n    }\n  }\n\n  if (jobs.length === 0) {\n    const textPattern = /([A-Za-z][A-Za-z\\s,\\/&\\-]+?(?:Manager|Director|Head|VP|Lead|Engineer|Specialist|Coordinator|Analyst|Representative|Support|Success)[A-Za-z\\s,\\/&]*)\\s+at\\s+([A-Za-z0-9][A-Za-z0-9\\s&.,'\\\\-]+?)(?:\\s*\\u{1F4CD}\\s*([A-Za-z\\s,]+))?(?:\\s|$|Looking)/giu;\n\n    let match;\n    while ((match = textPattern.exec(textContent)) !== null) {\n      jobs.push({\n        title: match[1].trim(),\n        company: match[2].trim(),\n        location: match[3] ? match[3].trim() : 'Remote',\n        salary: 'Not specified',\n        source: 'Remotive',\n        url: 'https://remotive.com/remote-jobs',\n        jobId: `remotive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n      });\n    }\n  }\n}\n\nelse if (source === 'Indeed') {\n  const searchContent = htmlContent || textContent;\n  const seenJobs = new Set();\n\n  // Extract all Indeed URLs (including engage.indeed.com tracking links)\n  const indeedUrls = [];\n  const engagePattern = /https?:\\/\\/engage\\.indeed\\.com\\/[^\\s\"'<>]+/gi;\n  let urlMatch;\n  while ((urlMatch = engagePattern.exec(searchContent)) !== null) {\n    indeedUrls.push(urlMatch[0].replace(/&amp;/g, '&'));\n  }\n\n  const indeedUrlPattern = /https?:\\/\\/(?:[a-z]+\\.)?indeed\\.com\\/(?:viewjob\\?|rc\\/clk\\?|jobs\\?|job\\/)[^\\s\"'<>]+/gi;\n  while ((urlMatch = indeedUrlPattern.exec(searchContent)) !== null) {\n    indeedUrls.push(urlMatch[0].replace(/&amp;/g, '&'));\n  }\n\n  const trackingPattern = /to\\.indeed\\.com\\/[a-zA-Z0-9]+/gi;\n  while ((urlMatch = trackingPattern.exec(searchContent)) !== null) {\n    indeedUrls.push(`https://${urlMatch[0]}`);\n  }\n\n  // Parse Indeed job alert format: Title\\nCompany - Location\\n...\\nURL\n  const lines = textContent.split('\\n').map(l => l.trim()).filter(l => l.length > 0);\n\n  let urlIndex = 0;\n\n  for (let i = 0; i < lines.length; i++) {\n    const line = lines[i];\n    const nextLine = lines[i + 1] || '';\n\n    // Skip noise lines\n    if (line.match(/^(easily apply|posted|ago|active|see|view|apply now|new|job alert|jobs that may|unsubscribe|indeed|we found|your job|searching for|more jobs)/i)) continue;\n    if (line.length < 5) continue;\n\n    // Check if next line looks like \"Company - Location\"\n    const companyLocationMatch = nextLine.match(/^([A-Za-z0-9][A-Za-z0-9\\s&.,'-]+?)\\s*[-\u2013]\\s*(.+)$/);\n\n    // Check if this line is a job title (has leadership keywords)\n    const titleLower = line.toLowerCase();\n    const hasLeadership = ['director', 'manager', 'head', 'vp', 'vice president', 'lead', 'supervisor', 'chief', 'senior', 'associate vice'].some(kw => titleLower.includes(kw));\n\n    if (hasLeadership && companyLocationMatch) {\n      const title = line;\n      const company = companyLocationMatch[1].trim();\n      const location = companyLocationMatch[2].trim();\n\n      // Look ahead for salary info\n      let salary = 'Not specified';\n      for (let j = i + 2; j < Math.min(i + 6, lines.length); j++) {\n        const checkLine = lines[j];\n        const salaryMatch = checkLine.match(/\\$[\\d,]+(?:\\s*[-\u2013]\\s*\\$?[\\d,]+)?(?:\\s*(?:a|per|\\/)\\s*(?:year|yr|hour|hr|month|week))?/i);\n        if (salaryMatch) {\n          salary = salaryMatch[0].trim();\n          break;\n        }\n      }\n\n      const key = `${title.toLowerCase()}-${company.toLowerCase()}`;\n      if (!seenJobs.has(key)) {\n        seenJobs.add(key);\n        jobs.push({\n          title: title,\n          company: company,\n          location: location,\n          salary: salary,\n          source: 'Indeed',\n          url: indeedUrls[urlIndex] || 'https://indeed.com',\n          jobId: `indeed-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n        });\n        urlIndex++;\n      }\n\n      i++; // Skip the company-location line\n    }\n  }\n\n  // Fallback: try \"Title at Company\" pattern if no jobs found\n  if (jobs.length === 0) {\n    const jobPattern = /([A-Za-z\\s,\\/&]+(?:Support|Success|Director|Manager|Head|VP|Lead|Engineer|Representative|Specialist)[A-Za-z\\s,\\/&]*)\\s+at\\s+([A-Za-z0-9\\s&.,'\\\\-]+?)(?:\\s*[-\u2013]\\s*|\\s*\\n|\\s*$)/gi;\n\n    let match;\n    let jobIndex = 0;\n    while ((match = jobPattern.exec(textContent)) !== null) {\n      const salaryMatch = textContent.substring(match.index, match.index + 200).match(/\\$[\\d,]+(?:\\s*[-\u2013]\\s*\\$[\\d,]+)?(?:\\s*(?:\\/|per|a)\\s*(?:year|yr|hour|hr|month))?/i);\n      const key = `${match[1].toLowerCase().trim()}-${match[2].toLowerCase().trim()}`;\n      if (!seenJobs.has(key)) {\n        seenJobs.add(key);\n        jobs.push({\n          title: match[1].trim(),\n          company: match[2].trim(),\n          location: 'Not specified',\n          salary: salaryMatch ? salaryMatch[0].trim() : 'Not specified',\n          source: 'Indeed',\n          url: indeedUrls[jobIndex] || 'https://indeed.com',\n          jobId: `indeed-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n        });\n        jobIndex++;\n      }\n    }\n  }\n}\n\nelse if (source === 'Welcome to the Jungle') {\n  let searchContent = htmlContent || textContent;\n  \n  searchContent = searchContent\n    .replace(/=\\r?\\n/g, '')\n    .replace(/=3D/g, '=')\n    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));\n  \n  const jobBlocks = [];\n  const blockPattern = /<a[^>]*href=[\"']?(https:\\/\\/[^\"'\\s]*(?:sendgrid\\.net|ct\\.sendgrid\\.net)\\/ls\\/click[^\"'\\s]*)[\"']?[^>]*>[\\s\\S]*?<\\/a>/gi;\n  \n  let blockMatch;\n  while ((blockMatch = blockPattern.exec(searchContent)) !== null) {\n    const url = blockMatch[1];\n    const content = blockMatch[0];\n    \n    if (content.includes('Jungle logo') || content.includes('unsubscribe') || content.includes('manage your')) continue;\n    if (!content.includes('Salary:')) continue;\n    \n    jobBlocks.push({ url, content });\n  }\n  \n  const seenJobs = new Set();\n  \n  for (const block of jobBlocks) {\n    const strongMatches = [...block.content.matchAll(/<strong>([^<]+)<\\/strong>/gi)];\n    let company = '';\n    let title = '';\n    \n    for (const sm of strongMatches) {\n      const text = sm[1].trim();\n      if (!text || text.length < 2) continue;\n      if (text.toLowerCase().includes('jungle')) continue;\n      \n      if (!company) {\n        company = text;\n      } else if (!title) {\n        title = text;\n        break;\n      }\n    }\n    \n    const salaryMatch = block.content.match(/Salary:\\s*(\\$[\\d,]+(?:\\s*[-\u2013]\\s*\\$?[\\d,]+)?K?)/i);\n    const salary = salaryMatch ? salaryMatch[1].trim() : 'Not specified';\n    \n    const locationMatch = block.content.match(/(?:Remote|Hybrid|On-?site)[^<]*(?:\\([^)]+\\))?/i);\n    const location = locationMatch ? locationMatch[0].trim() : 'Not specified';\n    \n    if (title && company) {\n      const key = `${title.toLowerCase()}-${company.toLowerCase()}`;\n      if (seenJobs.has(key)) continue;\n      seenJobs.add(key);\n      \n      jobs.push({\n        title: title,\n        company: company,\n        location: location,\n        salary: salary,\n        source: 'Welcome to the Jungle',\n        url: block.url,\n        jobId: `wttj-${Date.now()}-${jobs.length}`\n      });\n    }\n  }\n}\n\nelse if (source === 'Google Careers') {\n  let searchContent = htmlContent || textContent;\n  searchContent = searchContent\n    .replace(/=\\r?\\n/g, '')\n    .replace(/=3D/g, '=')\n    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));\n  \n  const jobPattern = /href=([\"']?)https:\\/\\/www\\.google\\.com\\/about\\/careers\\/applications\\/jobs\\/results\\/(\\d+)-([^?\\s\"']+)[^>]*>[\\s\\S]*?<u>([^<]+)<\\/u>[\\s\\S]*?Google[\\s&;nbsp;]*[\u2013-][\\s&;nbsp;]*([^<]+?)(?:<br|<\\/span)/gi;\n  \n  let match;\n  const seenIds = new Set();\n  \n  while ((match = jobPattern.exec(searchContent)) !== null) {\n    const jobId = match[2];\n    if (seenIds.has(jobId)) continue;\n    seenIds.add(jobId);\n    \n    const slug = match[3];\n    const title = match[4].trim();\n    let location = match[5].trim()\n      .replace(/&nbsp;/g, ' ')\n      .replace(/&ndash;/g, '-')\n      .replace(/<[^>]+>/g, '')\n      .trim();\n    \n    if (location.toLowerCase().includes('yesterday') || location.toLowerCase().includes('days ago')) {\n      location = location.replace(/yesterday|\\d+ days? ago/gi, '').trim();\n    }\n    if (!location || location.length < 2) location = 'Multiple Sites';\n    \n    const url = `https://www.google.com/about/careers/applications/jobs/results/${jobId}-${slug}`;\n    \n    if (title) {\n      jobs.push({\n        title: title,\n        company: 'Google',\n        location: location,\n        salary: 'Not specified',\n        source: 'Google Careers',\n        url: url,\n        jobId: `google-${jobId}`\n      });\n    }\n  }\n}\n\nelse if (source === 'Jobright') {\n  let searchContent = htmlContent || textContent;\n  searchContent = searchContent\n    .replace(/=\\r?\\n/g, '')\n    .replace(/=3D/g, '=')\n    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));\n  \n  const isSalaryTag = (tag) => /\\$\\d|\\d+K\\/yr/i.test(tag);\n  const isIgnoredTag = (tag) => /referral|applicant|posted|ago|alumni|early applicant/i.test(tag);\n  \n  const seenUrls = new Set();\n  \n  const urlPattern = /href=[\"']?(https:\\/\\/jobright\\.ai\\/jobs\\/info\\/[a-f0-9]+)[^\"'\\s]*/gi;\n  const jobUrls = [];\n  let urlMatch;\n  while ((urlMatch = urlPattern.exec(searchContent)) !== null) {\n    const url = urlMatch[1].trim();\n    if (!seenUrls.has(url)) {\n      seenUrls.add(url);\n      jobUrls.push(url);\n    }\n  }\n  \n  const companyPattern = /id=3D\"job-company-name\"[^>]*>([^<]+)</gi;\n  const companies = [];\n  let compMatch;\n  while ((compMatch = companyPattern.exec(searchContent)) !== null) {\n    companies.push(compMatch[1].trim());\n  }\n  \n  const titlePattern = /id=3D\"job-title\"[^>]*>(?:<a[^>]*>)?([^<]+)/gi;\n  const titles = [];\n  let titMatch;\n  while ((titMatch = titlePattern.exec(searchContent)) !== null) {\n    titles.push(titMatch[1].trim());\n  }\n  \n  const tagPattern = /id=3D\"job-tag\"[^>]*background-color:#F2F3F4[^>]*>([^<]+)</gi;\n  const allTags = [];\n  let tagMatch;\n  while ((tagMatch = tagPattern.exec(searchContent)) !== null) {\n    allTags.push(tagMatch[1].trim());\n  }\n  \n  for (let i = 0; i < Math.min(jobUrls.length, titles.length, companies.length); i++) {\n    const url = jobUrls[i];\n    const title = titles[i];\n    const company = companies[i];\n    \n    const tagStartIdx = i * 2;\n    const jobTags = allTags.slice(tagStartIdx, tagStartIdx + 2);\n    \n    let salary = 'Not specified';\n    let location = 'Not specified';\n    \n    for (const tag of jobTags) {\n      if (isSalaryTag(tag)) {\n        salary = tag;\n      } else if (tag.length > 0 && !isIgnoredTag(tag)) {\n        location = tag;\n      }\n    }\n    \n    if (title && company) {\n      jobs.push({\n        title: title,\n        company: company,\n        location: location,\n        salary: salary,\n        source: 'Jobright',\n        url: url,\n        jobId: `jobright-${url.split('/').pop()}`\n      });\n    }\n  }\n  \n  if (jobs.length === 0) {\n    const tablePattern = /<table[^>]*border-radius:\\s*16px[^>]*>[\\s\\S]*?<\\/table>/gi;\n    const jobTables = searchContent.match(tablePattern) || [];\n    \n    for (const table of jobTables) {\n      if (!table.includes('APPLY NOW') && !table.includes('jobright.ai/jobs/info')) continue;\n      \n      const urlMatch = table.match(/href=[\"\\']?(https:\\/\\/jobright\\.ai\\/jobs\\/info\\/[a-f0-9]+)/i);\n      if (!urlMatch) continue;\n      const url = urlMatch[1].trim();\n      if (seenUrls.has(url)) continue;\n      seenUrls.add(url);\n      \n      const titleMatch = table.match(/font-size:\\s*16px;\\s*font-weight:\\s*640[^>]*>\\s*([^<]+)/i);\n      const title = titleMatch ? titleMatch[1].trim() : '';\n      \n      const companyMatch = table.match(/font-size:\\s*13px;\\s*font-weight:\\s*500[^>]*>\\s*([^<]+)/i);\n      const company = companyMatch ? companyMatch[1].trim() : '';\n      \n      const tagPattern = /background:\\s*#f2f4f5[^>]*>\\s*([^<]+)/gi;\n      const tags = [];\n      let tagMatch;\n      while ((tagMatch = tagPattern.exec(table)) !== null) {\n        tags.push(tagMatch[1].trim());\n      }\n      \n      let salary = 'Not specified';\n      let location = 'Not specified';\n      \n      for (const tag of tags) {\n        if (isSalaryTag(tag)) {\n          salary = tag;\n        } else if (tag.length > 0 && !isIgnoredTag(tag)) {\n          location = tag;\n        }\n      }\n      \n      if (title && company) {\n        jobs.push({\n          title: title,\n          company: company,\n          location: location,\n          salary: salary,\n          source: 'Jobright',\n          url: url,\n          jobId: `jobright-${url.split('/').pop()}`\n        });\n      }\n    }\n  }\n}\n\nelse if (source === 'Bloomberry') {\n  let searchContent = htmlContent || textContent;\n  \n  searchContent = searchContent\n    .replace(/=\\r?\\n/g, '')\n    .replace(/=3D/g, '=')\n    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));\n  \n  const jobPattern = /\\d+\\)\\s*<b><a\\s+href=[\"']?([^\"'>}]+)[}\"']*[^>]*>([^<]*)<\\/a><\\/b>\\s*\\(([^)]+)\\),\\s*([^<]+?)(?:\\s+-\\s+<i>\\s*([^<]+)<\\/i>|(?=<br|$))/gi;\n  \n  let match;\n  const seenJobs = new Set();\n  \n  while ((match = jobPattern.exec(searchContent)) !== null) {\n    const url = match[1].trim();\n    let title = match[2].trim();\n    const location = match[3].trim();\n    const company = match[4].trim();\n    const salary = match[5] ? match[5].trim() : 'Not specified';\n    \n    if (!title || title.length < 3) continue;\n    if (url.includes('unsubscribe') || url.includes('bloomberry.com/blog')) continue;\n    \n    const key = `${title.toLowerCase()}-${company.toLowerCase()}`;\n    if (seenJobs.has(key)) continue;\n    seenJobs.add(key);\n    \n    jobs.push({\n      title: title,\n      company: company,\n      location: location,\n      salary: salary,\n      source: 'Bloomberry',\n      url: url,\n      jobId: `bloomberry-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n    });\n  }\n}\n\nelse {\n  const atPattern = /([A-Za-z\\s,\\/&]+(?:Support|Success|Director|Manager|Head|VP|Lead|Engineer)[A-Za-z\\s,\\/&]*)\\s+at\\s+([A-Za-z0-9\\s&.,'\\\\-]+)/gi;\n  let match;\n  while ((match = atPattern.exec(textContent)) !== null) {\n    jobs.push({\n      title: match[1].trim(),\n      company: match[2].trim(),\n      location: 'Not specified',\n      salary: 'Not specified',\n      source: source,\n      url: '',\n      jobId: `other-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`\n    });\n  }\n}\n\n} catch (e) {\n  parserError = { source: source, error: e.message };\n}\n\n  const seen = new Set();\n  const uniqueJobs = jobs.filter(job => {\n    const key = `${job.title.toLowerCase()}-${job.company.toLowerCase()}`;\n    if (seen.has(key)) return false;\n    seen.add(key);\n    return true;\n  });\n\n  const emailId = email.id || '';\n  if (uniqueJobs.length === 0) {\n    allJobs.push({ _noJobs: true, _source: source, _rawText: (textContent || '').substring(0, 500), _emailId: emailId, _parserError: parserError });\n  } else {\n    for (const job of uniqueJobs) {\n      allJobs.push({\n        title: job.title,\n        company: job.company,\n        location: job.location,\n        salary: job.salary,\n        source: job.source,\n        url: job.url,\n        jobId: job.jobId,\n        _dateFound: new Date().toISOString().split('T')[0],\n        _emailId: emailId\n      });\n    }\n  }\n}\n\nif (allJobs.length === 0) {\n  return [{ json: { _noJobs: true, _source: 'None' } }];\n}\n\nreturn allJobs.map(job => ({ json: job }));"
+      },
+      "id": "78c7cc04-49ae-402e-afd9-de4a73a6175a",
+      "name": "Parse Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4848,
+        1184
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._noJobs }}",
+              "operation": "notEqual",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "7a4ca177-518f-4fa0-a615-2ce0a3894b17",
+      "name": "Has Jobs",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        5072,
+        1184
+      ],
+      "executeOnce": false
+    },
+    {
+      "parameters": {},
+      "id": "f9279dc9-9cb3-4851-9944-862762490190",
+      "name": "No Jobs Found",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5280,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform field names to match Airtable exactly\n// Filter to only customer support/success leadership roles\n\nconst items = $input.all().filter(item => !item.json._empty);\n\nif (items.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\n// Role filter: must contain support/success keywords AND leadership keywords\nconst supportKeywords = ['support', 'success', 'customer', 'client', 'cx', 'experience'];\nconst leadershipKeywords = ['manager', 'director', 'vp', 'vice president', 'head', 'lead', 'chief', 'supervisor', 'team lead'];\n\nconst filteredItems = items.filter(item => {\n  const title = (item.json.title || '').toLowerCase();\n  \n  // Check if title contains any support/success keyword\n  const hasSupport = supportKeywords.some(kw => title.includes(kw));\n  \n  // Check if title contains any leadership keyword\n  const hasLeadership = leadershipKeywords.some(kw => title.includes(kw));\n  \n  return hasSupport && hasLeadership;\n});\n\nif (filteredItems.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn filteredItems.map(item => ({\n  json: {\n    \"Job Title\": item.json.title,\n    \"Company\": item.json.company,\n    \"Location\": item.json.location,\n    \"Source\": item.json.source,\n    \"Job URL\": item.json.url,\n    \"Job ID\": item.json.jobId,\n    \"Salary Info\": item.json.salary,\n    \"Date Found\": item.json._dateFound,\n    \"Review Status\": \"New\",\n    \"_emailId\": item.json._emailId\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5504,
+        1088
+      ],
+      "id": "830d5e57-d8bf-40bf-8b30-908dd734e78c",
+      "name": "Map Fields for Airtable"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        5280,
+        1088
+      ],
+      "id": "6c229c04-2e3f-459f-8647-d0f357294057",
+      "name": "Merge Inputs"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 5,
+        "simple": false,
+        "filters": {
+          "q": "is:unread in:inbox from:(jobs-listings@linkedin.com OR jobalerts-noreply@linkedin.com OR jobs-noreply@linkedin.com OR builtin.com OR wellfound.com OR himalayas.app OR remotive.com OR welcometothejungle.com OR jobright.ai OR careers-noreply@google.com OR bloomberry.com OR jobalert-noreply@indeed.com OR indeed.com) newer_than:21d"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        4400,
+        1184
+      ],
+      "id": "fd8f66e9-72a7-4af1-b6ae-221331871c68",
+      "name": "Get many messages",
+      "webhookId": "46595c63-cee2-41ff-834e-8114edf3d651"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        4192,
+        1184
+      ],
+      "id": "440e49ac-d3d0-405c-b5f8-a8d99a56e9a3",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('IF: Should Process').item.json._emailId }}",
+        "labelIds": [
+          "Label_3146569228785124450"
+        ]
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        6192,
+        1088
+      ],
+      "id": "3355ac17-6ec6-4cb7-a0d2-00eed8576f9e",
+      "name": "Add label to message",
+      "webhookId": "a29818cc-9d22-40cb-ad01-47c3f481b26c"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "list",
+          "cachedResultName": "Job search",
+          "cachedResultUrl": "https://airtable.com/appFEzXvPWvRtXgRY"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "list",
+          "cachedResultName": "Job Listings",
+          "cachedResultUrl": "https://airtable.com/appFEzXvPWvRtXgRY/tbl6ZV2rHjWz56pP3"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        4848,
+        1392
+      ],
+      "id": "68e120ec-e4ed-4962-a4d4-0e6c6f5581e9",
+      "name": "Search records"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dedup Code v2 - More aggressive normalization\n\nconst normalize = (str) => {\n  if (!str) return '';\n  return str\n    .toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n};\n\nconst allItems = $input.all();\n\nconst newJobs = allItems.filter(item => \n  item.json.title && item.json.source && !item.json.fields && !item.json[\"Job Title\"]\n);\n\nconst existingRecords = allItems.filter(item => \n  item.json.fields || item.json[\"Job Title\"] || (item.json[\"Job URL\"] && !item.json.source)\n);\n\nconst existingUrls = new Set();\nconst existingKeys = new Set();\n\nfor (const item of existingRecords) {\n  const fields = item.json.fields || item.json;\n  \n  let url = fields[\"Job URL\"] || \"\";\n  if (url) {\n    url = url.split('?')[0].replace(/\\/$/, '');\n    existingUrls.add(url);\n  }\n  \n  const title = normalize(fields[\"Job Title\"] || \"\");\n  const company = normalize(fields[\"Company\"] || \"\");\n  if (title && company) {\n    existingKeys.add(title + \"|\" + company);\n  }\n}\n\nconst results = [];\n\nfor (const job of newJobs) {\n  let url = job.json.url || \"\";\n  if (url) {\n    url = url.split('?')[0].replace(/\\/$/, '');\n  }\n  \n  const title = normalize(job.json.title || \"\");\n  const company = normalize(job.json.company || \"\");\n  const key = title + \"|\" + company;\n  \n  const isGenericUrl = url.endsWith('/jobs') || url.endsWith('/remote-jobs');\n  if (url && !isGenericUrl && existingUrls.has(url)) continue;\n  \n  if (existingKeys.has(key)) continue;\n  \n  if (url && !isGenericUrl) existingUrls.add(url);\n  existingKeys.add(key);\n  \n  results.push(job);\n}\n\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5280,
+        880
+      ],
+      "id": "6d28c5ec-3210-4f5f-b709-9dd64707e60e",
+      "name": "Dedup Against Airtable"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $json.id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        4512,
+        1184
+      ],
+      "id": "4f25ac5f-bca2-43a2-9ffd-04ef6367a0e9",
+      "name": "Mark as Read",
+      "webhookId": "db2ff5fd-2d5a-46b4-99db-280fc676c78d"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Builder vs Maintainer Pre-Filter\n// Quick signal check before expensive LLM calls\n\nconst CONFIG = {\n  minBuilderSignals: 1,\n  maxMaintainerSignals: 3,\n  maxCompanySize: 500,\n  seniorityRequired: [\"head\", \"director\", \"vp\", \"vice president\", \"chief\", \"lead\"],\n  minBaseSalary: 125000,\n};\n\nconst BUILDER_SIGNALS = [\n  \"build from scratch\", \"building the function\", \"first hire\", \"founding team\",\n  \"ground floor\", \"greenfield\", \"no playbook\", \"define the playbook\",\n  \"create the playbook\", \"build the team\", \"stand up\", \"establish the foundation\",\n  \"series a\", \"series b\", \"seed stage\", \"early stage\", \"early-stage\",\n  \"startup\", \"hypergrowth\", \"wear many hats\", \"player-coach\", \"hands-on leader\",\n  \"roll up your sleeves\", \"scrappy\", \"ambiguity\", \"build processes\",\n  \"define processes\", \"voice of customer\", \"growth lever\", \"strategic partner\",\n  \"report to ceo\", \"report to founder\", \"exec team\"\n];\n\nconst MAINTAINER_SIGNALS = [\n  \"book of business\", \"portfolio of accounts\", \"manage your accounts\",\n  \"own a portfolio\", \"retention targets\", \"renewal rate\", \"net retention\",\n  \"gross retention\", \"nrr\", \"grr\", \"churn reduction\", \"upsell quota\",\n  \"expansion targets\", \"expansion revenue\", \"cross-sell\", \"established processes\",\n  \"proven playbook\", \"existing team of\", \"maintain existing\", \"support the team\",\n  \"customer success manager\", \"manage relationships\", \"own the relationship\",\n  \"point of contact for\"\n];\n\nconst TITLE_EXCLUDES = [\n  \"customer success manager\", \"csm\", \"account manager\", \"account executive\",\n  \"representative\", \"specialist\", \"associate\", \"coordinator\", \"analyst\",\n  \"customer engagement manager\", \"escalation manager\", \"retention manager\",\n  \"renewal manager\", \"expansion manager\", \"growth manager\"\n];\n\nconst KNOWN_LARGE_COMPANIES = [\n  \"anthropic\", \"openai\", \"google\", \"meta\", \"facebook\", \"amazon\", \"microsoft\",\n  \"apple\", \"netflix\", \"salesforce\", \"oracle\", \"ibm\", \"cisco\", \"intel\",\n  \"pinterest\", \"twitter\", \"x corp\", \"snap\", \"snapchat\", \"uber\", \"lyft\",\n  \"airbnb\", \"doordash\", \"instacart\", \"stripe\", \"plaid\", \"coinbase\",\n  \"honeywell\", \"ge\", \"general electric\", \"siemens\", \"3m\", \"boeing\",\n  \"lockheed\", \"raytheon\", \"northrop\", \"dell\", \"hp\", \"hewlett\"\n];\n\nconst HEALTHCARE_COMPLIANCE_KEYWORDS = [\n  \"hipaa expertise\", \"hipaa required\", \"phi handling\", \"phi experience\",\n  \"healthcare compliance required\", \"healthcare regulatory\",\n  \"clinical compliance\", \"medical device regulatory\"\n];\n\nfunction countSignals(text, signals) {\n  return signals.filter(signal => text.includes(signal)).length;\n}\n\nfunction estimateRoleType(builder, maintainer) {\n  const ratio = builder / Math.max(1, maintainer);\n  if (ratio >= 2) return 'likely_builder';\n  if (ratio >= 1) return 'hybrid';\n  if (ratio >= 0.5) return 'leaning_maintainer';\n  return 'likely_maintainer';\n}\n\nconst jobData = $json;\n\nif (jobData._empty) {\n  return { json: { ...jobData, _skip: true } };\n}\n\nconst title = (jobData['Job Title'] || '').toLowerCase();\nconst company = (jobData['Company'] || '').toLowerCase();\nconst text = title;\n\nconst builderCount = countSignals(text, BUILDER_SIGNALS);\nconst maintainerCount = countSignals(text, MAINTAINER_SIGNALS);\n\nconst hasBadTitle = TITLE_EXCLUDES.some(exc => title.includes(exc));\nconst hasSeniority = CONFIG.seniorityRequired.some(level => title.includes(level));\nconst isKnownLargeCompany = KNOWN_LARGE_COMPANIES.some(c => company.includes(c));\nconst hasHealthcareCompliance = HEALTHCARE_COMPLIANCE_KEYWORDS.some(kw => title.includes(kw));\n\nlet shouldProcess = true;\nlet reason = null;\n\nif (hasBadTitle && !hasSeniority) {\n  shouldProcess = false;\n  reason = `IC/CSM title (${title}) without leadership level`;\n}\n\nconst prefilterAnalysis = {\n  shouldProcess,\n  reason,\n  builderSignals: builderCount,\n  maintainerSignals: maintainerCount,\n  signalRatio: builderCount / Math.max(1, maintainerCount),\n  hasSeniority,\n  estimatedRoleType: estimateRoleType(builderCount, maintainerCount),\n  isKnownLargeCompany: isKnownLargeCompany,\n  hasSkillsMismatch: hasHealthcareCompliance\n};\n\nreturn {\n  json: {\n    ...jobData,\n    prefilterAnalysis\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5728,
+        1088
+      ],
+      "id": "6eb7fb37-bde7-42ed-962e-7c2b3c7f7a58",
+      "name": "Prefilter: Builder vs Maintainer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.prefilterAnalysis.shouldProcess }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "8cd84b40-107e-4ef7-ac10-3d9ec8086b1c",
+      "name": "IF: Should Process",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        5936,
+        1088
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5936,
+        1280
+      ],
+      "id": "skip-filtered-v33",
+      "name": "Skip Filtered Jobs"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "v24qHkIsp8GVCwFkscHP8",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        6080,
+        880
+      ],
+      "id": "email-exec-job-pipeline",
+      "name": "Execute Job Evaluation Pipeline",
+      "notes": "Calls shared subworkflow for enrichment, evaluation, and Airtable write"
+    }
+  ],
+  "connections": {
+    "Identify Source": {
+      "main": [
+        [
+          {
+            "node": "Parse Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Jobs": {
+      "main": [
+        [
+          {
+            "node": "Has Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Jobs": {
+      "main": [
+        [
+          {
+            "node": "Merge Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Jobs Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Fields for Airtable": {
+      "main": [
+        [
+          {
+            "node": "Prefilter: Builder vs Maintainer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefilter: Builder vs Maintainer": {
+      "main": [
+        [
+          {
+            "node": "IF: Should Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Should Process": {
+      "main": [
+        [
+          {
+            "node": "Execute Job Evaluation Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Filtered Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Job Evaluation Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Add label to message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many messages": {
+      "main": [
+        [
+          {
+            "node": "Mark as Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Read": {
+      "main": [
+        [
+          {
+            "node": "Identify Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many messages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "Merge Inputs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Inputs": {
+      "main": [
+        [
+          {
+            "node": "Dedup Against Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Against Airtable": {
+      "main": [
+        [
+          {
+            "node": "Map Fields for Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

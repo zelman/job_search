@@ -1,0 +1,13 @@
+# Other projects (separate repos or unrelated)
+tidepool/
+Archive project/
+Book project/
+MFO IT/
+Meditation/
+
+# System files
+.DS_Store
+*.docx
+
+# Temporary files
+*~

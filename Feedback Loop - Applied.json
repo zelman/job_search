@@ -1,0 +1,308 @@
+{
+  "name": "Feedback Loop - Applied",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [1],
+              "triggerAtHour": 9,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "applied-schedule",
+      "name": "Weekly Monday 9:30am"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "id"
+        },
+        "filterByFormula": "=AND({Review Status}='Applied', {Date Found}>=DATEADD(TODAY(), -7, 'days'))",
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [220, 0],
+      "id": "applied-query-airtable",
+      "name": "Query Applied Jobs",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-records",
+              "leftValue": "={{ $json.id !== undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0],
+      "id": "applied-if-has-records",
+      "name": "IF: Has Records"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "jobs",
+        "include": "specifiedFields",
+        "fieldsToInclude": "Job Title, Company, Tide-Pool Score, Tide-Pool Rationale, Industry, Company Stage, Role Type, Builder Evidence, Maintainer Evidence, Recommendation, Date Found"
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [660, 0],
+      "id": "applied-aggregate",
+      "name": "Aggregate Jobs"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "id": "applied-fetch-lens",
+      "name": "Fetch Tide Pool Lens"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Build pattern analysis prompt for \"Applied\" jobs\nconst aggregateResult = $('Aggregate Jobs').first().json;\nconst jobs = aggregateResult.jobs || [];\nconst lensContent = $json.data || $json;\n\n// Calculate score statistics\nconst scores = jobs.map(j => j['Tide-Pool Score'] || 0).filter(s => s > 0);\nconst scoreStats = scores.length > 0 ? {\n  min: Math.min(...scores),\n  max: Math.max(...scores),\n  average: (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1),\n  median: scores.sort((a, b) => a - b)[Math.floor(scores.length / 2)]\n} : { min: 0, max: 0, average: 0, median: 0 };\n\nconst systemPrompt = `You are analyzing job search data to identify what makes opportunities attractive enough to apply.\n\nYour task is to analyze jobs that resulted in applications and identify:\n1. Positive signals that made these jobs worth applying to\n2. Patterns that should be reinforced in scoring (higher points)\n3. Calibration issues - are good jobs scoring too low?\n4. Characteristics that should be given more weight\n\nCurrent Tide Pool Lens Positive Signals (check if these are working):\n- Pre-Series A to Series A (0-50 people): +50 pts\n- Series B (51-200 people): +30 pts\n- \"First support hire\" / \"build from scratch\": +30 pts\n- Founded <3 years ago: +10 pts bonus\n- VC-backed (not PE): +10 pts bonus\n- Mission sectors (healthcare, environmental, education, audio, enterprise AI): +8-10 pts\n\nRespond with structured JSON:\n{\n  \"analysis_date\": \"YYYY-MM-DD\",\n  \"jobs_analyzed\": <count>,\n  \"score_distribution\": {\n    \"min\": <number>,\n    \"max\": <number>,\n    \"average\": <number>,\n    \"median\": <number>\n  },\n  \"positive_signals_found\": [\n    {\n      \"signal\": \"<description>\",\n      \"frequency\": \"<how many jobs had this>\",\n      \"current_scoring\": \"<how it's currently scored>\",\n      \"suggested_action\": \"increase_weight | add_new_signal | no_change\"\n    }\n  ],\n  \"calibration_issues\": [\n    {\n      \"issue\": \"<description>\",\n      \"example_jobs\": [\"<job titles that illustrate this>\"],\n      \"suggested_fix\": \"<scoring adjustment>\"\n    }\n  ],\n  \"new_positive_signals\": [\n    {\n      \"signal\": \"<pattern not currently scored>\",\n      \"rationale\": \"<why this should boost score>\",\n      \"suggested_points\": <number>\n    }\n  ],\n  \"working_well\": [\n    \"<scoring rules that correctly identified good fits>\"\n  ],\n  \"summary\": \"<2-3 sentence executive summary>\"\n}`;\n\n// Format jobs for analysis\nconst jobsSummary = jobs.map(job => ({\n  title: job['Job Title'],\n  company: job['Company'],\n  score: job['Tide-Pool Score'],\n  rationale: job['Tide-Pool Rationale'],\n  industry: job['Industry'],\n  stage: job['Company Stage'],\n  roleType: job['Role Type'],\n  builderEvidence: job['Builder Evidence'],\n  recommendation: job['Recommendation'],\n  dateFound: job['Date Found']\n}));\n\nconst analysisDate = new Date().toISOString().split('T')[0];\n\nconst userPrompt = `Analyze these ${jobs.length} jobs that were applied to in the past 7 days:\n\nScore Statistics: Min=${scoreStats.min}, Max=${scoreStats.max}, Avg=${scoreStats.average}, Median=${scoreStats.median}\n\nJobs:\n${JSON.stringify(jobsSummary, null, 2)}\n\nIdentify positive patterns and calibration issues to improve the scoring framework.`;\n\nreturn {\n  json: {\n    systemPrompt,\n    userPrompt,\n    jobCount: jobs.length,\n    scoreStats,\n    analysisDate\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "applied-build-prompt",
+      "name": "Build Analysis Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"system\": {{ JSON.stringify($json.systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }}}]\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0],
+      "id": "applied-claude-api",
+      "name": "Claude: Pattern Analysis",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic-api",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parse Claude's pattern analysis response for Applied jobs\nconst response = $json;\nconst promptData = $('Build Analysis Prompt').first().json;\n\nlet analysisText = '';\nif (response.content && Array.isArray(response.content)) {\n  analysisText = response.content\n    .filter(c => c.type === 'text')\n    .map(c => c.text)\n    .join('');\n}\n\n// Parse JSON response\nlet analysis = {};\ntry {\n  const jsonMatch = analysisText.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    analysis = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  analysis = {\n    error: `Parse error: ${e.message}`,\n    raw_response: analysisText.substring(0, 1000)\n  };\n}\n\n// Format for HTML email\nconst reportDate = new Date().toISOString();\nconst reportTitle = `Applied Jobs Pattern Analysis - ${promptData.analysisDate}`;\n\nlet emailBody = `<div style=\\\"font-family: -apple-system, Arial, sans-serif; max-width: 700px; line-height: 1.6;\\\">`;\nemailBody += `<h1 style=\\\"color: #333; border-bottom: 2px solid #27ae60; padding-bottom: 10px;\\\">${reportTitle}</h1>`;\nemailBody += `<p><strong>Jobs Analyzed:</strong> ${analysis.jobs_analyzed || promptData.jobCount}</p>`;\n\n// Score distribution\nconst stats = analysis.score_distribution || promptData.scoreStats;\nif (stats) {\n  emailBody += `<div style=\\\"background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 15px 0;\\\">`;\n  emailBody += `<strong>Score Distribution:</strong><br>`;\n  emailBody += `Min: <strong>${stats.min}</strong> | Max: <strong>${stats.max}</strong> | Avg: <strong>${stats.average}</strong> | Median: <strong>${stats.median}</strong>`;\n  emailBody += `</div>`;\n}\n\nemailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\nemailBody += `<h2 style=\\\"color: #27ae60;\\\">Summary</h2>`;\nemailBody += `<p style=\\\"background: #f5f5f5; padding: 15px; border-radius: 5px;\\\">${analysis.summary || 'No summary available'}</p>`;\n\nif (analysis.calibration_issues?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #e74c3c;\\\">Calibration Issues (PRIORITY)</h2>`;\n  analysis.calibration_issues.forEach((c, i) => {\n    emailBody += `<div style=\\\"margin-bottom: 15px; padding: 10px; background: #fff5f5; border-left: 3px solid #e74c3c;\\\">`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0;\\\"><strong>${i + 1}. ${c.issue}</strong></p>`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0; color: #666;\\\">Examples: ${c.example_jobs?.join(', ') || 'N/A'}</p>`;\n    emailBody += `<p style=\\\"margin: 0; color: #666;\\\">Suggested fix: ${c.suggested_fix}</p>`;\n    emailBody += `</div>`;\n  });\n}\n\nif (analysis.new_positive_signals?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #27ae60;\\\">New Positive Signals to Add</h2>`;\n  analysis.new_positive_signals.forEach((s, i) => {\n    emailBody += `<div style=\\\"margin-bottom: 15px; padding: 10px; background: #f0fff0; border-left: 3px solid #27ae60;\\\">`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0;\\\"><strong>${i + 1}. ${s.signal}</strong> <span style=\\\"background: #27ae60; color: white; padding: 2px 8px; border-radius: 3px; font-size: 12px;\\\">+${s.suggested_points} pts</span></p>`;\n    emailBody += `<p style=\\\"margin: 0; color: #666;\\\">Rationale: ${s.rationale}</p>`;\n    emailBody += `</div>`;\n  });\n}\n\nif (analysis.positive_signals_found?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #27ae60;\\\">Positive Signals Found</h2>`;\n  analysis.positive_signals_found.forEach((p, i) => {\n    emailBody += `<div style=\\\"margin-bottom: 15px; padding: 10px; background: #fafafa;\\\">`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0;\\\"><strong>${i + 1}. ${p.signal}</strong> <em>(${p.frequency})</em></p>`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0; color: #666;\\\">Current scoring: ${p.current_scoring}</p>`;\n    emailBody += `<p style=\\\"margin: 0; color: #666;\\\">Suggested action: ${p.suggested_action}</p>`;\n    emailBody += `</div>`;\n  });\n}\n\nif (analysis.working_well?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #27ae60;\\\">Working Well</h2>`;\n  emailBody += `<ul style=\\\"padding-left: 20px;\\\">`;\n  analysis.working_well.forEach(w => {\n    emailBody += `<li style=\\\"margin-bottom: 8px; color: #27ae60;\\\">${w}</li>`;\n  });\n  emailBody += `</ul>`;\n}\n\nemailBody += `</div>`;\n\nconst hasCalibrationIssues = (analysis.calibration_issues?.length > 0);\nconst hasActionableInsights = hasCalibrationIssues || (analysis.new_positive_signals?.length > 0);\n\nreturn {\n  json: {\n    reportTitle,\n    reportDate,\n    reportType: 'Applied Analysis',\n    analysisJson: analysis,\n    emailBody,\n    jobCount: promptData.jobCount,\n    scoreStats: promptData.scoreStats,\n    hasCalibrationIssues,\n    hasActionableInsights\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "id": "applied-parse-response",
+      "name": "Parse Analysis Response"
+    },
+    {
+      "parameters": {
+        "sendTo": "zelman@gmail.com",
+        "subject": "={{ $json.reportTitle }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "emailType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1760, -100],
+      "id": "applied-email",
+      "name": "Email Report",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-oauth",
+          "name": "Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// No records to analyze - just pass through\nreturn { json: { message: 'No Applied jobs found in the past 7 days', skipped: true } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 150],
+      "id": "applied-no-records",
+      "name": "No Records"
+    }
+  ],
+  "connections": {
+    "Weekly Monday 9:30am": {
+      "main": [
+        [
+          {
+            "node": "Query Applied Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Applied Jobs": {
+      "main": [
+        [
+          {
+            "node": "IF: Has Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Records": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Jobs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Tide Pool Lens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tide Pool Lens": {
+      "main": [
+        [
+          {
+            "node": "Build Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude: Pattern Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Pattern Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Analysis Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Analysis Response": {
+      "main": [
+        [
+          {
+            "node": "Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

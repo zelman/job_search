@@ -1,0 +1,285 @@
+{
+  "name": "Indeed Job Scraper v4",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 12
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [-1200, 200],
+      "id": "a1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblofzQpzGEN8igVS",
+          "mode": "id"
+        },
+        "filterByFormula": "{Key} = 'BROWSERLESS_TOKEN'",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [-1000, 100],
+      "id": "a2",
+      "name": "Get Browserless Token"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "id"
+        },
+        "filterByFormula": "AND({Source} = 'Indeed', IS_AFTER({Date Found}, DATEADD(TODAY(), -14, 'days')))",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [-1000, 300],
+      "id": "a3",
+      "name": "Get Existing Indeed Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build search URL with broad query\nconst tokenItem = $input.first();\nconst token = tokenItem?.json?.fields?.Value || tokenItem?.json?.Value || '';\n\n// Broad search - let Indeed return lots of results, we filter after\nconst search = 'customer success OR customer support OR customer experience';\n\nreturn [{\n  json: {\n    browserlessToken: token,\n    searchUrl: `https://www.indeed.com/jobs?q=${encodeURIComponent(search)}&l=remote&fromage=7&remotejob=032b3046-06a3-4876-8dfd-474eb5e7ed11`,\n    queryId: 'broad-cx'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-800, 100],
+      "id": "a4",
+      "name": "Build Search Query"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chrome.browserless.io/function?token={{ $json.browserlessToken }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ context: { searchUrl: $json.searchUrl, queryId: $json.queryId }, code: String.raw`export default async ({ page, context }) => { const { searchUrl, queryId } = context; const sleep = ms => new Promise(r => setTimeout(r, ms)); try { page.setDefaultTimeout(60000); await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'); await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 45000 }); await sleep(3000); const hasCaptcha = await page.evaluate(() => { return document.body.innerText.includes('unusual traffic') || document.body.innerText.includes('captcha') || document.querySelector('iframe[src*=\"captcha\"]') !== null; }); if (hasCaptcha) { return { type: 'application/json', data: { error: 'CAPTCHA detected', queryId } }; } for (let i = 0; i < 3; i++) { await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await sleep(1500); } const jobs = await page.evaluate(() => { const results = []; const jobCards = document.querySelectorAll('[data-jk], .job_seen_beacon, .jobsearch-ResultsList > li'); jobCards.forEach(card => { try { const titleEl = card.querySelector('h2 a, .jobTitle a, a[data-jk]'); const companyEl = card.querySelector('[data-testid=\"company-name\"], .companyName, .company'); const locationEl = card.querySelector('[data-testid=\"text-location\"], .companyLocation, .location'); const salaryEl = card.querySelector('.salary-snippet, .salaryText, [data-testid=\"attribute_snippet_testid\"]'); if (!titleEl) return; const title = titleEl.innerText.trim(); const href = titleEl.getAttribute('href') || ''; const jobKey = card.getAttribute('data-jk') || href.match(/jk=([a-f0-9]+)/)?.[1] || ''; const company = companyEl?.innerText.trim() || 'Unknown'; const location = locationEl?.innerText.trim() || 'Not specified'; const salary = salaryEl?.innerText.trim() || 'Not specified'; const url = href.startsWith('http') ? href : 'https://www.indeed.com' + href; if (title && title.length > 3) { results.push({ title, company, location, salary, url, jobKey, jobId: 'indeed-' + (jobKey || Date.now() + '-' + results.length) }); } } catch (e) {} }); return results; }); return { type: 'application/json', data: { jobs, queryId, jobCount: jobs.length, url: page.url() } }; } catch (error) { return { type: 'application/json', data: { error: error.message, queryId } }; } };` }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [-600, 100],
+      "id": "a5",
+      "name": "Scrape Indeed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Indeed response and filter for leadership roles\nconst response = $input.first().json;\n\nif (response.error) {\n  return [{ json: { _error: response.error } }];\n}\n\nconst data = response.data || response;\nconst jobs = data.jobs || [];\n\nif (jobs.length === 0) {\n  return [{ json: { _empty: true, _message: 'No jobs found' } }];\n}\n\nconst supportKeywords = ['support', 'success', 'customer', 'client', 'cx', 'experience'];\nconst leadershipKeywords = ['head', 'director', 'vp', 'vice president', 'chief', 'lead', 'manager', 'supervisor'];\n\nconst filtered = jobs.filter(job => {\n  const title = (job.title || '').toLowerCase();\n  return supportKeywords.some(kw => title.includes(kw)) && leadershipKeywords.some(kw => title.includes(kw));\n});\n\nif (filtered.length === 0) {\n  return [{ json: { _empty: true, _rawCount: jobs.length } }];\n}\n\nreturn filtered.map(job => ({\n  json: {\n    'Job Title': job.title,\n    'Company': job.company,\n    'Location': job.location,\n    'Source': 'Indeed',\n    'Job URL': job.url,\n    'Job ID': job.jobId,\n    'Salary Info': job.salary,\n    'Date Found': new Date().toISOString().split('T')[0],\n    'Review Status': 'New'\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-400, 100],
+      "id": "a6",
+      "name": "Parse Jobs"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [-200, 200],
+      "id": "a7",
+      "name": "Merge for Dedup"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dedup new jobs against existing\nconst normalize = str => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');\n\nconst allItems = $input.all();\nconst newJobs = allItems.filter(i => i.json['Source'] === 'Indeed' && !i.json.fields && !i.json._empty && !i.json._error);\nconst existing = allItems.filter(i => i.json.fields);\n\nconst existingKeys = new Set();\nfor (const item of existing) {\n  const f = item.json.fields;\n  const key = normalize(f['Job Title']) + '|' + normalize(f['Company']);\n  if (key.length > 1) existingKeys.add(key);\n  if (f['Job ID']) existingKeys.add(f['Job ID']);\n}\n\nconst results = [];\nconst seen = new Set();\n\nfor (const job of newJobs) {\n  const key = normalize(job.json['Job Title']) + '|' + normalize(job.json['Company']);\n  const jobId = job.json['Job ID'];\n  \n  if (existingKeys.has(key) || existingKeys.has(jobId) || seen.has(key)) continue;\n  seen.add(key);\n  results.push(job);\n}\n\nreturn results.length ? results : [{ json: { _empty: true } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 200],
+      "id": "a8",
+      "name": "Dedup"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._empty !== true && !$json._error }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [200, 200],
+      "id": "a9",
+      "name": "Has Jobs?"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "v24qHkIsp8GVCwFkscHP8",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [400, 100],
+      "id": "a10",
+      "name": "Job Evaluation Pipeline"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [400, 300],
+      "id": "a11",
+      "name": "No Jobs"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Browserless Token",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Existing Indeed Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Browserless Token": {
+      "main": [
+        [
+          {
+            "node": "Build Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Query": {
+      "main": [
+        [
+          {
+            "node": "Scrape Indeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Indeed": {
+      "main": [
+        [
+          {
+            "node": "Parse Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Jobs": {
+      "main": [
+        [
+          {
+            "node": "Merge for Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Indeed Jobs": {
+      "main": [
+        [
+          {
+            "node": "Merge for Dedup",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge for Dedup": {
+      "main": [
+        [
+          {
+            "node": "Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup": {
+      "main": [
+        [
+          {
+            "node": "Has Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Job Evaluation Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

@@ -1,5 +1,5 @@
 {
-  "name": "VC Scraper - Climate Tech",
+  "name": "VC Scraper - Climate Tech v23",
   "nodes": [
     {
       "parameters": {
@@ -410,438 +410,37 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json._empty }}",
-              "operation": "notEqual",
-              "value2": true
-            }
-          ]
-        }
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "rcMNDrfZR6csHRsYKFn0W",
+          "mode": "id"
+        },
+        "options": {}
       },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
       "position": [
-        1540,
+        1570,
         725
       ],
-      "id": "climate-filter-valid",
-      "name": "Filter Valid"
+      "id": "climate-exec-pipeline",
+      "name": "Execute Enrich & Evaluate Pipeline",
+      "notes": "Calls shared subworkflow for dedup, enrichment, and evaluation"
     },
     {
       "parameters": {
-        "jsCode": "const newCompanies = $input.all();\nreturn newCompanies.map(item => ({ json: { ...item.json, _isNewCompany: true } }));"
+        "maxItems": 50
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
       "position": [
-        1760,
+        1420,
         725
       ],
-      "id": "climate-mark-new",
-      "name": "Mark as New"
-    },
-    {
-      "parameters": {
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Funding Alerts",
-          "mode": "list",
-          "cachedResultName": "Funding Alerts"
-        },
-        "returnAll": true,
-        "options": {}
-      },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        1760,
-        925
-      ],
-      "id": "climate-get-existing",
-      "name": "Get Existing Companies"
-    },
-    {
-      "parameters": {
-        "mode": "append"
-      },
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        1980,
-        825
-      ],
-      "id": "climate-merge-for-dedup",
-      "name": "Merge for Dedup"
-    },
-    {
-      "parameters": {
-        "jsCode": "const allItems = $input.all();\nconst newCompanies = [];\nconst existingRecords = [];\nfor (const item of allItems) {\n  if (item.json._isNewCompany) newCompanies.push(item);\n  else if (item.json.fields && item.json.fields['Company Name']) existingRecords.push(item);\n  else if (item.json.id && item.json['Company Name']) existingRecords.push({ json: { fields: item.json } });\n}\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst existingNames = new Set();\nfor (const item of existingRecords) {\n  const name = (item.json.fields || item.json)['Company Name'] || '';\n  if (name) existingNames.add(normalize(name));\n}\nconst uniqueCompanies = [];\nconst addedNames = new Set();\nfor (const company of newCompanies) {\n  const name = company.json['Company Name'];\n  if (!name) continue;\n  const normalizedName = normalize(name);\n  if (!normalizedName || existingNames.has(normalizedName) || addedNames.has(normalizedName)) continue;\n  addedNames.add(normalizedName);\n  const cleanCompany = { ...company.json };\n  delete cleanCompany._isNewCompany;\n  uniqueCompanies.push({ json: cleanCompany });\n}\nreturn uniqueCompanies.length ? uniqueCompanies : [{ json: { _empty: true, _message: 'No new companies found' } }];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2200,
-        825
-      ],
-      "id": "climate-dedup",
-      "name": "Dedup Against Existing"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json._empty }}",
-              "operation": "notEqual",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        2420,
-        825
-      ],
-      "id": "climate-has-new",
-      "name": "Has New Companies?"
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md",
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "id": "climate-fetch-tide-pool-profile",
-      "name": "Fetch Tide Pool Profile",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3240,
-        825
-      ],
-      "notes": "Fetch the Tide Pool agent lens for evaluation context."
-    },
-    {
-      "parameters": {
-        "jsCode": "// Build evaluation prompt - process ALL items\nconst companyItems = $('IF: Auto-Disqualify').all().filter(item => !item.json.isAutoDisqualified);\nconst tidePoolProfile = $('Fetch Tide Pool Profile').first().json;\n\nconst systemPrompt = `You are evaluating a company for job search fit based on the Tide Pool Agent Lens criteria.\n\nTIDE POOL PROFILE (Key Criteria):\n- Target: VP/Head/Director of Customer Support/Success Operations roles\n- Ideal Company: Pre-Series A to Series A, 0-50 employees, VC-backed (not PE)\n- Builder Focus: \"First hire\", \"build from scratch\", creating/scaling support operations\n- Target Sectors: Healthcare, environmental/climate, life sciences, education, audio/music tech, enterprise AI/ML\n- Auto-Disqualify: PE-backed, 500+ employees, $200M+ funding, Fortune 500, acquired companies\n- Title Flexibility: At <50 person companies, title irrelevant - focus on builder scope\n- High-Touch AI: Enterprise AI (governance, compliance, analytics) needs CS from day one\n\nSCORING FRAMEWORK (100 points max):\n- Company Stage & Fit: up to 40 pts\n  - Pre-Seed/Seed: 40 pts (ideal early builder)\n  - Series A: 35 pts (still early)\n  - Series B: 20 pts (getting late)\n  - Series C+: 5 pts (too late)\n- Sector Match: up to 30 pts\n  - Target sector (healthcare, climate, life sciences, education, audio/music, enterprise AI): 30 pts\n  - Adjacent sector: 15 pts\n  - Unrelated sector: 5 pts\n- CS Hire Likelihood: up to 30 pts\n  - B2B SaaS/Enterprise with high-touch product: 30 pts\n  - Mid-market B2B: 20 pts\n  - Consumer or self-serve: 10 pts\n\nPENALTIES (subtract from score):\n- PE-backed: -50 pts (auto-skip)\n- 200+ employees: -20 pts\n- Founded before 2018: -15 pts\n- Series C or later: -20 pts\n\nEvaluate the company and return this JSON:\n{\n  \"score\": <0-100 integer>,\n  \"sector_match\": \"target\" | \"adjacent\" | \"unrelated\",\n  \"cs_hire_likelihood\": \"high\" | \"medium\" | \"low\" | \"unlikely\",\n  \"product_type\": \"high-touch enterprise\" | \"mid-market\" | \"self-serve\" | \"consumer\" | \"unknown\",\n  \"ops_gap\": true | false,\n  \"summary\": \"<2-3 sentence explanation>\"\n}\n\nRespond ONLY with valid JSON, no markdown or explanation.`;\n\nreturn companyItems.map(item => {\n  const companyData = item.json;\n  const userPrompt = `COMPANY TO EVALUATE:\n\nName: ${companyData['Company Name']}\nVC Firm: ${companyData['VC Firm']}\nURL: ${companyData['Company URL']}\nDescription: ${companyData['Company Description'] || 'Not available'}\n\nENRICHMENT DATA:\n- Employee Count: ${companyData.enrichment?.employeeCount || 'Unknown'}\n- Funding Stage: ${companyData.enrichment?.fundingStage || 'Unknown'}\n- Total Funding: ${companyData.enrichment?.totalFundingRaw || 'Unknown'}\n- PE-Backed: ${companyData.enrichment?.isPEBacked ? 'Yes (' + companyData.enrichment.peBackerFound + ')' : 'No'}\n- VC-Backed: ${companyData.enrichment?.isVCBacked ? 'Yes' : 'Unknown'}\n- Founded Year: ${companyData.enrichment?.foundedYear || 'Unknown'}\n\nAUTO-DISQUALIFIERS: ${companyData.autoDisqualifiers?.length > 0 ? companyData.autoDisqualifiers.join('; ') : 'None'}\n\nProvide your evaluation as JSON.`;\n\n  return {\n    json: {\n      ...companyData,\n      evaluationPrompt: { systemPrompt, userPrompt }\n    }\n  };\n});"
-      },
-      "id": "climate-build-evaluation-prompt",
-      "name": "Build Evaluation Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3440,
-        825
-      ],
-      "notes": "Combine Tide Pool profile with company data to build Claude evaluation prompt."
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-3-haiku-20240307\",\n  \"max_tokens\": 1024,\n  \"system\": {{ JSON.stringify($json.evaluationPrompt.systemPrompt) }},\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.evaluationPrompt.userPrompt) }}\n    }\n  ]\n}",
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 30000
-            }
-          },
-          "timeout": 60000
-        },
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "id": "climate-evaluate-via-anthropic",
-      "name": "Evaluate via Anthropic API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3660,
-        825
-      ],
-      "notes": "Call Claude 3 Haiku for company evaluation. Rate limited to 30s between requests.",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "anthropic-header",
-          "name": "Anthropic API Key"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Parse Claude's evaluation response - process ALL items\nconst responseItems = $input.all();\nconst companyItems = $('Build Evaluation Prompt').all();\n\nreturn responseItems.map((item, index) => {\n  const response = item.json;\n  const companyData = companyItems[index]?.json || {};\n  \n  let evaluationText = '';\n  if (response.content && Array.isArray(response.content)) {\n    evaluationText = response.content.filter(c => c.type === 'text').map(c => c.text).join('');\n  } else if (typeof response.content === 'string') {\n    evaluationText = response.content;\n  }\n  \n  let evaluation = {};\n  try {\n    const jsonMatch = evaluationText.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) evaluation = JSON.parse(jsonMatch[0]);\n  } catch (e) {\n    evaluation = { score: 0, cs_hire_likelihood: 'unknown', product_type: 'unknown', ops_gap: false, summary: `Parse error: ${e.message}` };\n  }\n  \n  let status = 'Research';\n  const score = evaluation.score || 0;\n  if (score >= 70) status = 'Apply';\n  else if (score >= 50) status = 'Monitor';\n  else if (score >= 30) status = 'Research';\n  else status = 'Skip';\n  \n  return {\n    json: {\n      'Company Name': companyData['Company Name'],\n      'Company URL': companyData['Company URL'],\n      'Company Description': companyData['Company Description'],\n      'VC Firm': companyData['VC Firm'],\n      'Tide-Pool Score': score,\n      'Sector Match': evaluation.sector_match || 'unknown',\n      'CS Hire Likelihood': evaluation.cs_hire_likelihood || 'unknown',\n      'Product Type': evaluation.product_type || 'unknown',\n      'Ops Gap': evaluation.ops_gap || false,\n      'Status': status,\n      'Summary': evaluation.summary || 'No summary available',\n      'Employee Count': companyData.enrichment?.employeeCount || null,\n      'Funding Stage': companyData.enrichment?.fundingStage || '',\n      'Total Funding': companyData.enrichment?.totalFundingRaw || '',\n      'PE Backed': companyData.enrichment?.isPEBacked || false,\n      'Founded Year': companyData.enrichment?.foundedYear || null,\n      'Disqualify Reasons': companyData.autoDisqualifiers?.length > 0 ? companyData.autoDisqualifiers.join('; ') : ''\n    }\n  };\n});"
-      },
-      "id": "climate-parse-evaluation",
-      "name": "Parse Evaluation",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        3880,
-        825
-      ],
-      "notes": "Parse Claude's JSON response and map to Airtable fields."
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Funding Alerts",
-          "mode": "list",
-          "cachedResultName": "Funding Alerts"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Company Name": "={{ $json['Company Name'] }}",
-            "Company URL": "={{ $json['Company URL'] }}",
-            "Company Description": "={{ $json['Company Description'] }}",
-            "VC Firm": "={{ $json['VC Firm'] }}",
-            "Status": "={{ $json['Status'] }}",
-            "Next Steps": "={{ $json['Status'] === 'Apply' ? 'Apply Now' : $json['Status'] === 'Monitor' ? 'Watch for Jobs' : $json['Status'] === 'Research' ? 'Research More' : 'Skip' }}",
-            "Tide-Pool Score": "={{ $json['Tide-Pool Score'] || 0 }}",
-            "Sector Match": "={{ $json['Sector Match'] || 'unknown' }}",
-            "CS Hire Likelihood": "={{ $json['CS Hire Likelihood'] || '' }}",
-            "Product Type": "={{ $json['Product Type'] || '' }}",
-            "Ops Gap": "={{ $json['Ops Gap'] || false }}",
-            "Summary": "={{ $json['Summary'] || '' }}",
-            "Stage": "={{ $json['Funding Stage'] || '' }}",
-            "Total Funding": "={{ $json['Total Funding'] || '' }}",
-            "Employee Count": "={{ $json['Employee Count'] || null }}",
-            "PE Backed": "={{ $json['PE Backed'] || false }}",
-            "Founded Year": "={{ $json['Founded Year'] || null }}",
-            "Disqualify Reasons": "={{ $json['Disqualify Reasons'] || '' }}",
-            "First Seen Date": "={{ $now.format('YYYY-MM-DD') }}",
-            "Source": "={{ $json['VC Firm'] }}"
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
-      },
-      "id": "climate-airtable-create-evaluated",
-      "name": "Airtable: Create Evaluated Record",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        4100,
-        825
-      ],
-      "notes": "Create Airtable record with full evaluation data."
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        1760,
-        575
-      ],
-      "id": "climate-no-valid",
-      "name": "No Valid Companies"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        2640,
-        675
-      ],
-      "id": "climate-no-new",
-      "name": "All Duplicates"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Build search query for Brave - process ALL items\nconst items = $input.all();\n\nreturn items.map(item => {\n  const company = item.json;\n  const companyName = company['Company Name'] || '';\n  const searchQuery = '\"' + companyName + '\" company funding employees series startup';\n  \n  return {\n    json: {\n      ...company,\n      searchQuery: searchQuery\n    }\n  };\n});"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2300,
-        675
-      ],
-      "id": "climate-build-search-query",
-      "name": "Build Search Query"
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.search.brave.com/res/v1/web/search",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "q",
-              "value": "={{ $json.searchQuery }}"
-            },
-            {
-              "name": "count",
-              "value": "10"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 1500
-            }
-          },
-          "timeout": 30000
-        }
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2480,
-        675
-      ],
-      "id": "climate-brave-search",
-      "name": "Brave Search Company",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "CREDENTIAL_ID",
-          "name": "Brave Search API"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "// Parse Brave Search results - process ALL items with improved disqualifiers\nconst braveResponses = $input.all();\nconst companyDataItems = $('Build Search Query').all();\n\nconst peFirms = ['Vista Equity', 'Thoma Bravo', 'KKR', 'Blackstone', 'TPG', 'Carlyle', 'Bain Capital', 'Silver Lake', 'Francisco Partners', 'Vector Capital', 'Ares Management', 'Apollo Global', 'Warburg Pincus', 'Golden Gate Capital', 'Nordic Capital', 'TA Associates', 'Insight Partners', 'General Atlantic', 'Summit Partners'];\nconst vcFirms = ['a16z', 'Andreessen Horowitz', 'Sequoia', 'Accel', 'Greylock', 'First Round', 'NEA', 'Lightspeed', 'Bessemer', 'Battery Ventures', 'Foundation Capital', 'Index Ventures', 'Benchmark', 'Kleiner Perkins', 'GV', 'Google Ventures', 'Founders Fund', 'Y Combinator', 'YC', 'Accomplice', 'Underscore VC'];\nconst bigAcquirers = ['Google', 'Alphabet', 'Microsoft', 'Amazon', 'Apple', 'Meta', 'Facebook', 'Oracle', 'Salesforce', 'Adobe', 'SAP', 'IBM', 'Cisco', 'Intel', 'Nest', 'Shell', 'BP', 'Chevron', 'ExxonMobil'];\n\nconst currentYear = new Date().getFullYear();\n\nreturn braveResponses.map((item, index) => {\n  const braveResponse = item.json;\n  const companyData = companyDataItems[index]?.json || {};\n  const searchResults = braveResponse?.web?.results || braveResponse?.results || [];\n  const allText = searchResults.map(r => `${r.title || ''} ${r.description || ''} ${r.extra_snippets?.join(' ') || ''}`).join(' ');\n  \n  let employeeCount = null;\n  const empPatterns = [/([\\d,]+)\\s*(?:to\\s*[\\d,]+)?\\s*employees?/gi, /team\\s*(?:of)?\\s*([\\d,]+)/gi];\n  for (const pattern of empPatterns) {\n    const matches = [...allText.matchAll(pattern)];\n    for (const match of matches) {\n      const count = parseInt(match[1].replace(/,/g, ''));\n      if (count > 0 && count < 1000000 && (!employeeCount || count > employeeCount)) employeeCount = count;\n    }\n  }\n  \n  const isPublic = /\\b(?:IPO|went public|publicly traded|publicly held|stock price|NYSE|NASDAQ|traded on|ticker|stock symbol|\\([A-Z]{1,5}\\))\\b/i.test(allText);\n  const acquiredMatch = allText.match(/(?:acquired by|bought by|purchased by|acquisition by)\\s+([\\w\\s]+?)(?:\\s+(?:for|in))/i);\n  const isAcquired = !!acquiredMatch || bigAcquirers.some(a => new RegExp(`acquired by ${a}|${a} acqui`, 'i').test(allText));\n  const acquiredBy = acquiredMatch ? acquiredMatch[1].trim() : (bigAcquirers.find(a => new RegExp(`acquired by ${a}|${a} acqui`, 'i').test(allText)) || null);\n  \n  let fundingStage = null;\n  if (isPublic) {\n    fundingStage = 'Public/IPO';\n  } else {\n    const stagePatterns = {'Series F+': /\\bSeries\\s*[F-Z]\\b/i, 'Series E': /\\bSeries\\s*E\\b/i, 'Series D': /\\bSeries\\s*D\\b/i, 'Series C': /\\bSeries\\s*C\\b/i, 'Series B': /\\bSeries\\s*B\\b/i, 'Series A': /\\bSeries\\s*A\\b/i, 'Seed': /\\b(?:Seed\\s*(?:round|funding)?|seed-stage)\\b/i, 'Pre-Seed': /\\b(?:Pre[- ]?Seed|angel\\s*round)\\b/i};\n    for (const [stage, pattern] of Object.entries(stagePatterns)) {\n      if (pattern.test(allText)) { fundingStage = stage; break; }\n    }\n  }\n  \n  let totalFunding = null, totalFundingRaw = null;\n  const fundPatterns = [/raised\\s*\\$([\\d.]+)\\s*(million|billion|M|B)/gi, /\\$([\\d.]+)\\s*(million|billion|M|B)\\s*(?:in\\s*)?(?:total\\s*)?funding/gi];\n  for (const pattern of fundPatterns) {\n    const matches = [...allText.matchAll(pattern)];\n    for (const match of matches) {\n      const amount = parseFloat(match[1]);\n      const unit = match[2].toLowerCase();\n      let value = (unit === 'billion' || unit === 'b') ? amount * 1000000000 : amount * 1000000;\n      if (!totalFunding || value > totalFunding) { totalFunding = value; totalFundingRaw = `$${amount}${unit.charAt(0).toUpperCase()}`; }\n    }\n  }\n  \n  const isPEBacked = peFirms.some(f => new RegExp(f.replace(/\\s+/g, '\\\\s*'), 'i').test(allText));\n  const peBackerFound = peFirms.find(f => new RegExp(f.replace(/\\s+/g, '\\\\s*'), 'i').test(allText)) || null;\n  const isVCBacked = vcFirms.some(f => new RegExp(f.replace(/\\s+/g, '\\\\s*'), 'i').test(allText));\n  \n  let foundedYear = null;\n  const foundMatch = allText.match(/(?:founded|established|since|started)\\s*(?:in)?\\s*(\\d{4})/i);\n  if (foundMatch) { const year = parseInt(foundMatch[1]); if (year >= 1990 && year <= currentYear) foundedYear = year; }\n  \n  const autoDisqualifiers = [];\n  if (isPEBacked) autoDisqualifiers.push(`PE-backed (${peBackerFound})`);\n  if (employeeCount >= 500) autoDisqualifiers.push(`500+ employees (${employeeCount})`);\n  if (totalFunding >= 200000000) autoDisqualifiers.push(`$200M+ funding (${totalFundingRaw})`);\n  if (isPublic || fundingStage === 'Public/IPO') autoDisqualifiers.push('Public company');\n  if (isAcquired) autoDisqualifiers.push(`Acquired${acquiredBy ? ' by ' + acquiredBy : ''}`);\n  if (foundedYear && foundedYear < 2017) autoDisqualifiers.push(`Founded ${foundedYear} (${currentYear - foundedYear}+ years old)`);\n  if (['Series D', 'Series E', 'Series F+'].includes(fundingStage)) autoDisqualifiers.push(`Late stage (${fundingStage})`);\n  \n  return {\n    json: {\n      'Company Name': companyData['Company Name'],\n      'Company URL': companyData['Company URL'],\n      'Company Description': companyData['Company Description'],\n      'VC Firm': companyData['VC Firm'],\n      'Status': companyData['Status'],\n      'First Seen Date': companyData['First Seen Date'],\n      'Source': companyData['Source'],\n      enrichment: { employeeCount, fundingStage, totalFunding, totalFundingRaw, isPEBacked, peBackerFound, isVCBacked, foundedYear, isPublic, isAcquired, acquiredBy, searchResultCount: searchResults.length },\n      autoDisqualifiers,\n      isAutoDisqualified: autoDisqualifiers.length > 0,\n      needsManualResearch: searchResults.length === 0,\n      hasEnrichmentData: !!(employeeCount || fundingStage || totalFunding || isPEBacked || isVCBacked || isPublic || isAcquired)\n    }\n  };\n});"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2660,
-        675
-      ],
-      "id": "climate-parse-enrichment",
-      "name": "Parse Enrichment"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-auto-disqualify",
-              "leftValue": "={{ $json.isAutoDisqualified }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        2840,
-        675
-      ],
-      "id": "climate-if-auto-disqualify",
-      "name": "IF: Auto-Disqualify"
-    },
-    {
-      "parameters": {
-        "authentication": "airtableTokenApi",
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Funding Alerts",
-          "mode": "list",
-          "cachedResultName": "Funding Alerts"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Company Name": "={{ $json['Company Name'] }}",
-            "Company URL": "={{ $json['Company URL'] }}",
-            "Company Description": "={{ $json['Company Description'] }}",
-            "VC Firm": "={{ $json['VC Firm'] }}",
-            "Status": "Auto-Disqualified",
-            "Next Steps": "Skip",
-            "Disqualify Reasons": "={{ $json.autoDisqualifiers.join('; ') }}",
-            "Stage": "={{ $json.enrichment.fundingStage || '' }}",
-            "Total Funding": "={{ $json.enrichment.totalFundingRaw || '' }}",
-            "Tide-Pool Score": 0,
-            "Summary": "={{ 'Auto-disqualified: ' + $json.autoDisqualifiers.join('; ') }}",
-            "Employee Count": "={{ $json.enrichment.employeeCount || null }}",
-            "PE Backed": "={{ $json.enrichment.isPEBacked || false }}",
-            "Founded Year": "={{ $json.enrichment.foundedYear || null }}",
-            "First Seen Date": "={{ $now.format('YYYY-MM-DD') }}",
-            "Source": "={{ $json['VC Firm'] }}",
-            "Sector Match": "unknown"
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        3820,
-        500
-      ],
-      "id": "climate-airtable-auto-disqualified",
-      "name": "Airtable: Auto-Disqualified"
+      "id": "climate-limit-backfill",
+      "name": "Limit (Backfill)",
+      "notes": "Remove this node after initial backfill is complete"
     }
   ],
   "connections": {
@@ -890,11 +489,6 @@
           },
           {
             "node": "Fetch MCJ Collective",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Existing Companies",
             "type": "main",
             "index": 0
           }
@@ -1191,190 +785,23 @@
       "main": [
         [
           {
-            "node": "Filter Valid",
+            "node": "Limit (Backfill)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Valid": {
+    "Limit (Backfill)": {
       "main": [
         [
           {
-            "node": "Mark as New",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "No Valid Companies",
+            "node": "Execute Enrich & Evaluate Pipeline",
             "type": "main",
             "index": 0
           }
         ]
       ]
-    },
-    "Mark as New": {
-      "main": [
-        [
-          {
-            "node": "Merge for Dedup",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Existing Companies": {
-      "main": [
-        [
-          {
-            "node": "Merge for Dedup",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Merge for Dedup": {
-      "main": [
-        [
-          {
-            "node": "Dedup Against Existing",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Dedup Against Existing": {
-      "main": [
-        [
-          {
-            "node": "Has New Companies?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Has New Companies?": {
-      "main": [
-        [
-          {
-            "node": "Build Search Query",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "All Duplicates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Tide Pool Profile": {
-      "main": [
-        [
-          {
-            "node": "Build Evaluation Prompt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Evaluation Prompt": {
-      "main": [
-        [
-          {
-            "node": "Evaluate via Anthropic API",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Evaluate via Anthropic API": {
-      "main": [
-        [
-          {
-            "node": "Parse Evaluation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Evaluation": {
-      "main": [
-        [
-          {
-            "node": "Airtable: Create Evaluated Record",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Search Query": {
-      "main": [
-        [
-          {
-            "node": "Brave Search Company",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Brave Search Company": {
-      "main": [
-        [
-          {
-            "node": "Parse Enrichment",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Enrichment": {
-      "main": [
-        [
-          {
-            "node": "IF: Auto-Disqualify",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF: Auto-Disqualify": {
-      "main": [
-        [
-          {
-            "node": "Airtable: Auto-Disqualified",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Fetch Tide Pool Profile",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Airtable: Auto-Disqualified": {
-      "main": []
     }
   },
   "settings": {

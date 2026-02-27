@@ -1,0 +1,549 @@
+{
+  "workflow_name": "Indeed Job Search - Targeted Role Discovery",
+  "description": "Automated Indeed search with Customer Journey Leader evaluation framework. Surfaces Head/Director/VP roles at early-to-growth-stage VC-backed B2B SaaS companies where founder-led customer relationships are breaking down.",
+  "version": "2.0",
+  "last_updated": "2026-02-17",
+
+  "evaluation_framework": {
+    "name": "Customer Journey Leader Lens",
+    "description": "At seed/Series A companies, evaluate for 'customer journey leader' — the first customer-facing hire who owns the entire post-sale relationship: onboarding, success, support, retention, and feedback-to-product.",
+    "key_question": "Is this company approaching the moment where founder-led customer relationships break down?",
+    "inflection_signals": [
+      "Enterprise/B2B customers (not pure self-serve SMB)",
+      "Growing logo count with increasing complexity",
+      "Founder still doing support but shipping product rapidly",
+      "Series A raised or imminent",
+      "Team is 10-30 people, mostly engineering",
+      "Customer-facing differentiators in marketing (e.g., 'white-glove support', 'US-based support')"
+    ]
+  },
+
+  "search_queries": [
+    {
+      "id": "q1",
+      "search": "Head of Customer Support B2B SaaS",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "high",
+      "notes": "Highest signal query - found Measured role"
+    },
+    {
+      "id": "q2",
+      "search": "Director Customer Support SaaS startup",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "high",
+      "notes": "Catches Director-level titles at startups"
+    },
+    {
+      "id": "q3",
+      "search": "Head of Customer Experience B2B SaaS",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "high",
+      "notes": "CX-titled roles often have full post-sales scope at early stage"
+    },
+    {
+      "id": "q4",
+      "search": "VP Customer Success SaaS startup",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "high",
+      "notes": "Customer Success at early stage often = full customer journey ownership"
+    },
+    {
+      "id": "q5",
+      "search": "Head of Customer healthcare SaaS",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "high",
+      "notes": "Healthcare SaaS is priority sector - broad 'Customer' title captures journey leader roles"
+    },
+    {
+      "id": "q6",
+      "search": "Director Customer Support healthcare SaaS",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "high",
+      "notes": "Healthcare SaaS is a priority sector"
+    },
+    {
+      "id": "q7",
+      "search": "Head of Customer Support developer tools",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "high",
+      "notes": "Developer tools is a priority sector"
+    },
+    {
+      "id": "q8",
+      "search": "VP Customer Support SaaS",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "medium",
+      "notes": "VP-level postings, may skew larger companies"
+    },
+    {
+      "id": "q9",
+      "search": "founding customer leader SaaS",
+      "location": "remote",
+      "country_code": "US",
+      "priority": "low",
+      "notes": "Long shot - some startups use this language for 0-to-1 roles"
+    }
+  ],
+
+  "scheduling": {
+    "rotation_strategy": "Run all high-priority queries daily, medium every 2 days, low every 3 days",
+    "dedup_window_days": 14,
+    "dedup_key": "job_id",
+    "notes": "Indeed job_id from search results is the primary dedup field. Track seen IDs in Airtable to avoid reprocessing."
+  },
+
+  "disqualifier_hierarchy": {
+    "description": "Enforce in this exact order. Stop evaluation at first disqualifier hit.",
+    "order": [
+      {
+        "priority": 1,
+        "id": "hd1",
+        "field": "company_funding_type",
+        "condition": "equals",
+        "value": "private_equity",
+        "label": "PE-backed company",
+        "action": "instant_disqualify",
+        "notes": "PE-backed is the single strongest disqualifier. Check FIRST before any other logic.",
+        "keywords_detect": ["private equity", "PE-backed", "portfolio company of", "Accel-KKR", "LLR Partners", "Vista Equity", "Thoma Bravo", "Silver Lake", "Warburg Pincus", "KKR", "Blackstone", "Carlyle", "Apollo", "TPG", "Bain Capital", "Advent", "Hellman & Friedman", "Francisco Partners", "Insight Partners PE", "CD Private Equity", "Encore Consumer Capital"]
+      },
+      {
+        "priority": 2,
+        "id": "hd2",
+        "field": "company_scale",
+        "condition": "any_of",
+        "values": ["fortune_500", "1000+_employees", "500M+_funding", "500M+_valuation"],
+        "label": "Fortune 500 / 1000+ employees / $500M+ funding or valuation",
+        "action": "instant_disqualify"
+      },
+      {
+        "priority": 3,
+        "id": "hd3",
+        "field": "sector",
+        "condition": "in_list",
+        "value": ["dtc", "consumer_products", "retail", "defense", "government", "hardware", "agtech", "commodity_trading", "marketplace"],
+        "label": "Sector mismatch",
+        "action": "instant_disqualify",
+        "keywords_detect": {
+          "dtc_consumer": ["DTC", "direct to consumer", "Shopify", "ecommerce", "e-commerce", "retail", "Target", "Walmart", "Amazon storefront", "consumer products", "supplements", "personal care", "beauty brand", "CPG"],
+          "defense_government": ["DoD", "Department of Defense", "Navy", "Army", "Air Force", "military", "defense contractor", "government contract", "federal", "defense tech", "national security"],
+          "hardware": ["hardware company", "physical product", "manufacturing", "IoT device", "sensor hardware", "buoys", "hydrophones"],
+          "agtech_commodity": ["agriculture", "agtech", "farming", "commodity trading", "coffee export", "grain", "livestock"]
+        }
+      },
+      {
+        "priority": 4,
+        "id": "hd4",
+        "field": "role_primary_function",
+        "condition": "in_list",
+        "value": ["renewals", "account_management", "sales"],
+        "label": "Role is primarily renewals/AM/sales, not support/CX",
+        "action": "instant_disqualify",
+        "keywords_detect": ["renewals", "renewal rate", "retention ARR", "expansion ARR", "NRR", "GRR", "net revenue retention", "gross revenue retention", "upsell", "cross-sell", "expansion revenue", "account management", "book of business", "quota", "sales target", "revenue target"],
+        "context_notes": "If these are PRIMARY success metrics (not secondary), disqualify. CS roles that mention renewals as one metric among many are OK."
+      },
+      {
+        "priority": 5,
+        "id": "hd5",
+        "field": "healthcare_domain",
+        "condition": "domain_mismatch",
+        "value": "payer",
+        "label": "Healthcare role requires payer-side expertise (not provider-side)",
+        "action": "instant_disqualify",
+        "keywords_detect": ["health plan", "health plans", "payer", "payers", "utilization management", "utilization review", "claims processing", "member experience", "insurance", "managed care", "Medicare Advantage", "Medicaid managed"],
+        "notes": "Candidate background is provider-side (Alliance HealthCare). Payer-side requires different domain knowledge."
+      },
+      {
+        "priority": 6,
+        "id": "hd6",
+        "field": "funding_too_low",
+        "condition": "and",
+        "conditions": [
+          {"field": "total_funding", "condition": "less_than", "value": 500000},
+          {"field": "sector", "condition": "not_in", "value": ["healthcare_saas", "developer_tools"]}
+        ],
+        "label": "Total funding < $500K and not in target sector",
+        "action": "disqualify",
+        "notes": "Exception: if in target sector AND approaching Series A, flag as WATCH instead"
+      },
+      {
+        "priority": 7,
+        "id": "hd7",
+        "field": "too_early",
+        "condition": "and",
+        "conditions": [
+          {"field": "employee_count", "condition": "less_than", "value": 5},
+          {"field": "funding_stage", "condition": "equals", "value": "pre_seed"}
+        ],
+        "label": "Company size < 5 people AND pre-seed",
+        "action": "soft_disqualify",
+        "output": "WATCH",
+        "notes": "Flag as 'too early' - revisit in 6-12 months. Cannot support $125K+ comp yet."
+      },
+      {
+        "priority": 8,
+        "id": "hd8",
+        "field": "location_requirement",
+        "condition": "equals",
+        "value": "onsite_only",
+        "label": "No remote option available",
+        "action": "disqualify"
+      }
+    ]
+  },
+
+  "positive_signals": {
+    "description": "Signals that increase score. Weight: VERY_HIGH > HIGH > MEDIUM > LOW",
+    "signals": [
+      {
+        "id": "ps1",
+        "signal": "open_role_customer_leadership",
+        "weight": "VERY_HIGH",
+        "description": "Explicit open role for customer/support leadership",
+        "score_boost": 15
+      },
+      {
+        "id": "ps2",
+        "signal": "healthcare_saas",
+        "weight": "HIGH",
+        "description": "Healthcare SaaS - protected niche, domain expertise match",
+        "keywords": ["healthcare SaaS", "health tech", "clinical", "EHR", "EMR", "telehealth", "digital health", "provider", "hospital", "physician", "patient care", "pharma", "biotech", "clinical trials", "life sciences"],
+        "score_boost": 12
+      },
+      {
+        "id": "ps3",
+        "signal": "developer_tools",
+        "weight": "HIGH",
+        "description": "Developer tools - target sector, especially with enterprise plan",
+        "keywords": ["developer tools", "dev tools", "API", "SDK", "infrastructure", "platform", "developer experience"],
+        "score_boost": 12
+      },
+      {
+        "id": "ps4",
+        "signal": "enterprise_customers_named",
+        "weight": "HIGH",
+        "description": "Named enterprise customers - signals PMF and support complexity",
+        "score_boost": 10
+      },
+      {
+        "id": "ps5",
+        "signal": "series_a_or_b",
+        "weight": "HIGH",
+        "description": "Series A or B stage - sweet spot for first customer-facing hire",
+        "score_boost": 10
+      },
+      {
+        "id": "ps6",
+        "signal": "top_tier_vcs",
+        "weight": "MEDIUM",
+        "description": "Seed with top-tier VCs (YC, a16z, GC, Sequoia, First Round) - Series A likely coming",
+        "keywords": ["Y Combinator", "YC", "Andreessen Horowitz", "a16z", "General Catalyst", "Sequoia", "First Round", "Accel", "Greylock", "Benchmark", "Index Ventures", "Lightspeed", "NEA", "Bessemer"],
+        "score_boost": 7,
+        "output_hint": "Good for WATCH list if no open role"
+      },
+      {
+        "id": "ps7",
+        "signal": "support_as_differentiator",
+        "weight": "MEDIUM",
+        "description": "'Support' or 'customer experience' mentioned as company differentiator",
+        "keywords": ["white-glove support", "US-based support", "dedicated support", "customer-first", "customer obsessed", "support as differentiator"],
+        "score_boost": 5
+      },
+      {
+        "id": "ps8",
+        "signal": "team_size_inflection",
+        "weight": "MEDIUM",
+        "description": "Team 10-50, mostly engineering - approaching CX hire inflection",
+        "score_boost": 5
+      },
+      {
+        "id": "ps9",
+        "signal": "remote_friendly",
+        "weight": "LOW",
+        "description": "Remote-friendly or distributed team",
+        "score_boost": 3
+      },
+      {
+        "id": "ps10",
+        "signal": "pharma_biotech_customers",
+        "weight": "HIGH",
+        "description": "Pharma/biotech/clinical customer base - maps to Alliance HealthCare experience",
+        "score_boost": 10
+      }
+    ]
+  },
+
+  "negative_signals": {
+    "description": "Signals that decrease score or trigger disqualification",
+    "signals": [
+      {
+        "id": "ns1",
+        "signal": "pe_investors",
+        "weight": "DISQUALIFY",
+        "description": "PE investors detected",
+        "action": "instant_disqualify"
+      },
+      {
+        "id": "ns2",
+        "signal": "dtc_shopify_retail",
+        "weight": "DISQUALIFY",
+        "description": "DTC / Shopify / retail distribution",
+        "keywords": ["Shopify", "DTC", "direct to consumer", "retail", "Target", "Walmart", "Amazon"],
+        "action": "instant_disqualify"
+      },
+      {
+        "id": "ns3",
+        "signal": "government_dod",
+        "weight": "DISQUALIFY",
+        "description": "Government/DoD customers",
+        "keywords": ["DoD", "government contract", "federal", "military", "defense"],
+        "action": "instant_disqualify"
+      },
+      {
+        "id": "ns4",
+        "signal": "hardware",
+        "weight": "STRONG_NEGATIVE",
+        "description": "Hardware or hardware+software hybrid - SaaS experience doesn't transfer",
+        "score_penalty": -20
+      },
+      {
+        "id": "ns5",
+        "signal": "smb_only_pricing",
+        "weight": "MODERATE_NEGATIVE",
+        "description": "SMB-only pricing (< $500/mo) - may not need enterprise support leader",
+        "score_penalty": -10
+      },
+      {
+        "id": "ns6",
+        "signal": "founder_stepped_down",
+        "weight": "MODERATE_NEGATIVE",
+        "description": "Founder stepped down / CEO replaced - past the building phase",
+        "score_penalty": -10
+      },
+      {
+        "id": "ns7",
+        "signal": "consumer_products",
+        "weight": "DISQUALIFY",
+        "description": "Consumer products company",
+        "action": "instant_disqualify"
+      },
+      {
+        "id": "ns8",
+        "signal": "funding_over_500m",
+        "weight": "DISQUALIFY",
+        "description": "Total funding > $500M - too mature",
+        "action": "instant_disqualify"
+      },
+      {
+        "id": "ns9",
+        "signal": "website_redirect",
+        "weight": "RED_FLAG",
+        "description": "Website redirecting to different entity - pivot/wind-down signal",
+        "score_penalty": -15,
+        "notes": "Investigate further before proceeding"
+      }
+    ]
+  },
+
+  "three_bucket_output": {
+    "description": "Scoring outputs one of three buckets",
+    "buckets": [
+      {
+        "name": "APPLY",
+        "criteria": "Open role exists OR company is at the CX hire inflection point, in target sector, meets all qualifiers",
+        "score_threshold": 50,
+        "action": "Immediate notification"
+      },
+      {
+        "name": "WATCH",
+        "criteria": "Right sector and trajectory but 3-12 months premature. Flag for revisit.",
+        "score_threshold": 35,
+        "triggers_for_revisit": [
+          "Series A announcement",
+          "Customer-facing job posting",
+          "Team growth past 15-20 people"
+        ],
+        "action": "Add to watch list, check monthly"
+      },
+      {
+        "name": "PASS",
+        "criteria": "Hits disqualifier(s) or fundamental sector/stage mismatch",
+        "score_threshold": null,
+        "action": "No action needed"
+      }
+    ]
+  },
+
+  "soft_scoring": {
+    "description": "Score 0-10 on each dimension. Total determines APPLY/WATCH/PASS bucket.",
+    "minimum_apply_score": 50,
+    "minimum_watch_score": 35,
+    "maximum_possible_score": 80,
+    "dimensions": [
+      {
+        "id": "s1",
+        "name": "build_opportunity",
+        "weight": 10,
+        "description": "Is this a 0-to-1 or early-stage build? Score 10 for greenfield/first hire, 7 for small team (1-3), 4 for scaling existing team, 2 for managing established org, 0 for PE-playbook optimization.",
+        "keywords_positive": ["build", "establish", "first", "founding", "from scratch", "design and implement", "create", "stand up", "greenfield", "0-to-1", "zero to one"],
+        "keywords_negative": ["manage existing", "inherited team", "oversee current", "maintain", "optimize", "M&A integration", "blending teams", "mature the model"]
+      },
+      {
+        "id": "s2",
+        "name": "company_stage",
+        "weight": 10,
+        "description": "Series A or B is sweet spot. Score 10 for Seed/A, 8 for Series B, 5 for Series C, 2 for Series D+, 0 for late stage/public/PE.",
+        "keywords_positive": ["seed", "series a", "series b", "early stage", "startup"],
+        "keywords_negative": ["series d", "series e", "series f", "ipo", "public company", "PE-backed", "private equity"]
+      },
+      {
+        "id": "s3",
+        "name": "company_size",
+        "weight": 8,
+        "description": "10-50 employees is ideal inflection point. Score 10 for 10-30, 8 for 30-50, 6 for 50-100, 4 for 100-200, 2 for 200-500, 0 for 500+.",
+        "notes": "Under 10 may be too early (WATCH). Over 500 is too late."
+      },
+      {
+        "id": "s4",
+        "name": "title_level",
+        "weight": 7,
+        "description": "VP/Head/SVP preferred, Director acceptable. Score 10 for SVP/VP/Head, 7 for Director, 3 for Senior Manager, 0 for Manager."
+      },
+      {
+        "id": "s5",
+        "name": "sector_fit",
+        "weight": 10,
+        "description": "Healthcare SaaS and developer tools are priority. Score 10 for healthcare SaaS (provider-side), 10 for life sciences/clinical, 9 for developer tools with enterprise plan, 7 for technical B2B SaaS, 5 for general B2B SaaS, 0 for DTC/consumer/defense/hardware.",
+        "keywords_high": ["healthcare SaaS", "health tech", "clinical", "pharma", "biotech", "life sciences", "developer tools", "API platform"],
+        "keywords_disqualify": ["DTC", "consumer", "retail", "defense", "hardware", "agtech"]
+      },
+      {
+        "id": "s6",
+        "name": "compensation_fit",
+        "weight": 7,
+        "description": "Base above $125K preferred. Score 10 for $150K+, 8 for $140-150K, 6 for $125-140K, 4 for $110-125K with strong equity, 2 for under $110K, 0 for under $100K.",
+        "notes": "Flexible for exceptional build opportunity in target sector"
+      },
+      {
+        "id": "s7",
+        "name": "technical_complexity",
+        "weight": 8,
+        "description": "Enterprise B2B with technical product preferred. Score 10 for APIs/data/clinical/infrastructure, 8 for enterprise SaaS with integrations, 5 for mid-market SaaS, 3 for simple SaaS, 0 for non-technical.",
+        "keywords_positive": ["API", "integration", "data pipeline", "infrastructure", "platform", "clinical data", "enterprise"],
+        "keywords_negative": ["simple", "no-code", "plug and play", "SMB", "self-serve only"]
+      },
+      {
+        "id": "s8",
+        "name": "customer_journey_scope",
+        "weight": 10,
+        "description": "Does role own full post-sale journey? Score 10 for onboarding+success+support+retention, 7 for 2-3 of these, 4 for narrow support only, 0 for renewals/AM focus.",
+        "keywords_positive": ["customer journey", "post-sale", "onboarding", "success", "support", "retention", "customer experience", "customer lifecycle"],
+        "keywords_negative": ["renewals only", "expansion only", "upsell focus", "sales support"]
+      }
+    ]
+  },
+
+  "ai_classification_prompt": {
+    "description": "Send this prompt along with the job listing details to Claude API for classification.",
+    "system_prompt": "You are evaluating job listings using the Customer Journey Leader framework. At seed/Series A companies, evaluate for 'customer journey leader' — the first customer-facing hire who owns the entire post-sale relationship. Be STRICT on disqualifiers (check PE-backing FIRST). Be conservative on scoring. Output three buckets: APPLY, WATCH, or PASS.",
+    "user_prompt_template": "Evaluate this job listing for fit.\n\n**Candidate Profile:**\nVP/Head-level customer leader with 13+ years experience building support organizations from scratch (0-to-1) at B2B SaaS companies. Healthcare experience is PROVIDER-SIDE (Alliance HealthCare - medical imaging to hospitals/clinics), NOT payer-side. Targeting early-stage VC-backed companies where he can be the founding customer hire or build the function.\n\n**Job Details:**\nJob Title: {{job_title}}\nCompany: {{company_name}}\nJob Description: {{job_description}}\nCompany Size: {{employee_count}} (if known)\nFunding: {{funding_info}} (if known)\nCompensation: {{compensation}} (if known)\nLocation: {{location}}\n\n**STEP 1: DISQUALIFIER CHECK (in order)**\nCheck each disqualifier. If ANY are true, return PASS with reason.\n\n1. PE-backed? (Look for: private equity, PE-backed, portfolio company, known PE firms like Accel-KKR, Vista, Thoma Bravo, LLR Partners, etc.)\n2. Fortune 500 / 1000+ employees / $500M+ funding or valuation?\n3. Sector mismatch? (DTC, consumer products, retail, defense, government, hardware, agtech, commodity trading)\n4. Role primarily renewals/AM/sales? (Primary metrics: NRR, GRR, expansion ARR, upsell, quota)\n5. Payer-side healthcare? (health plans, insurance, claims, utilization management)\n6. No remote option?\n\n**STEP 2: IF NOT DISQUALIFIED, SCORE (0-10 each)**\n- build_opportunity: 10=0-to-1 first hire, 7=small team, 4=scaling, 2=inherited org, 0=PE optimization\n- company_stage: 10=Seed/A, 8=Series B, 5=C, 2=D+, 0=late/PE\n- company_size: 10=10-30 people, 8=30-50, 6=50-100, 4=100-200, 2=200-500, 0=500+\n- title_level: 10=SVP/VP/Head, 7=Director, 3=Sr Manager, 0=Manager\n- sector_fit: 10=healthcare SaaS or life sciences, 9=dev tools, 7=technical B2B SaaS, 5=general B2B SaaS, 0=mismatched\n- compensation_fit: 10=$150K+, 8=$140-150K, 6=$125-140K, 4=$110-125K, 2=under $110K\n- technical_complexity: 10=APIs/clinical/data, 8=enterprise integrations, 5=mid-market, 3=simple, 0=non-tech\n- customer_journey_scope: 10=owns full post-sale, 7=2-3 areas, 4=narrow support, 0=renewals focus\n\n**STEP 3: DETERMINE BUCKET**\n- Total 50+: APPLY\n- Total 35-49: WATCH (right trajectory but premature)\n- Total <35 OR disqualified: PASS\n\n**STEP 4: RETURN JSON**\n{\n  \"bucket\": \"APPLY\" | \"WATCH\" | \"PASS\",\n  \"disqualifiers_checked\": [{\"rule\": \"...\", \"result\": \"pass|fail\", \"evidence\": \"...\"}],\n  \"disqualified\": true|false,\n  \"disqualify_reason\": \"<if disqualified>\",\n  \"scores\": {\"build_opportunity\": N, ...},\n  \"total_score\": N,\n  \"max_possible\": 80,\n  \"positive_signals\": [\"<list strong signals>\"],\n  \"red_flags\": [\"<list concerns>\"],\n  \"summary\": \"<2-3 sentence explanation>\",\n  \"watch_triggers\": [\"<if WATCH, what would trigger APPLY>\"],\n  \"missing_info\": [\"<fields to research>\"]\n}"
+  },
+
+  "output_destinations": {
+    "airtable": {
+      "description": "Store all results in Airtable for tracking and dedup",
+      "suggested_fields": [
+        {"name": "Job ID", "type": "text", "notes": "Indeed job_id for dedup"},
+        {"name": "Job Title", "type": "text"},
+        {"name": "Company", "type": "text"},
+        {"name": "Search Query", "type": "text", "notes": "Which query found this"},
+        {"name": "Bucket", "type": "single_select", "options": ["APPLY", "WATCH", "PASS"]},
+        {"name": "Status", "type": "single_select", "options": ["New", "Reviewing", "Applied", "Watching", "Passed", "Disqualified"]},
+        {"name": "Disqualify Reason", "type": "text"},
+        {"name": "Total Score", "type": "number"},
+        {"name": "AI Summary", "type": "long_text"},
+        {"name": "Positive Signals", "type": "long_text"},
+        {"name": "Red Flags", "type": "long_text"},
+        {"name": "Watch Triggers", "type": "long_text"},
+        {"name": "Build Opportunity Score", "type": "number"},
+        {"name": "Company Stage Score", "type": "number"},
+        {"name": "Company Size Score", "type": "number"},
+        {"name": "Title Level Score", "type": "number"},
+        {"name": "Sector Fit Score", "type": "number"},
+        {"name": "Comp Fit Score", "type": "number"},
+        {"name": "Technical Complexity Score", "type": "number"},
+        {"name": "Customer Journey Scope Score", "type": "number"},
+        {"name": "Job URL", "type": "url"},
+        {"name": "Compensation Range", "type": "text"},
+        {"name": "Employee Count", "type": "number"},
+        {"name": "Funding Info", "type": "text"},
+        {"name": "Missing Info", "type": "long_text"},
+        {"name": "Notes", "type": "long_text"}
+      ]
+    },
+    "notification": {
+      "description": "Alert based on bucket",
+      "rules": [
+        {"bucket": "APPLY", "action": "Immediate email/slack notification"},
+        {"bucket": "WATCH", "action": "Weekly digest"},
+        {"bucket": "PASS", "action": "No notification"}
+      ]
+    }
+  },
+
+  "watch_list_management": {
+    "description": "How to manage WATCH bucket companies",
+    "revisit_triggers": [
+      "Series A announcement",
+      "Customer-facing job posting appears",
+      "Team growth past 15-20 people",
+      "Enterprise customer announcement",
+      "Founder posts about scaling challenges"
+    ],
+    "revisit_cadence": "Monthly review of WATCH list",
+    "promotion_criteria": "If revisit trigger fires AND company now scores 50+, promote to APPLY"
+  },
+
+  "example_evaluations": {
+    "description": "Reference examples for calibration",
+    "examples": [
+      {
+        "company": "Faro Health",
+        "bucket": "APPLY",
+        "reason": "Healthcare domain match (life sciences/clinical), Series B, SVP/VP role, enterprise B2B customers (pharma/biotech), VC-backed"
+      },
+      {
+        "company": "Measured",
+        "bucket": "APPLY",
+        "reason": "Explicit Head of Customer Support role, B2B SaaS, Series B, right company size, VC-backed"
+      },
+      {
+        "company": "Tempo Labs",
+        "bucket": "WATCH",
+        "reason": "Developer tools (target sector), top-tier VCs (YC, GC), enterprise customers, but Seed stage, ~15 people, no customer roles yet. Revisit at Series A."
+      },
+      {
+        "company": "Appspace",
+        "bucket": "PASS",
+        "reason": "PE-backed (Accel-KKR, LLR Partners) - instant disqualify"
+      },
+      {
+        "company": "Love Wellness",
+        "bucket": "PASS",
+        "reason": "PE-backed + DTC/consumer products + retail distribution - multiple disqualifiers"
+      },
+      {
+        "company": "Andrenam",
+        "bucket": "PASS",
+        "reason": "Defense tech + hardware + government customers - sector mismatch"
+      }
+    ]
+  }
+}

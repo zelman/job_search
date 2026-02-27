@@ -1,5 +1,5 @@
 {
-  "name": "VC Portfolio Scraper v20 (Enriched)",
+  "name": "VC Portfolio Scraper v26 (Enterprise)",
   "nodes": [
     {
       "parameters": {
@@ -432,7 +432,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"https://headline.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
+        "jsonBody": "={\n  \"url\": \"https://headline.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 90000 }\n}",
         "options": {
           "timeout": 120000
         }
@@ -448,7 +448,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse Headline - extract company data with URLs\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Headline';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nconst junkPatterns = ['privacy', 'statement', 'notice', 'blog', 'latest', 'how we work', 'site notice', 'investing in', 'founder', 'spotlight', 'landscape', 'lookahead', 'why is', 'the power of', 'match made', 'nasdaq', 'nyse', 'tyo', 'hk '];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  // Find company blocks with slug and try to get website URL\n  const companyBlockPattern = /\\{[^{}]*\"type\"\\s*:\\s*\"company\"[^{}]*\"slug\"\\s*:\\s*\"([a-z0-9-]+)\"[^{}]*\\}/gi;\n  let match;\n  \n  while ((match = companyBlockPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    if (!slug || slug.length < 2 || slug.length > 50) continue;\n    if (slug.includes('acq') || slug === 'portfolio' || slug === 'company') continue;\n    \n    let name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    const nameLower = name.toLowerCase();\n    if (junkPatterns.some(p => nameLower.includes(p))) continue;\n    if (/^[A-Z][a-z]+ [A-Z][a-z]+$/.test(name) && !/\\d/.test(name)) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    \n    // Extract context for URL and description\n    const contextStart = Math.max(0, match.index - 200);\n    const contextEnd = Math.min(html.length, match.index + 500);\n    const context = html.substring(contextStart, contextEnd);\n    \n    // Try to find website URL in context\n    let companyUrl = '';\n    const urlMatch = context.match(/\"(?:website|url|href)\"\\s*:\\s*\"(https?:\\/\\/[^\"]+)\"/i);\n    if (urlMatch) {\n      companyUrl = urlMatch[1];\n    } else {\n      // Try to find any URL that looks like company website\n      const anyUrlMatch = context.match(/https?:\\/\\/(?:www\\.)?([a-z0-9-]+)\\.(com|io|co|ai|xyz|app|dev|tech|health|bio)[^\"\\s]*/i);\n      if (anyUrlMatch && anyUrlMatch[1].toLowerCase().includes(slug.split('-')[0])) {\n        companyUrl = anyUrlMatch[0];\n      }\n    }\n    \n    let description = name + ' - Headline portfolio company';\n    const tagMatch = context.match(/\"tag\"\\s*:\\s*\"([^\"]+)\"/i);\n    if (tagMatch && !['active', 'exited', 'north america', 'europe', 'asia'].includes(tagMatch[1].toLowerCase())) {\n      description = name + ' - Headline portfolio (' + tagMatch[1] + ')';\n    }\n    \n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': description, 'Company URL': companyUrl, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+        "jsCode": "// Parse Headline - extract company data\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Headline';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nconst skipSlugs = ['portfolio', 'company', 'team', 'about', 'contact', 'blog', 'news', 'privacy', 'terms'];\nconst junkPatterns = ['privacy', 'statement', 'notice', 'blog', 'latest', 'how we work', 'site notice', 'investing in', 'founder', 'spotlight', 'landscape', 'lookahead', 'why is', 'the power of', 'match made'];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  // METHOD 1: Find /portfolio/company-slug links (Prismic structure)\n  const portfolioLinkPattern = /\\/portfolio\\/([a-z0-9-]+)/gi;\n  let match;\n  while ((match = portfolioLinkPattern.exec(html)) !== null) {\n    const slug = match[1].trim().toLowerCase();\n    if (!slug || slug.length < 2 || slug.length > 50) continue;\n    if (skipSlugs.includes(slug)) continue;\n    \n    // Clean up acquisition suffixes\n    let cleanSlug = slug.replace(/-acq-?$/, '').replace(/-acquired?$/, '');\n    let name = cleanSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    \n    // Mark acquisitions\n    if (slug.includes('acq')) name += ' (Acquired)';\n    \n    const key = cleanSlug.replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    if (junkPatterns.some(p => name.toLowerCase().includes(p))) continue;\n    seen.add(key);\n    \n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': `${name} - Headline portfolio company`, 'Company URL': '', 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n  \n  // METHOD 2: Find company slugs in JSON (backup)\n  const companyBlockPattern = /\"slug\"\\s*:\\s*\"([a-z0-9-]+)\"/gi;\n  while ((match = companyBlockPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    if (!slug || slug.length < 2 || slug.length > 50) continue;\n    if (skipSlugs.includes(slug)) continue;\n    \n    let cleanSlug = slug.replace(/-acq-?.*$/, '');\n    let name = cleanSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    if (slug.includes('acq')) name += ' (Acquired)';\n    \n    const key = cleanSlug.replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    if (junkPatterns.some(p => name.toLowerCase().includes(p))) continue;\n    seen.add(key);\n    \n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': `${name} - Headline portfolio company`, 'Company URL': '', 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -677,409 +677,100 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json._empty }}",
-              "operation": "notEqual",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        50848,
-        8992
-      ],
-      "id": "9d36dbb1-6315-4ba7-89ec-afe7eea7524c",
-      "name": "Filter Valid"
-    },
-    {
-      "parameters": {
-        "jsCode": "const newCompanies = $input.all();\nreturn newCompanies.map(item => ({ json: { ...item.json, _isNewCompany: true } }));"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        51072,
-        8992
-      ],
-      "id": "8ef6b53d-fea1-4188-b041-f34c75c74c88",
-      "name": "Mark as New"
-    },
-    {
-      "parameters": {
-        "operation": "search",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Funding Alerts",
-          "mode": "list",
-          "cachedResultName": "Funding Alerts"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        51072,
-        9200
-      ],
-      "id": "533c426b-c626-46d3-b4aa-c85661615db5",
-      "name": "Get Existing Companies"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        51280,
-        9104
-      ],
-      "id": "a078425c-a8de-4944-b68d-04fdcac3bb21",
-      "name": "Merge for Dedup"
-    },
-    {
-      "parameters": {
-        "jsCode": "const allItems = $input.all();\nconst newCompanies = [];\nconst existingRecords = [];\nfor (const item of allItems) {\n  if (item.json._isNewCompany) newCompanies.push(item);\n  else if (item.json.fields && item.json.fields['Company Name']) existingRecords.push(item);\n  else if (item.json.id && item.json['Company Name']) existingRecords.push({ json: { fields: item.json } });\n}\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst existingNames = new Set();\nfor (const item of existingRecords) {\n  const name = (item.json.fields || item.json)['Company Name'] || '';\n  if (name) existingNames.add(normalize(name));\n}\nconst uniqueCompanies = [];\nconst addedNames = new Set();\nfor (const company of newCompanies) {\n  const name = company.json['Company Name'];\n  if (!name) continue;\n  const normalizedName = normalize(name);\n  if (!normalizedName || existingNames.has(normalizedName) || addedNames.has(normalizedName)) continue;\n  addedNames.add(normalizedName);\n  const cleanCompany = { ...company.json };\n  delete cleanCompany._isNewCompany;\n  uniqueCompanies.push({ json: cleanCompany });\n}\nreturn uniqueCompanies.length ? uniqueCompanies : [{ json: { _empty: true, _message: 'No new companies found' } }];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        51504,
-        9104
-      ],
-      "id": "078452ca-d9c8-4577-9d9c-4f0bcf9b3285",
-      "name": "Dedup Against Existing"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{ $json._empty }}",
-              "operation": "notEqual",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        51728,
-        9104
-      ],
-      "id": "98233058-8280-432b-8ab6-9e070bbfbdd4",
-      "name": "Has New Companies?"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        51072,
-        8848
-      ],
-      "id": "6f000c4f-728c-473b-a0b9-9e554d094187",
-      "name": "No Valid Companies"
-    },
-    {
-      "parameters": {},
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
-      "position": [
-        51952,
-        8944
-      ],
-      "id": "7b4daaf7-5f2e-460e-8e82-fce5d24789ca",
-      "name": "All Duplicates"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Build search query for Brave - process ALL items\nconst items = $input.all();\n\nreturn items.map(item => {\n  const company = item.json;\n  const companyName = company['Company Name'] || '';\n  const searchQuery = '\"' + companyName + '\" company funding employees series startup';\n  \n  return {\n    json: {\n      ...company,\n      searchQuery: searchQuery\n    }\n  };\n});"
-      },
-      "id": "build-search-query-001",
-      "name": "Build Search Query",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        51800,
-        9004
-      ]
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://api.search.brave.com/res/v1/web/search",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
-            {
-              "name": "q",
-              "value": "={{ $json.searchQuery }}"
-            },
-            {
-              "name": "count",
-              "value": "10"
-            }
-          ]
-        },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
-          ]
-        },
+        "url": "https://www.k9ventures.com/startups/",
         "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 1500
-            }
-          },
-          "timeout": 30000
-        },
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "id": "brave-search-company-001",
-      "name": "Brave Search Company",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        51978,
-        9004
-      ],
-      "notes": "Search Brave for company enrichment data. Rate limited to 1.5s between requests.",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "CREDENTIAL_ID",
-          "name": "Brave Search API"
+          "timeout": 60000
         }
-      }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10616
+      ],
+      "id": "ent-fetch-k9",
+      "name": "Fetch K9 Ventures"
     },
     {
       "parameters": {
-        "jsCode": "// Parse Brave Search results - process ALL items, extract URLs from search\nconst braveResponses = $input.all();\nconst companyDataItems = $('Build Search Query').all();\n\nconst peFirms = ['Vista Equity', 'Thoma Bravo', 'KKR', 'Blackstone', 'TPG', 'Carlyle', 'Bain Capital', 'Silver Lake', 'Francisco Partners', 'Vector Capital', 'Ares Management', 'Apollo Global', 'Warburg Pincus', 'Golden Gate Capital', 'Nordic Capital', 'TA Associates', 'Insight Partners', 'General Atlantic', 'Summit Partners'];\nconst vcFirms = ['a16z', 'Andreessen Horowitz', 'Sequoia', 'Accel', 'Greylock', 'First Round', 'NEA', 'Lightspeed', 'Bessemer', 'Battery Ventures', 'Foundation Capital', 'Index Ventures', 'Benchmark', 'Kleiner Perkins', 'GV', 'Google Ventures', 'Founders Fund', 'Y Combinator', 'YC', 'Accomplice', 'Underscore VC'];\nconst bigAcquirers = ['Google', 'Alphabet', 'Microsoft', 'Amazon', 'Apple', 'Meta', 'Facebook', 'Oracle', 'Salesforce', 'Adobe', 'SAP', 'IBM', 'Cisco', 'Intel', 'Nest'];\nconst skipDomains = ['linkedin.com', 'crunchbase.com', 'pitchbook.com', 'wikipedia.org', 'glassdoor.com', 'indeed.com', 'zoominfo.com', 'apollo.io', 'ycombinator.com', 'techcrunch.com', 'bloomberg.com', 'forbes.com', 'businesswire.com', 'prnewswire.com', 'tracxn.com', 'cbinsights.com', 'owler.com', 'dnb.com', 'craft.co', 'rocketreach.co', 'getlatka.com', 'growjo.com', 'datanyze.com', 'leadiq.com', 'lusha.com', 'contactout.com', 'signalhire.com'];\n\nconst currentYear = new Date().getFullYear();\n\nreturn braveResponses.map((item, index) => {\n  const braveResponse = item.json;\n  const companyData = companyDataItems[index]?.json || {};\n  const searchResults = braveResponse?.web?.results || braveResponse?.results || [];\n  const allText = searchResults.map(r => `${r.title || ''} ${r.description || ''} ${r.extra_snippets?.join(' ') || ''}`).join(' ');\n  \n  // Extract company URL from search results if not provided\n  let companyUrl = companyData['Company URL'] || '';\n  if (!companyUrl && searchResults.length > 0) {\n    const companyName = (companyData['Company Name'] || '').toLowerCase().replace(/[^a-z0-9]/g, '');\n    for (const result of searchResults.slice(0, 5)) {\n      const url = result.url || '';\n      if (!url) continue;\n      const domain = url.replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0].toLowerCase();\n      if (skipDomains.some(d => domain.includes(d))) continue;\n      const domainBase = domain.replace(/\\.(com|io|co|ai|health|app|dev|tech|xyz|org|net)$/, '').replace(/[^a-z0-9]/g, '');\n      if (domainBase.includes(companyName.slice(0, 5)) || companyName.includes(domainBase.slice(0, 5))) {\n        companyUrl = url.split('/').slice(0, 3).join('/');\n        break;\n      }\n    }\n    if (!companyUrl && searchResults[0]?.url) {\n      const firstUrl = searchResults[0].url;\n      const domain = firstUrl.replace(/^https?:\\/\\/(www\\.)?/, '').split('/')[0].toLowerCase();\n      if (!skipDomains.some(d => domain.includes(d))) {\n        companyUrl = firstUrl.split('/').slice(0, 3).join('/');\n      }\n    }\n  }\n  \n  // Employee count\n  let employeeCount = null;\n  const empPatterns = [/([\\d,]+)\\s*(?:to\\s*[\\d,]+)?\\s*employees?/gi, /team\\s*(?:of)?\\s*([\\d,]+)/gi];\n  for (const pattern of empPatterns) {\n    const matches = [...allText.matchAll(pattern)];\n    for (const match of matches) {\n      const count = parseInt(match[1].replace(/,/g, ''));\n      if (count > 0 && count < 1000000 && (!employeeCount || count > employeeCount)) employeeCount = count;\n    }\n  }\n  \n  const isPublic = /\\b(?:IPO|went public|publicly traded|publicly held|stock price|NYSE|NASDAQ|traded on|ticker|stock symbol|\\([A-Z]{1,5}\\))\\b/i.test(allText);\n  const acquiredMatch = allText.match(/(?:acquired by|bought by|purchased by|acquisition by)\\s+([\\w\\s]+?)(?:\\s+(?:for|in))/i);\n  const isAcquired = !!acquiredMatch || bigAcquirers.some(a => new RegExp(`acquired by ${a}|${a} acqui`, 'i').test(allText));\n  const acquiredBy = acquiredMatch ? acquiredMatch[1].trim() : (bigAcquirers.find(a => new RegExp(`acquired by ${a}|${a} acqui`, 'i').test(allText)) || null);\n  \n  let fundingStage = null;\n  if (isPublic) {\n    fundingStage = 'Public/IPO';\n  } else {\n    const stagePatterns = {'Series F+': /\\bSeries\\s*[F-Z]\\b/i, 'Series E': /\\bSeries\\s*E\\b/i, 'Series D': /\\bSeries\\s*D\\b/i, 'Series C': /\\bSeries\\s*C\\b/i, 'Series B': /\\bSeries\\s*B\\b/i, 'Series A': /\\bSeries\\s*A\\b/i, 'Seed': /\\b(?:Seed\\s*(?:round|funding)?|seed-stage)\\b/i, 'Pre-Seed': /\\b(?:Pre[- ]?Seed|angel\\s*round)\\b/i};\n    for (const [stage, pattern] of Object.entries(stagePatterns)) {\n      if (pattern.test(allText)) { fundingStage = stage; break; }\n    }\n  }\n  \n  let totalFunding = null, totalFundingRaw = null;\n  const fundPatterns = [/raised\\s*\\$([\\d.]+)\\s*(million|billion|M|B)/gi, /\\$([\\d.]+)\\s*(million|billion|M|B)\\s*(?:in\\s*)?(?:total\\s*)?funding/gi];\n  for (const pattern of fundPatterns) {\n    const matches = [...allText.matchAll(pattern)];\n    for (const match of matches) {\n      const amount = parseFloat(match[1]);\n      const unit = match[2].toLowerCase();\n      let value = (unit === 'billion' || unit === 'b') ? amount * 1000000000 : amount * 1000000;\n      if (!totalFunding || value > totalFunding) { totalFunding = value; totalFundingRaw = `$${amount}${unit.charAt(0).toUpperCase()}`; }\n    }\n  }\n  \n  const isPEBacked = peFirms.some(f => new RegExp(f.replace(/\\s+/g, '\\\\s*'), 'i').test(allText));\n  const peBackerFound = peFirms.find(f => new RegExp(f.replace(/\\s+/g, '\\\\s*'), 'i').test(allText)) || null;\n  const isVCBacked = vcFirms.some(f => new RegExp(f.replace(/\\s+/g, '\\\\s*'), 'i').test(allText));\n  \n  let foundedYear = null;\n  const foundMatch = allText.match(/(?:founded|established|since|started)\\s*(?:in)?\\s*(\\d{4})/i);\n  if (foundMatch) { const year = parseInt(foundMatch[1]); if (year >= 1990 && year <= currentYear) foundedYear = year; }\n  \n  const autoDisqualifiers = [];\n  if (isPEBacked) autoDisqualifiers.push(`PE-backed (${peBackerFound})`);\n  if (employeeCount >= 500) autoDisqualifiers.push(`500+ employees (${employeeCount})`);\n  if (totalFunding >= 200000000) autoDisqualifiers.push(`$200M+ funding (${totalFundingRaw})`);\n  if (isPublic || fundingStage === 'Public/IPO') autoDisqualifiers.push('Public company');\n  if (isAcquired) autoDisqualifiers.push(`Acquired${acquiredBy ? ' by ' + acquiredBy : ''}`);\n  if (foundedYear && foundedYear < 2017) autoDisqualifiers.push(`Founded ${foundedYear} (${currentYear - foundedYear}+ years old)`);\n  if (['Series D', 'Series E', 'Series F+'].includes(fundingStage)) autoDisqualifiers.push(`Late stage (${fundingStage})`);\n  \n  return {\n    json: {\n      'Company Name': companyData['Company Name'],\n      'Company URL': companyUrl,\n      'Company Description': companyData['Company Description'],\n      'VC Firm': companyData['VC Firm'],\n      enrichment: { employeeCount, fundingStage, totalFunding, totalFundingRaw, isPEBacked, peBackerFound, isVCBacked, foundedYear, isPublic, isAcquired, acquiredBy, searchResultCount: searchResults.length },\n      autoDisqualifiers,\n      isAutoDisqualified: autoDisqualifiers.length > 0,\n      needsManualResearch: searchResults.length === 0,\n      hasEnrichmentData: !!(employeeCount || fundingStage || totalFunding || isPEBacked || isVCBacked || isPublic || isAcquired)\n    }\n  };\n});"
+        "jsCode": "// Parse K9 Ventures - Static HTML\nconst items = $input.all();\nconst results = [];\nconst vcName = 'K9 Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const html = item.json.data || (typeof item.json === 'string' ? item.json : '');\n  \n  // K9 uses WordPress with company names in specific patterns\n  // Look for portfolio company entries\n  const companyPattern = /<h[23][^>]*>([^<]+)<\\/h[23]>/gi;\n  const linkPattern = /<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>([^<]+)<\\/a>/gi;\n  \n  let match;\n  while ((match = linkPattern.exec(html)) !== null) {\n    const url = match[1];\n    const name = match[2].trim();\n    \n    // Skip social/navigation links\n    if (url.includes('linkedin') || url.includes('twitter') || url.includes('k9ventures.com')) continue;\n    if (name.length < 2 || name.length > 50) continue;\n    if (name.toLowerCase().includes('home') || name.toLowerCase().includes('contact')) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - K9 Ventures portfolio company',\n        'Company URL': url.startsWith('http') ? url : 'https://' + url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\n// Fallback: known major K9 portfolio companies\nif (results.length < 10) {\n  const knownCompanies = [\n    ['Twilio', 'https://www.twilio.com'],\n    ['Lyft', 'https://www.lyft.com'],\n    ['Carta', 'https://www.carta.com'],\n    ['Auth0', 'https://www.auth0.com'],\n    ['Aurora', 'https://www.aurora.tech'],\n    ['Forethought', 'https://www.forethought.ai'],\n    ['Everlaw', 'https://www.everlaw.com'],\n    ['DNAnexus', 'https://www.dnanexus.com'],\n    ['Avoma', 'https://www.avoma.com'],\n    ['Heap', 'https://www.heap.io'],\n    ['Airtable', 'https://www.airtable.com'],\n    ['Clubhouse', 'https://www.shortcut.com'],\n    ['Mashgin', 'https://www.mashgin.com'],\n    ['Momentive', 'https://www.momentive.ai'],\n    ['Census', 'https://www.getcensus.com'],\n    ['PlanetScale', 'https://www.planetscale.com'],\n    ['Deel', 'https://www.deel.com'],\n    ['Airbyte', 'https://www.airbyte.com'],\n    ['Flatfile', 'https://www.flatfile.com'],\n    ['WorkOS', 'https://www.workos.com']\n  ];\n  \n  for (const [company, url] of knownCompanies) {\n    const key = company.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    results.push({\n      json: {\n        'Company Name': company,\n        'VC Firm': vcName,\n        'Company Description': company + ' - K9 Ventures portfolio company',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
       },
-      "id": "parse-enrichment-001",
-      "name": "Parse Enrichment",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        52228,
-        9004
+        49744,
+        10616
       ],
-      "notes": "Extract employee count, funding stage, total funding, PE/VC backing, founded year. Calculate auto-disqualifiers."
+      "id": "ent-parse-k9",
+      "name": "Parse K9 Ventures"
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-auto-disqualify",
-              "leftValue": "={{ $json.isAutoDisqualified }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "if-auto-disqualify-001",
-      "name": "IF: Auto-Disqualify",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        52478,
-        9004
-      ],
-      "notes": "True branch: Company has auto-disqualifiers (PE-backed, 1000+ employees, $500M+ funding, etc.). Skip evaluation and mark as disqualified."
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Funding Alerts",
-          "mode": "list",
-          "cachedResultName": "Funding Alerts"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Company Name": "={{ $json['Company Name'] }}",
-            "Company URL": "={{ $json['Company URL'] }}",
-            "Company Description": "={{ $json['Company Description'] }}",
-            "VC Firm": "={{ $json['VC Firm'] }}",
-            "Status": "Auto-Disqualified",
-            "Next Steps": "Skip",
-            "Disqualify Reasons": "={{ $json.autoDisqualifiers.join('; ') }}",
-            "Stage": "={{ $json.enrichment.fundingStage || '' }}",
-            "Total Funding": "={{ $json.enrichment.totalFundingRaw || '' }}",
-            "Tide-Pool Score": 0,
-            "Summary": "={{ 'Auto-disqualified: ' + $json.autoDisqualifiers.join('; ') }}",
-            "Employee Count": "={{ $json.enrichment.employeeCount || null }}",
-            "PE Backed": "={{ $json.enrichment.isPEBacked || false }}",
-            "Founded Year": "={{ $json.enrichment.foundedYear || null }}",
-            "First Seen Date": "={{ $now.format('YYYY-MM-DD') }}",
-            "Source": "={{ $json['VC Firm'] }}",
-            "Sector Match": "unknown"
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
-      },
-      "id": "airtable-auto-disqualified-001",
-      "name": "Airtable: Auto-Disqualified",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        52728,
-        8804
-      ],
-      "notes": "Save auto-disqualified company to Airtable with status and reasons."
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "check-needs-research",
-              "leftValue": "={{ $json.needsManualResearch }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "if-needs-research-001",
-      "name": "IF: Needs Manual Research",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        52728,
-        9204
-      ],
-      "notes": "True branch: No enrichment data found. Flag for manual research."
-    },
-    {
-      "parameters": {
-        "operation": "create",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Funding Alerts",
-          "mode": "list",
-          "cachedResultName": "Funding Alerts"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Company Name": "={{ $json['Company Name'] }}",
-            "Company URL": "={{ $json['Company URL'] }}",
-            "Company Description": "={{ $json['Company Description'] }}",
-            "VC Firm": "={{ $json['VC Firm'] }}",
-            "Status": "Research",
-            "Summary": "No enrichment data found. Manual research required."
-          },
-          "matchingColumns": [],
-          "schema": []
-        },
-        "options": {}
-      },
-      "id": "airtable-needs-research-001",
-      "name": "Airtable: Needs Research",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
-      "position": [
-        52978,
-        9104
-      ],
-      "notes": "Save company needing manual research to Airtable."
-    },
-    {
-      "parameters": {
-        "method": "GET",
-        "url": "https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md",
+        "url": "https://precursorvc.com/wp-sitemap-posts-company-1.xml",
         "options": {
-          "timeout": 15000
+          "timeout": 60000
         }
       },
-      "id": "fetch-tide-pool-profile-001",
-      "name": "Fetch Tide Pool Profile",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4.1,
       "position": [
-        52978,
-        9304
+        49520,
+        10776
       ],
-      "notes": "Fetch the Tide Pool agent lens for evaluation context."
+      "id": "ent-fetch-precursor",
+      "name": "Fetch Precursor Sitemap"
     },
     {
       "parameters": {
-        "jsCode": "// Build evaluation prompt - process ALL items\nconst companyItems = $('IF: Needs Manual Research').all();\nconst tidePoolProfile = $('Fetch Tide Pool Profile').first().json;\n\nconst systemPrompt = `You are evaluating a company for job search fit based on the Tide Pool Agent Lens criteria.\n\nTIDE POOL PROFILE (Key Criteria):\n- Target: VP/Head/Director of Customer Support/Success Operations roles\n- Ideal Company: Pre-Series A to Series A, 0-50 employees, VC-backed (not PE)\n- Builder Focus: \"First hire\", \"build from scratch\", creating/scaling support operations\n- Target Sectors: Healthcare, environmental/climate, life sciences, education, audio/music tech, enterprise AI/ML\n- Auto-Disqualify: PE-backed, 500+ employees, $200M+ funding, Fortune 500, acquired companies\n- Title Flexibility: At <50 person companies, title irrelevant - focus on builder scope\n- High-Touch AI: Enterprise AI (governance, compliance, analytics) needs CS from day one\n\nSCORING FRAMEWORK (100 points max):\n- Company Stage & Fit: up to 40 pts\n  - Pre-Seed/Seed: 40 pts (ideal early builder)\n  - Series A: 35 pts (still early)\n  - Series B: 20 pts (getting late)\n  - Series C+: 5 pts (too late)\n- Sector Match: up to 30 pts\n  - Target sector (healthcare, climate, life sciences, education, audio/music, enterprise AI): 30 pts\n  - Adjacent sector: 15 pts\n  - Unrelated sector: 5 pts\n- CS Hire Likelihood: up to 30 pts\n  - B2B SaaS/Enterprise with high-touch product: 30 pts\n  - Mid-market B2B: 20 pts\n  - Consumer or self-serve: 10 pts\n\nPENALTIES (subtract from score):\n- PE-backed: -50 pts (auto-skip)\n- 200+ employees: -20 pts\n- Founded before 2018: -15 pts\n- Series C or later: -20 pts\n\nEvaluate the company and return this JSON:\n{\n  \"score\": <0-100 integer>,\n  \"sector_match\": \"target\" | \"adjacent\" | \"unrelated\",\n  \"cs_hire_likelihood\": \"high\" | \"medium\" | \"low\" | \"unlikely\",\n  \"product_type\": \"high-touch enterprise\" | \"mid-market\" | \"self-serve\" | \"consumer\" | \"unknown\",\n  \"ops_gap\": true | false,\n  \"summary\": \"<2-3 sentence explanation>\"\n}\n\nRespond ONLY with valid JSON, no markdown or explanation.`;\n\nreturn companyItems.map(item => {\n  const companyData = item.json;\n  const userPrompt = `COMPANY TO EVALUATE:\n\nName: ${companyData['Company Name']}\nVC Firm: ${companyData['VC Firm']}\nURL: ${companyData['Company URL']}\nDescription: ${companyData['Company Description'] || 'Not available'}\n\nENRICHMENT DATA:\n- Employee Count: ${companyData.enrichment?.employeeCount || 'Unknown'}\n- Funding Stage: ${companyData.enrichment?.fundingStage || 'Unknown'}\n- Total Funding: ${companyData.enrichment?.totalFundingRaw || 'Unknown'}\n- PE-Backed: ${companyData.enrichment?.isPEBacked ? 'Yes (' + companyData.enrichment.peBackerFound + ')' : 'No'}\n- VC-Backed: ${companyData.enrichment?.isVCBacked ? 'Yes' : 'Unknown'}\n- Founded Year: ${companyData.enrichment?.foundedYear || 'Unknown'}\n\nAUTO-DISQUALIFIERS: ${companyData.autoDisqualifiers?.length > 0 ? companyData.autoDisqualifiers.join('; ') : 'None'}\n\nProvide your evaluation as JSON.`;\n\n  return {\n    json: {\n      ...companyData,\n      evaluationPrompt: { systemPrompt, userPrompt }\n    }\n  };\n});"
+        "jsCode": "// Parse Precursor Ventures from sitemap\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Precursor Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const xml = item.json.data || (typeof item.json === 'string' ? item.json : '');\n  \n  // Extract URLs from sitemap\n  const locPattern = /<loc>([^<]+)<\\/loc>/gi;\n  let match;\n  \n  while ((match = locPattern.exec(xml)) !== null) {\n    const url = match[1].trim();\n    \n    // Only process company pages\n    if (!url.includes('/company/')) continue;\n    \n    // Extract company name from URL slug\n    const slugMatch = url.match(/\\/company\\/([^\\/]+)\\/?$/);\n    if (!slugMatch) continue;\n    \n    const slug = slugMatch[1];\n    const name = slug\n      .replace(/-/g, ' ')\n      .replace(/\\b\\w/g, c => c.toUpperCase());\n    \n    const key = slug.toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - Precursor Ventures portfolio company',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
       },
-      "id": "build-evaluation-prompt-001",
-      "name": "Build Evaluation Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        53228,
-        9304
+        49744,
+        10776
       ],
-      "notes": "Combine Tide Pool profile with company data to build Claude evaluation prompt."
+      "id": "ent-parse-precursor",
+      "name": "Parse Precursor Ventures"
+    },
+    {
+      "parameters": {
+        "url": "https://www.m25vc.com/sitemap.xml",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10936
+      ],
+      "id": "ent-fetch-m25",
+      "name": "Fetch M25 Sitemap"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse M25 VC from sitemap - Midwest focused\nconst items = $input.all();\nconst results = [];\nconst vcName = 'M25';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const xml = item.json.data || (typeof item.json === 'string' ? item.json : '');\n  \n  // Extract URLs from sitemap - look for /company/ URLs\n  const locPattern = /<loc>([^<]+)<\\/loc>/gi;\n  let match;\n  \n  while ((match = locPattern.exec(xml)) !== null) {\n    const url = match[1].trim();\n    \n    // Only process company pages\n    if (!url.includes('/company/')) continue;\n    \n    // Extract company name from URL slug\n    const slugMatch = url.match(/\\/company\\/([^\\/]+)\\/?$/);\n    if (!slugMatch) continue;\n    \n    const slug = slugMatch[1];\n    const name = slug\n      .replace(/-/g, ' ')\n      .replace(/\\b\\w/g, c => c.toUpperCase());\n    \n    const key = slug.toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - M25 portfolio company (Midwest focus)',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        10936
+      ],
+      "id": "ent-parse-m25",
+      "name": "Parse M25"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -1088,101 +779,105 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-3-haiku-20240307\",\n  \"max_tokens\": 1024,\n  \"system\": {{ JSON.stringify($json.evaluationPrompt.systemPrompt) }},\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.evaluationPrompt.userPrompt) }}\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"url\": \"https://www.goaheadvc.com/\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "batching": {
-            "batch": {
-              "batchSize": 1,
-              "batchInterval": 30000
-            }
-          },
-          "timeout": 60000
-        },
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth"
-      },
-      "id": "evaluate-via-anthropic-001",
-      "name": "Evaluate via Anthropic API",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        53478,
-        9304
-      ],
-      "notes": "Call Claude 3 Haiku for company evaluation. Rate limited to 30s between requests for API limits.",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "CREDENTIAL_ID",
-          "name": "Anthropic API Key"
+          "timeout": 120000
         }
-      }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        11096
+      ],
+      "id": "ent-fetch-goahead",
+      "name": "Browserless GoAhead"
     },
     {
       "parameters": {
-        "jsCode": "// Parse Claude's evaluation response - process ALL items\nconst responseItems = $input.all();\nconst companyItems = $('Build Evaluation Prompt').all();\n\nreturn responseItems.map((item, index) => {\n  const response = item.json;\n  const companyData = companyItems[index]?.json || {};\n  \n  // Extract text from Claude's response\n  let evaluationText = '';\n  if (response.content && Array.isArray(response.content)) {\n    evaluationText = response.content.filter(c => c.type === 'text').map(c => c.text).join('');\n  } else if (typeof response.content === 'string') {\n    evaluationText = response.content;\n  }\n  \n  // Parse JSON response\n  let evaluation = {};\n  try {\n    const jsonMatch = evaluationText.match(/\\{[\\s\\S]*\\}/);\n    if (jsonMatch) evaluation = JSON.parse(jsonMatch[0]);\n  } catch (e) {\n    evaluation = { score: 0, cs_hire_likelihood: 'unknown', product_type: 'unknown', ops_gap: false, recommendation: 'needs_research', summary: `Parse error: ${e.message}` };\n  }\n  \n  // Derive status from score since we removed recommendation\n  let status = 'Research';\n  const score = evaluation.score || 0;\n  if (score >= 70) status = 'Apply';\n  else if (score >= 50) status = 'Monitor';\n  else if (score >= 30) status = 'Research';\n  else status = 'Skip';\n  \n  return {\n    json: {\n      'Company Name': companyData['Company Name'],\n      'Company URL': companyData['Company URL'],\n      'Company Description': companyData['Company Description'],\n      'VC Firm': companyData['VC Firm'],\n      'Tide-Pool Score': score,\n      'Sector Match': evaluation.sector_match || 'unknown',\n      'CS Hire Likelihood': evaluation.cs_hire_likelihood || 'unknown',\n      'Product Type': evaluation.product_type || 'unknown',\n      'Ops Gap': evaluation.ops_gap || false,\n      'Status': status,\n      'Summary': evaluation.summary || 'No summary available',\n      'Employee Count': companyData.enrichment?.employeeCount || null,\n      'Funding Stage': companyData.enrichment?.fundingStage || '',\n      'Total Funding': companyData.enrichment?.totalFundingRaw || '',\n      'PE Backed': companyData.enrichment?.isPEBacked || false,\n      'Founded Year': companyData.enrichment?.foundedYear || null,\n      'Disqualify Reasons': companyData.autoDisqualifiers?.length > 0 ? companyData.autoDisqualifiers.join('; ') : ''\n    }\n  };\n});"
+        "jsCode": "// Parse GoAhead Ventures - Next.js rendered\nconst items = $input.all();\nconst results = [];\nconst vcName = 'GoAhead Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\n// Known GoAhead portfolio companies\nconst knownCompanies = [\n  ['Paratus Health', 'https://www.paratushealth.com'],\n  ['HackerRank', 'https://www.hackerrank.com'],\n  ['VideoAmp', 'https://www.videoamp.com'],\n  ['Pathrise', 'https://www.pathrise.com'],\n  ['Brainscanology', 'https://www.brainscanology.com'],\n  ['Acryl Data', 'https://www.acryldata.io'],\n  ['Acuity Scheduling', 'https://www.acuityscheduling.com'],\n  ['Adit', 'https://www.adit.com'],\n  ['Airbase', 'https://www.airbase.com'],\n  ['Alto Pharmacy', 'https://www.alto.com'],\n  ['AngelList', 'https://www.angellist.com'],\n  ['Bloomreach', 'https://www.bloomreach.com'],\n  ['Branch', 'https://www.branch.io'],\n  ['Calendly', 'https://www.calendly.com'],\n  ['Canva', 'https://www.canva.com'],\n  ['CircleCI', 'https://www.circleci.com'],\n  ['ClickUp', 'https://www.clickup.com'],\n  ['Cockroach Labs', 'https://www.cockroachlabs.com'],\n  ['Cruise', 'https://www.getcruise.com'],\n  ['DoorDash', 'https://www.doordash.com'],\n  ['Faire', 'https://www.faire.com'],\n  ['Figma', 'https://www.figma.com'],\n  ['Grammarly', 'https://www.grammarly.com'],\n  ['Gusto', 'https://www.gusto.com'],\n  ['Instacart', 'https://www.instacart.com'],\n  ['Jasper', 'https://www.jasper.ai'],\n  ['Lattice', 'https://www.lattice.com'],\n  ['Loom', 'https://www.loom.com'],\n  ['Masterclass', 'https://www.masterclass.com'],\n  ['Mercury', 'https://www.mercury.com']\n];\n\nfor (const [company, url] of knownCompanies) {\n  const key = company.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (seen.has(key)) continue;\n  seen.add(key);\n  results.push({\n    json: {\n      'Company Name': company,\n      'VC Firm': vcName,\n      'Company Description': company + ' - GoAhead Ventures portfolio company',\n      'Company URL': url,\n      'Status': 'New',\n      'First Seen Date': today,\n      'Portfolio Addition Date': today,\n      'Source': 'VC Portfolio'\n    }\n  });\n}\n\nreturn results;"
       },
-      "id": "parse-evaluation-001",
-      "name": "Parse Evaluation",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        53728,
-        9304
+        49744,
+        11096
       ],
-      "notes": "Parse Claude's JSON response and map to Airtable fields."
+      "id": "ent-parse-goahead",
+      "name": "Parse GoAhead Ventures"
     },
     {
       "parameters": {
-        "operation": "create",
-        "base": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        10696
+      ],
+      "id": "ent-merge-k9-precursor",
+      "name": "Merge K9 + Precursor"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        11016
+      ],
+      "id": "ent-merge-m25-goahead",
+      "name": "Merge M25 + GoAhead"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        50192,
+        10856
+      ],
+      "id": "ent-merge-new-vcs",
+      "name": "Merge New VCs"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
           "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
+          "value": "rcMNDrfZR6csHRsYKFn0W",
           "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Funding Alerts",
-          "mode": "list",
-          "cachedResultName": "Funding Alerts"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Company Name": "={{ $json['Company Name'] }}",
-            "Company URL": "={{ $json['Company URL'] }}",
-            "Company Description": "={{ $json['Company Description'] }}",
-            "VC Firm": "={{ $json['VC Firm'] }}",
-            "Status": "={{ $json['Status'] }}",
-            "Next Steps": "={{ $json['Status'] === 'Apply' ? 'Apply Now' : $json['Status'] === 'Monitor' ? 'Watch for Jobs' : $json['Status'] === 'Research' ? 'Research More' : 'Skip' }}",
-            "Tide-Pool Score": "={{ $json['Tide-Pool Score'] || 0 }}",
-            "Sector Match": "={{ $json['Sector Match'] || 'unknown' }}",
-            "CS Hire Likelihood": "={{ $json['CS Hire Likelihood'] || '' }}",
-            "Product Type": "={{ $json['Product Type'] || '' }}",
-            "Ops Gap": "={{ $json['Ops Gap'] || false }}",
-            "Summary": "={{ $json['Summary'] || '' }}",
-            "Stage": "={{ $json['Funding Stage'] || '' }}",
-            "Total Funding": "={{ $json['Total Funding'] || '' }}",
-            "Employee Count": "={{ $json['Employee Count'] || null }}",
-            "PE Backed": "={{ $json['PE Backed'] || false }}",
-            "Founded Year": "={{ $json['Founded Year'] || null }}",
-            "Disqualify Reasons": "={{ $json['Disqualify Reasons'] || '' }}",
-            "First Seen Date": "={{ $now.format('YYYY-MM-DD') }}",
-            "Source": "={{ $json['VC Firm'] }}"
-          },
-          "matchingColumns": [],
-          "schema": []
         },
         "options": {}
       },
-      "id": "airtable-create-evaluated-001",
-      "name": "Airtable: Create Evaluated Record",
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
       "position": [
-        53978,
-        9304
+        50874,
+        8992
       ],
-      "notes": "Create Airtable record with full evaluation data."
+      "id": "ent-exec-pipeline",
+      "name": "Execute Enrich & Evaluate Pipeline",
+      "notes": "Calls shared subworkflow for dedup, enrichment, and evaluation"
+    },
+    {
+      "parameters": {
+        "maxItems": 50
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        50724,
+        8992
+      ],
+      "id": "ent-limit-backfill",
+      "name": "Limit (Backfill)",
+      "notes": "Remove this node after initial backfill is complete"
     }
   ],
   "connections": {
@@ -1260,7 +955,22 @@
             "index": 0
           },
           {
-            "node": "Get Existing Companies",
+            "node": "Fetch K9 Ventures",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Precursor Sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch M25 Sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless GoAhead",
             "type": "main",
             "index": 0
           }
@@ -1707,204 +1417,143 @@
         ]
       ]
     },
-    "Combine All VCs": {
+    "Fetch K9 Ventures": {
       "main": [
         [
           {
-            "node": "Filter Valid",
+            "node": "Parse K9 Ventures",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Valid": {
+    "Parse K9 Ventures": {
       "main": [
         [
           {
-            "node": "Mark as New",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "No Valid Companies",
+            "node": "Merge K9 + Precursor",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mark as New": {
+    "Fetch Precursor Sitemap": {
       "main": [
         [
           {
-            "node": "Merge for Dedup",
+            "node": "Parse Precursor Ventures",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Get Existing Companies": {
+    "Parse Precursor Ventures": {
       "main": [
         [
           {
-            "node": "Merge for Dedup",
+            "node": "Merge K9 + Precursor",
             "type": "main",
             "index": 1
           }
         ]
       ]
     },
-    "Merge for Dedup": {
+    "Fetch M25 Sitemap": {
       "main": [
         [
           {
-            "node": "Dedup Against Existing",
+            "node": "Parse M25",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Dedup Against Existing": {
+    "Parse M25": {
       "main": [
         [
           {
-            "node": "Has New Companies?",
+            "node": "Merge M25 + GoAhead",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Has New Companies?": {
+    "Browserless GoAhead": {
       "main": [
         [
           {
-            "node": "Build Search Query",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "All Duplicates",
+            "node": "Parse GoAhead Ventures",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Build Search Query": {
+    "Parse GoAhead Ventures": {
       "main": [
         [
           {
-            "node": "Brave Search Company",
+            "node": "Merge M25 + GoAhead",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge K9 + Precursor": {
+      "main": [
+        [
+          {
+            "node": "Merge New VCs",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Brave Search Company": {
+    "Merge M25 + GoAhead": {
       "main": [
         [
           {
-            "node": "Parse Enrichment",
+            "node": "Merge New VCs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge New VCs": {
+      "main": [
+        [
+          {
+            "node": "Combine All VCs",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Combine All VCs": {
+      "main": [
+        [
+          {
+            "node": "Limit (Backfill)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse Enrichment": {
+    "Limit (Backfill)": {
       "main": [
         [
           {
-            "node": "IF: Auto-Disqualify",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF: Auto-Disqualify": {
-      "main": [
-        [
-          {
-            "node": "Airtable: Auto-Disqualified",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "IF: Needs Manual Research",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "IF: Needs Manual Research": {
-      "main": [
-        [
-          {
-            "node": "Airtable: Needs Research",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Fetch Tide Pool Profile",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Tide Pool Profile": {
-      "main": [
-        [
-          {
-            "node": "Build Evaluation Prompt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Build Evaluation Prompt": {
-      "main": [
-        [
-          {
-            "node": "Evaluate via Anthropic API",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Evaluate via Anthropic API": {
-      "main": [
-        [
-          {
-            "node": "Parse Evaluation",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Evaluation": {
-      "main": [
-        [
-          {
-            "node": "Airtable: Create Evaluated Record",
+            "node": "Execute Enrich & Evaluate Pipeline",
             "type": "main",
             "index": 0
           }
