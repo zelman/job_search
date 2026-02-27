@@ -259,6 +259,13 @@ The `_enrichment` object provides a **standardized interface** between data fetc
 | Zombie company | 7+ years old + still Seed + <100 employees | Stalled growth |
 | Skills mismatch | HIPAA/PHI required | Healthcare compliance expertise needed |
 
+### Scoring Penalties (Non-Disqualifying)
+
+| Rule | Penalty | Rationale |
+|------|---------|-----------|
+| Employee count 500-999 | -15 pts | Gap between 500-1000 still too large for builder roles |
+| Support title without Director/VP/Head | -15 pts | Support Manager/Supervisor roles consistently rejected regardless of company |
+
 ---
 
 ## Workflow Implementations
@@ -382,7 +389,7 @@ Scrape via Browserless    Scrape Costanoa
 
 The feedback loops create a **closed-loop learning system** that continuously refines the Tide Pool Agent Lens based on actual user decisions. Instead of static scoring rules, the system learns from patterns in accepted and rejected opportunities.
 
-### Feedback Loop - Not a Fit
+### Feedback Loop - Not a Fit (Rejected Jobs)
 
 **Goal**: Identify patterns in rejected jobs to suggest new auto-disqualifiers and scoring penalties.
 
@@ -391,12 +398,14 @@ Schedule (Weekly Mon 9am)
        │
        ▼
 ┌──────────────────────────────────────────────────────────────┐
-│ QUERY NOT A FIT JOBS                                          │
-│ ─────────────────────                                         │
-│ Filter: Review Status = 'Not a Fit'                          │
+│ QUERY REJECTED JOBS                                           │
+│ ───────────────────                                           │
+│ Filter: Review Status = 'Not a Fit' OR starts with 'Passed'  │
+│         (includes Passed, Passed (PE), Passed (Location),    │
+│          Passed (Company Specific))                          │
 │         Date Found >= 7 days ago                              │
-│ Fields: Title, Company, Score, Rationale, Industry,          │
-│         Stage, Role Type, Builder/Maintainer Evidence        │
+│ Fields: Title, Company, Review Status, Score, Rationale,     │
+│         Industry, Stage, Role Type, Builder/Maintainer Evidence│
 └──────────────────────────────────────────────────────────────┘
        │
        ▼
@@ -558,13 +567,17 @@ Prevent duplicate evaluations when the same job/company appears from multiple so
 
 ### Integration in Pipelines
 
-**Job Evaluation Pipeline v2**:
+**Job Evaluation Pipeline v3**:
 ```
 Trigger → Fetch Profile → Prepare Dedup Check → Dedup Check →
     IF: Is Duplicate?
         ├─ Yes → Skip Duplicate (return early)
-        └─ No → Restore Job Data → [evaluation chain] → Airtable Upsert →
+        └─ No → Restore Job Data → [evaluation chain with scoring penalties] → Airtable Upsert →
                 Prepare Dedup Register → Dedup Register → Done
+
+Scoring Penalties Applied:
+- 500-999 employees: -15 pts
+- Support title without Director/VP/Head: -15 pts
 ```
 
 **Enrich & Evaluate Pipeline v2**:
@@ -701,7 +714,7 @@ Feedback Report                    Tide Pool Agent Lens (GitHub)
 | `Job Alert Email Parser v3-35.json` | v3-35 | Email-based job aggregation (10 sources) |
 | `Work at a Startup Scraper v12.json` | v12 | YC/Costanoa web scraping |
 | `Indeed Job Scraper v4.json` | v4 | Indeed direct scraping |
-| `Job Evaluation Pipeline v2.json` | v2 | Shared subworkflow for job evaluation (with JD fetching + dedup) |
+| `Job Evaluation Pipeline v3.json` | v3 | Shared subworkflow for job evaluation (with JD fetching, dedup, scoring penalties) |
 | `Enrich & Evaluate Pipeline v2.json` | v2 | Shared subworkflow for company enrichment + evaluation (with dedup) |
 | `Dedup Check Subworkflow.json` | v1 | Cross-source deduplication lookup |
 | `Dedup Register Subworkflow.json` | v1 | Cross-source deduplication registration |
@@ -721,6 +734,8 @@ Feedback Report                    Tide Pool Agent Lens (GitHub)
 
 | Date | Change |
 |------|--------|
+| 2026-02-27 | Updated Job Evaluation Pipeline to v3 with scoring penalties (500-999 employees: -15 pts, Support title without Director/VP/Head: -15 pts) |
+| 2026-02-27 | Updated evaluation-config.json to v2.2 with new penalty rules |
 | 2026-02-26 | Added cross-source deduplication (Dedup Check + Dedup Register subworkflows) |
 | 2026-02-26 | Updated Job Evaluation Pipeline to v2 with dedup integration |
 | 2026-02-26 | Updated Enrich & Evaluate Pipeline to v2 with dedup integration |

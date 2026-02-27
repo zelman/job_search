@@ -1,8 +1,8 @@
 {
   "_metadata": {
     "name": "Customer Journey Leader Evaluation Framework",
-    "version": "2.1",
-    "last_updated": "2026-02-17",
+    "version": "2.2",
+    "last_updated": "2026-02-27",
     "description": "Machine-optimized evaluation logic DERIVED from the Tide Pool Agent Lens. This document implements the tactical 'how' - the source of truth for identity, values, and 'why' lives in the north star document.",
     "author": "Eric Zelman",
     "usage": [
@@ -448,7 +448,10 @@
           "2": "200-500 employees",
           "0": "500+ employees (too late)"
         },
-        "notes": "Under 10 may be too early - flag as WATCH if sector matches"
+        "penalties": {
+          "500-999 employees": "-15 pts (gap between 500-1000 still too large for builder roles)"
+        },
+        "notes": "Under 10 may be too early - flag as WATCH if sector matches. 500-999 employees gets -15 penalty before 1000+ auto-disqualifies."
       },
       {
         "id": "title_level",
@@ -459,7 +462,11 @@
           "7": "Director",
           "3": "Senior Manager",
           "0": "Manager or below"
-        }
+        },
+        "penalties": {
+          "Support role without Director/VP/Head": "-15 pts (Support Manager/Supervisor roles consistently rejected regardless of company)"
+        },
+        "notes": "Any 'Support' role without Director/VP/Head title gets -15 penalty"
       },
       {
         "id": "sector_fit",

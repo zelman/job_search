@@ -1,0 +1,308 @@
+{
+  "name": "Feedback Loop - Not a Fit",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [1],
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "feedback-schedule",
+      "name": "Weekly Monday 9am"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "id"
+        },
+        "filterByFormula": "=AND(OR({Review Status}='Not a Fit', FIND('Passed', {Review Status})>0), {Date Found}>=DATEADD(TODAY(), -7, 'days'))",
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [220, 0],
+      "id": "feedback-query-airtable",
+      "name": "Query Rejected Jobs",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-records",
+              "leftValue": "={{ $json.id !== undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 0],
+      "id": "feedback-if-has-records",
+      "name": "IF: Has Records"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "jobs",
+        "include": "specifiedFields",
+        "fieldsToInclude": "Job Title, Company, Review Status, Tide-Pool Score, Tide-Pool Rationale, Industry, Company Stage, Role Type, Builder Evidence, Maintainer Evidence, Recommendation, Date Found"
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [660, 0],
+      "id": "feedback-aggregate",
+      "name": "Aggregate Jobs"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "id": "feedback-fetch-lens",
+      "name": "Fetch Tide Pool Lens"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Build pattern analysis prompt for rejected jobs (Not a Fit + Passed variants)\nconst aggregateResult = $('Aggregate Jobs').first().json;\nconst jobs = aggregateResult.jobs || [];\nconst lensContent = $json.data || $json;\n\nconst systemPrompt = `You are analyzing job search data to identify patterns in rejected opportunities.\n\nYour task is to analyze jobs that were marked \"Not a Fit\" or \"Passed\" (including \"Passed (Company Specific)\" for companies the user is not interested in) and identify:\n1. Common patterns that led to rejection\n2. Potential new auto-disqualifiers to add to the Tide Pool lens\n3. Scoring adjustments that could better filter these jobs earlier\n4. Any patterns that suggest the current disqualifiers are working well\n\nCurrent Tide Pool Lens Auto-Disqualifiers:\n- PE-backed companies\n- 1000+ employees  \n- Total funding >$500M\n- Fortune 500/Public companies\n- IT internal support roles\n- Domain expertise requirements: Pharma marketing, Agency experience, FinServ, Legal, AdTech, Gov\n\nCurrent Scoring Penalties:\n- <$125K base: -10 pts\n- On-site in non-preferred cities: -10 pts\n\nRespond with structured JSON:\n{\n  \"analysis_date\": \"YYYY-MM-DD\",\n  \"jobs_analyzed\": <count>,\n  \"patterns_identified\": [\n    {\n      \"pattern\": \"<description>\",\n      \"frequency\": \"<how many jobs exhibited this>\",\n      \"current_handling\": \"<how current rules handle this>\",\n      \"suggested_action\": \"new_disqualifier | scoring_adjustment | no_change\"\n    }\n  ],\n  \"suggested_disqualifiers\": [\n    {\n      \"rule\": \"<specific rule>\",\n      \"rationale\": \"<why this should disqualify>\",\n      \"jobs_affected\": <count that would have been caught>\n    }\n  ],\n  \"scoring_adjustments\": [\n    {\n      \"current_rule\": \"<what exists>\",\n      \"suggested_change\": \"<modification>\",\n      \"rationale\": \"<why>\"\n    }\n  ],\n  \"working_well\": [\n    \"<patterns correctly caught by current rules>\"\n  ],\n  \"summary\": \"<2-3 sentence executive summary>\"\n}`;\n\n// Format jobs for analysis\nconst jobsSummary = jobs.map(job => ({\n  title: job['Job Title'],\n  company: job['Company'],\n  reviewStatus: job['Review Status'],\n  score: job['Tide-Pool Score'],\n  rationale: job['Tide-Pool Rationale'],\n  industry: job['Industry'],\n  stage: job['Company Stage'],\n  roleType: job['Role Type'],\n  recommendation: job['Recommendation'],\n  dateFound: job['Date Found']\n}));\n\nconst analysisDate = new Date().toISOString().split('T')[0];\n\nconst userPrompt = `Analyze these ${jobs.length} jobs that were rejected (marked \"Not a Fit\" or \"Passed\"/\"Passed (Company Specific)\") in the past 7 days:\n\n${JSON.stringify(jobsSummary, null, 2)}\n\nIdentify patterns and suggest improvements to the Tide Pool lens filtering rules.`;\n\nreturn {\n  json: {\n    systemPrompt,\n    userPrompt,\n    jobCount: jobs.length,\n    analysisDate\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "feedback-build-prompt",
+      "name": "Build Analysis Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"system\": {{ JSON.stringify($json.systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }}}]\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0],
+      "id": "feedback-claude-api",
+      "name": "Claude: Pattern Analysis",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic-api",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parse Claude's pattern analysis response\nconst response = $json;\nconst promptData = $('Build Analysis Prompt').first().json;\n\nlet analysisText = '';\nif (response.content && Array.isArray(response.content)) {\n  analysisText = response.content\n    .filter(c => c.type === 'text')\n    .map(c => c.text)\n    .join('');\n}\n\n// Parse JSON response\nlet analysis = {};\ntry {\n  const jsonMatch = analysisText.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    analysis = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  analysis = {\n    error: `Parse error: ${e.message}`,\n    raw_response: analysisText.substring(0, 1000)\n  };\n}\n\n// Format for HTML email\nconst reportDate = new Date().toISOString();\nconst reportTitle = `Rejected Jobs Pattern Analysis - ${promptData.analysisDate}`;\n\nlet emailBody = `<div style=\\\"font-family: -apple-system, Arial, sans-serif; max-width: 700px; line-height: 1.6;\\\">`;\nemailBody += `<h1 style=\\\"color: #333; border-bottom: 2px solid #4a90d9; padding-bottom: 10px;\\\">${reportTitle}</h1>`;\nemailBody += `<p><strong>Jobs Analyzed:</strong> ${analysis.jobs_analyzed || promptData.jobCount}</p>`;\nemailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n\nemailBody += `<h2 style=\\\"color: #4a90d9;\\\">Summary</h2>`;\nemailBody += `<p style=\\\"background: #f5f5f5; padding: 15px; border-radius: 5px;\\\">${analysis.summary || 'No summary available'}</p>`;\n\nif (analysis.suggested_disqualifiers?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #4a90d9;\\\">Suggested New Disqualifiers</h2>`;\n  analysis.suggested_disqualifiers.forEach((d, i) => {\n    emailBody += `<div style=\\\"margin-bottom: 15px; padding: 10px; background: #fafafa; border-left: 3px solid #4a90d9;\\\">`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0;\\\"><strong>${i + 1}. ${d.rule}</strong></p>`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0; color: #666;\\\">Rationale: ${d.rationale}</p>`;\n    emailBody += `<p style=\\\"margin: 0; color: #666;\\\">Jobs affected: ${d.jobs_affected}</p>`;\n    emailBody += `</div>`;\n  });\n}\n\nif (analysis.scoring_adjustments?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #4a90d9;\\\">Scoring Adjustments</h2>`;\n  analysis.scoring_adjustments.forEach((s, i) => {\n    emailBody += `<div style=\\\"margin-bottom: 15px; padding: 10px; background: #fafafa; border-left: 3px solid #f39c12;\\\">`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0;\\\"><strong>${i + 1}. Current:</strong> ${s.current_rule}</p>`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0;\\\"><strong>Suggested:</strong> ${s.suggested_change}</p>`;\n    emailBody += `<p style=\\\"margin: 0; color: #666;\\\">Rationale: ${s.rationale}</p>`;\n    emailBody += `</div>`;\n  });\n}\n\nif (analysis.patterns_identified?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #4a90d9;\\\">Patterns Identified</h2>`;\n  analysis.patterns_identified.forEach((p, i) => {\n    emailBody += `<div style=\\\"margin-bottom: 15px; padding: 10px; background: #fafafa;\\\">`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0;\\\"><strong>${i + 1}. ${p.pattern}</strong> <em>(${p.frequency})</em></p>`;\n    emailBody += `<p style=\\\"margin: 0 0 5px 0; color: #666;\\\">Current handling: ${p.current_handling}</p>`;\n    emailBody += `<p style=\\\"margin: 0; color: #666;\\\">Suggested action: ${p.suggested_action}</p>`;\n    emailBody += `</div>`;\n  });\n}\n\nif (analysis.working_well?.length > 0) {\n  emailBody += `<hr style=\\\"border: none; border-top: 1px solid #ddd; margin: 20px 0;\\\">`;\n  emailBody += `<h2 style=\\\"color: #27ae60;\\\">Working Well</h2>`;\n  emailBody += `<ul style=\\\"padding-left: 20px;\\\">`;\n  analysis.working_well.forEach(w => {\n    emailBody += `<li style=\\\"margin-bottom: 8px; color: #27ae60;\\\">${w}</li>`;\n  });\n  emailBody += `</ul>`;\n}\n\nemailBody += `</div>`;\n\nconst hasActionableInsights = (analysis.suggested_disqualifiers?.length > 0) || \n                              (analysis.scoring_adjustments?.length > 0);\n\nreturn {\n  json: {\n    reportTitle,\n    reportDate,\n    reportType: 'Rejected Jobs Analysis',\n    analysisJson: analysis,\n    emailBody,\n    jobCount: promptData.jobCount,\n    hasActionableInsights\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0],
+      "id": "feedback-parse-response",
+      "name": "Parse Analysis Response"
+    },
+    {
+      "parameters": {
+        "sendTo": "zelman@gmail.com",
+        "subject": "={{ $json.reportTitle }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {
+          "emailType": "html"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1760, -100],
+      "id": "feedback-email",
+      "name": "Email Report",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail-oauth",
+          "name": "Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// No records to analyze - just pass through\nreturn { json: { message: 'No rejected jobs (Not a Fit/Passed) found in the past 7 days', skipped: true } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 150],
+      "id": "feedback-no-records",
+      "name": "No Records"
+    }
+  ],
+  "connections": {
+    "Weekly Monday 9am": {
+      "main": [
+        [
+          {
+            "node": "Query Rejected Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Rejected Jobs": {
+      "main": [
+        [
+          {
+            "node": "IF: Has Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Records": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Jobs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Tide Pool Lens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tide Pool Lens": {
+      "main": [
+        [
+          {
+            "node": "Build Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude: Pattern Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Pattern Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Analysis Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Analysis Response": {
+      "main": [
+        [
+          {
+            "node": "Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

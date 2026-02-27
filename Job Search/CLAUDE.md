@@ -19,7 +19,7 @@ Current versions (as of Feb 2026):
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v12.json` (v12) - Pear VC, Floodgate, Afore, Unshackled, 2048 (batched, 2048 uses /function endpoint for infinite scroll, extracts company URLs with news domain filtering)
 - `Enrich & Evaluate Pipeline v2.json` (shared subworkflow - companies, with cross-source dedup)
-- `Job Evaluation Pipeline v2.json` (shared subworkflow - jobs, with JD fetching and cross-source dedup)
+- `Job Evaluation Pipeline v3.json` (shared subworkflow - jobs, with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty)
 - `Dedup Check Subworkflow.json` (cross-source deduplication lookup)
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)

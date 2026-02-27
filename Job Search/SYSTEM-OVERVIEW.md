@@ -198,11 +198,11 @@ Build Prompt → Wait (Rate Limit) → Call Claude API → Parse Response
 
 These workflows create a **closed-loop feedback system** that learns from manual review decisions (Applied, Not a Fit) to refine the Tide Pool Agent Lens over time.
 
-#### Feedback Loop - Not a Fit
+#### Feedback Loop - Not a Fit (Rejected Jobs)
 **Schedule**: Weekly, Monday 9:00am
 
 **What it does**:
-- Queries Airtable for jobs marked "Not a Fit" in the past 7 days
+- Queries Airtable for jobs marked "Not a Fit" OR any "Passed*" variant (Passed, Passed (PE), Passed (Location), Passed (Company Specific)) in the past 7 days
 - Sends aggregated data to Claude (Sonnet) for pattern analysis
 - Identifies common rejection patterns and potential rule improvements
 - Emails a structured HTML report with actionable recommendations
@@ -315,6 +315,10 @@ Three questions for any opportunity:
 - Fortune 500/Public company
 - IT internal support role
 - Quota-carrying CSM role
+
+### Scoring Penalties (Non-Disqualifying)
+- 500-999 employees: -15 pts (too large for builder roles but not auto-disqualify)
+- Support role without Director/VP/Head title: -15 pts (e.g., "Support Manager", "Customer Support Supervisor")
 
 ### Scoring System (100 points)
 | Category | Max Points |
@@ -507,7 +511,7 @@ Key sections:
 ---
 
 *Document updated: February 2026*
-*System Version: Job Alert Email Parser v3-35, Work at a Startup Scraper v12, VC Scrapers v22-v26, Feedback Loops v1, Dedup Subworkflows v1*
+*System Version: Job Alert Email Parser v3-35, Work at a Startup Scraper v12, VC Scrapers v22-v26, Feedback Loops v1, Dedup Subworkflows v1, Job Evaluation Pipeline v3, evaluation-config v2.2*
 
 **Related Documentation**:
 - `ARCHITECTURE.md` - Detailed technical architecture and data flow diagrams
@@ -517,5 +521,5 @@ Key sections:
 - `Feedback Loop - Applied.json` - Weekly calibration analysis for applied jobs
 - `Dedup Check Subworkflow.json` - Cross-source deduplication lookup
 - `Dedup Register Subworkflow.json` - Cross-source deduplication registration
-- `Job Evaluation Pipeline v2.json` - Job evaluation with dedup integration
+- `Job Evaluation Pipeline v3.json` - Job evaluation with dedup, 500-999 employee penalty, Support title penalty
 - `Enrich & Evaluate Pipeline v2.json` - Company evaluation with dedup integration
