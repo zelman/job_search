@@ -1,0 +1,687 @@
+{
+  "name": "VC Scraper - Micro-VC v14",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 2,5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "micro-vc-schedule",
+      "name": "Schedule Trigger (Tue/Fri 8am)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://pear.vc/companies/\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 45000 },\n  \"waitForSelector\": { \"selector\": \"a\", \"timeout\": 10000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -300],
+      "id": "micro-vc-pear-fetch",
+      "name": "Browserless Pear VC",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "browserless-api",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Pear VC portfolio - extract company name from URL slug\nconst items = $input.all();\nconst html = items[0]?.json?.data || '';\nconst vcName = 'Pear VC';\nconst results = [];\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\n// Pattern: href=\"https://pear.vc/companies/slug/\" or href=\"/companies/slug/\"\nconst companyLinkPattern = /<a[^>]*href=[\"'](?:https?:\\/\\/pear\\.vc)?\\/companies\\/([^\\/\"']+)\\/?[\"'][^>]*>/gi;\n\nlet match;\n\nwhile ((match = companyLinkPattern.exec(html)) !== null) {\n  const slug = match[1].trim();\n  // Skip non-company slugs\n  if (slug === '' || slug === 'page' || slug.startsWith('?')) continue;\n  \n  // Convert slug to name: 'guardant-health' -> 'Guardant Health'\n  const name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n  \n  if (name.length >= 2 && name.length <= 60) {\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (!seen.has(key) && key.length >= 2) {\n      seen.add(key);\n      results.push({\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - Pear VC portfolio company',\n        'Company URL': 'NA',\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      });\n    }\n  }\n}\n\nreturn results.length > 0 ? results.map(r => ({ json: r })) : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, -300],
+      "id": "micro-vc-pear-parse",
+      "name": "Parse Pear VC"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.floodgate.com/companies\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 45000 },\n  \"waitForSelector\": { \"selector\": \"a\", \"timeout\": 10000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -150],
+      "id": "micro-vc-floodgate-fetch",
+      "name": "Browserless Floodgate",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "browserless-api",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Floodgate portfolio (Webflow site)\nconst items = $input.all();\nconst html = items[0]?.json?.data || '';\nconst vcName = 'Floodgate';\nconst results = [];\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nconst skipDomains = ['floodgate', 'linkedin', 'twitter', 'facebook', 'x', 'webflow', 'google', 'youtube', 'instagram'];\n\n// Webflow typically uses div with company names or links to company sites\nconst linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/[^\"']+)[\"'][^>]*>([^<]*)<\\/a>/gi;\nconst h3Pattern = /<h3[^>]*>([^<]+)<\\/h3>/gi;\n\nlet match;\n\n// Try h3 headers (common in Webflow portfolio grids)\nwhile ((match = h3Pattern.exec(html)) !== null) {\n  const name = match[1].trim();\n  if (name.length >= 2 && name.length <= 60) {\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (!seen.has(key) && key.length >= 2) {\n      seen.add(key);\n      results.push({\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - Floodgate portfolio company',\n        'Company URL': '',\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      });\n    }\n  }\n}\n\n// Also extract from external links\nwhile ((match = linkPattern.exec(html)) !== null) {\n  const url = match[1].trim();\n  const domainMatch = url.match(/https?:\\/\\/(?:www\\.)?([^.\\/]+)/i);\n  if (!domainMatch) continue;\n  const domain = domainMatch[1].toLowerCase();\n  if (skipDomains.some(skip => domain.includes(skip))) continue;\n  if (domain.length < 2 || domain.length > 30) continue;\n  \n  let name = match[2].trim();\n  if (!name || name.length < 2) {\n    name = domain.charAt(0).toUpperCase() + domain.slice(1);\n  }\n  \n  const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (!seen.has(key) && key.length >= 2) {\n    seen.add(key);\n    results.push({\n      'Company Name': name,\n      'VC Firm': vcName,\n      'Company Description': name + ' - Floodgate portfolio company',\n      'Company URL': url,\n      'Status': 'New',\n      'First Seen Date': today,\n      'Source': 'VC Portfolio'\n    });\n  }\n}\n\nreturn results.length > 0 ? results.map(r => ({ json: r })) : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, -150],
+      "id": "micro-vc-floodgate-parse",
+      "name": "Parse Floodgate"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.afore.vc/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 45000 },\n  \"waitForSelector\": { \"selector\": \"a\", \"timeout\": 10000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "id": "micro-vc-afore-fetch",
+      "name": "Browserless Afore",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "browserless-api",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Afore Capital portfolio - look for <a href>...<h3>Name</h3>...</a> pattern\nconst items = $input.all();\nconst html = items[0]?.json?.data || '';\nconst vcName = 'Afore Capital';\nconst results = [];\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nconst skipDomains = ['afore', 'linkedin', 'twitter', 'facebook', 'x', 'webflow', 'google', 'youtube', 'instagram', 'mailto'];\n\n// Pattern: <a href=\"URL\">...<h3>Company Name</h3>...</a>\nconst linkWithH3Pattern = /<a[^>]*href=[\"'](https?:\\/\\/[^\"']+)[\"'][^>]*>[\\s\\S]*?<h3[^>]*>([^<]+)<\\/h3>[\\s\\S]*?<\\/a>/gi;\n\nlet match;\n\n// Extract company cards with URL + name\nwhile ((match = linkWithH3Pattern.exec(html)) !== null) {\n  const url = match[1].trim();\n  const name = match[2].trim();\n  \n  const domainMatch = url.match(/https?:\\/\\/(?:www\\.)?([^.\\/]+)/i);\n  if (!domainMatch) continue;\n  const domain = domainMatch[1].toLowerCase();\n  if (skipDomains.some(skip => domain.includes(skip))) continue;\n  \n  if (name.length >= 2 && name.length <= 60) {\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (!seen.has(key) && key.length >= 2) {\n      seen.add(key);\n      results.push({\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - Afore Capital portfolio company',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      });\n    }\n  }\n}\n\n// Fallback: standalone h3 headers (no URL)\nif (results.length === 0) {\n  const h3Pattern = /<h3[^>]*>([^<]+)<\\/h3>/gi;\n  while ((match = h3Pattern.exec(html)) !== null) {\n    const name = match[1].trim();\n    if (name.length >= 2 && name.length <= 60 && !name.toLowerCase().includes('portfolio')) {\n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (!seen.has(key) && key.length >= 2) {\n        seen.add(key);\n        results.push({\n          'Company Name': name,\n          'VC Firm': vcName,\n          'Company Description': name + ' - Afore Capital portfolio company',\n          'Company URL': '',\n          'Status': 'New',\n          'First Seen Date': today,\n          'Source': 'VC Portfolio'\n        });\n      }\n    }\n  }\n}\n\nreturn results.length > 0 ? results.map(r => ({ json: r })) : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "micro-vc-afore-parse",
+      "name": "Parse Afore"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.unshackledvc.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 45000 },\n  \"waitForSelector\": { \"selector\": \"a\", \"timeout\": 10000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 150],
+      "id": "micro-vc-unshackled-fetch",
+      "name": "Browserless Unshackled",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "browserless-api",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Unshackled Ventures - uses <a href>...<h5>Name</h5>...</a> pattern\nconst items = $input.all();\nconst html = items[0]?.json?.data || '';\nconst vcName = 'Unshackled Ventures';\nconst results = [];\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nconst skipDomains = ['unshackled', 'linkedin', 'twitter', 'facebook', 'x', 'webflow', 'google', 'youtube', 'instagram'];\n\n// Pattern: <a href=\"URL\">...<h5>Company Name</h5>...</a>\nconst linkWithH5Pattern = /<a[^>]*href=[\"'](https?:\\/\\/[^\"']+)[\"'][^>]*>[\\s\\S]*?<h5[^>]*>([^<]+)<\\/h5>[\\s\\S]*?<\\/a>/gi;\n\nlet match;\n\n// Extract company cards with URL + name from h5\nwhile ((match = linkWithH5Pattern.exec(html)) !== null) {\n  const url = match[1].trim();\n  const name = match[2].trim();\n  \n  const domainMatch = url.match(/https?:\\/\\/(?:www\\.)?([^.\\/]+)/i);\n  if (!domainMatch) continue;\n  const domain = domainMatch[1].toLowerCase();\n  if (skipDomains.some(skip => domain.includes(skip))) continue;\n  \n  if (name.length >= 2 && name.length <= 60 && !name.toLowerCase().includes('portfolio')) {\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (!seen.has(key) && key.length >= 2) {\n      seen.add(key);\n      results.push({\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - Unshackled Ventures portfolio company',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      });\n    }\n  }\n}\n\n// Fallback: standalone h5 headers (no URL)\nif (results.length === 0) {\n  const h5Pattern = /<h5[^>]*>([^<]+)<\\/h5>/gi;\n  while ((match = h5Pattern.exec(html)) !== null) {\n    const name = match[1].trim();\n    if (name.length >= 2 && name.length <= 60 && !name.toLowerCase().includes('portfolio')) {\n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (!seen.has(key) && key.length >= 2) {\n        seen.add(key);\n        results.push({\n          'Company Name': name,\n          'VC Firm': vcName,\n          'Company Description': name + ' - Unshackled Ventures portfolio company',\n          'Company URL': '',\n          'Status': 'New',\n          'First Seen Date': today,\n          'Source': 'VC Portfolio'\n        });\n      }\n    }\n  }\n}\n\nreturn results.length > 0 ? results.map(r => ({ json: r })) : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 150],
+      "id": "micro-vc-unshackled-parse",
+      "name": "Parse Unshackled"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/function",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"code\": \"export default async ({ page }) => {\\n  await page.goto('https://www.2048.vc/companies', { waitUntil: 'networkidle2', timeout: 60000 });\\n  await page.waitForSelector('.card-investment', { timeout: 15000 });\\n  \\n  // Wait for Jetboost to fully initialize\\n  await new Promise(r => setTimeout(r, 3000));\\n  \\n  // Scroll down repeatedly to trigger infinite scroll loading (reduced from 30 to 15)\\n  let prevCount = 0;\\n  for (let i = 0; i < 15; i++) {\\n    const count = await page.$$eval('.card-investment', els => els.length);\\n    if (count === prevCount && i > 3) break;\\n    prevCount = count;\\n    \\n    // Scroll to the bottom of the page\\n    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));\\n    await new Promise(r => setTimeout(r, 1500));\\n    \\n    // Also try clicking Load More if visible\\n    const btn = await page.$('.jetboost-infinite-loader-bnww:not(.jetboost-list-item-hide)');\\n    if (btn) {\\n      await btn.click();\\n      await new Promise(r => setTimeout(r, 1500));\\n    }\\n  }\\n  \\n  const html = await page.content();\\n  return { data: html, type: 'text/html' };\\n};\"\n}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "id": "micro-vc-2048-fetch",
+      "name": "Browserless 2048",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "browserless-api",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse 2048 Ventures - extract company names and URLs from cards\nconst items = $input.all();\nconst html = items[0]?.json?.data || '';\nconst vcName = '2048 Ventures';\nconst results = [];\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nconst skipWords = ['companies', 'portfolio', 'about', 'team', 'contact', 'invest', 'blog', 'news', 'privacy', 'terms', 'filter', 'sort', 'all', 'why we invested'];\n\n// Skip social media + news/media domains that appear in \"Why we invested\" links\nconst skipDomains = ['2048', 'linkedin', 'twitter', 'facebook', 'instagram', 'google', 'webflow', 'medium', 'techcrunch', 'fortune', 'axios', 'bloomberg', 'businessinsider', 'forbes', 'wsj', 'nytimes', 'reuters', 'cnbc', 'prnewswire', 'businesswire', 'globenewswire', 'marketwatch', 'yahoo', 'crunchbase', 'pitchbook', 'venturebeat', 'wired', 'theverge', 'engadget', 'zdnet', 'cnet'];\n\nlet match;\n\n// Split HTML into individual cards using card-investment class\nconst cardPattern = /<div[^>]*class=[\"'][^\"']*card-investment[^\"']*[\"'][^>]*>[\\s\\S]*?(?=<div[^>]*class=[\"'][^\"']*card-investment|$)/gi;\nconst cards = html.match(cardPattern) || [];\n\nfor (const card of cards) {\n  // Extract company name from heading-h3\n  const nameMatch = card.match(/<[^>]*class=[\"'][^\"']*heading-h3[^\"']*[\"'][^>]*>([^<]+)<\\/[^>]+>/i);\n  if (!nameMatch) continue;\n  \n  let name = nameMatch[1].trim().replace(/\\s+/g, ' ');\n  if (name.length < 2 || name.length > 60) continue;\n  if (skipWords.some(w => name.toLowerCase() === w || name.toLowerCase().includes(w))) continue;\n  if (/^(stage|location|year|vertical|diversity)$/i.test(name)) continue;\n  \n  const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (seen.has(key) || key.length < 2) continue;\n  \n  // Find all external links in this card\n  const linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/[^\"']+)[\"'][^>]*>/gi;\n  let companyUrl = '';\n  let linkMatch;\n  \n  while ((linkMatch = linkPattern.exec(card)) !== null) {\n    const url = linkMatch[1].trim();\n    const urlLower = url.toLowerCase();\n    \n    // Skip news/media domains\n    if (skipDomains.some(d => urlLower.includes(d))) continue;\n    \n    // This is likely the company website URL\n    companyUrl = url;\n    break; // Take the first non-news URL in the card\n  }\n  \n  seen.add(key);\n  results.push({\n    'Company Name': name,\n    'VC Firm': vcName,\n    'Company Description': name + ' - 2048 Ventures portfolio company',\n    'Company URL': companyUrl,\n    'Status': 'New',\n    'First Seen Date': today,\n    'Source': 'VC Portfolio'\n  });\n}\n\n// Fallback: if card splitting didn't work, try heading-h3 extraction\nif (results.length === 0) {\n  const headingPattern = /<[^>]*class=[\"'][^\"']*heading-h3[^\"']*[\"'][^>]*>([^<]+)<\\/[^>]+>/gi;\n  while ((match = headingPattern.exec(html)) !== null) {\n    let name = match[1].trim().replace(/\\s+/g, ' ');\n    if (name.length < 2 || name.length > 60) continue;\n    if (skipWords.some(w => name.toLowerCase() === w)) continue;\n    if (/^(stage|location|year|vertical|diversity)$/i.test(name)) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (!seen.has(key) && key.length >= 2) {\n      seen.add(key);\n      results.push({\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - 2048 Ventures portfolio company',\n        'Company URL': '',\n        'Status': 'New',\n        'First Seen Date': today,\n        'Source': 'VC Portfolio'\n      });\n    }\n  }\n}\n\nreturn results.length > 0 ? results.map(r => ({ json: r })) : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "id": "micro-vc-2048-parse",
+      "name": "Parse 2048"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/function",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"code\": \"export default async ({ page }) => {\\n  await page.goto('https://www.ycombinator.com/companies?sort=launch_date', { waitUntil: 'networkidle2', timeout: 60000 });\\n  await new Promise(r => setTimeout(r, 3000));\\n  \\n  // Scroll to load more companies (limited to 8 scrolls to avoid memory issues)\\n  for (let i = 0; i < 8; i++) {\\n    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));\\n    await new Promise(r => setTimeout(r, 800));\\n  }\\n  \\n  const html = await page.content();\\n  return { data: html, type: 'text/html' };\\n};\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 450],
+      "id": "micro-vc-yc-fetch",
+      "name": "Browserless YC",
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "browserless-api",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse YC Startup Directory - sorted by launch date\nconst items = $input.all();\nconst html = items[0]?.json?.data || '';\nconst results = [];\nconst seenSlugs = new Set();\nconst today = new Date().toISOString().split('T')[0];\nconst MAX_COMPANIES = 100; // Limit to avoid n8n memory issues\n\n// Extract company cards - look for links to /companies/slug\nconst companyPattern = /<a[^>]*href=[\"']\\/companies\\/([^\\/\"'?]+)[\"'][^>]*>[\\s\\S]*?<\\/a>/gi;\n\nlet match;\nwhile ((match = companyPattern.exec(html)) !== null) {\n  if (results.length >= MAX_COMPANIES) break; // Stop at limit\n  \n  const slug = match[1].trim().toLowerCase();\n  if (!slug || slug.length < 2 || ['founders', 'directory', 'top-companies'].includes(slug)) continue;\n  \n  // Dedupe by slug (unique identifier) - skip if already seen\n  if (seenSlugs.has(slug)) continue;\n  seenSlugs.add(slug);\n  \n  const fullMatch = match[0];\n  \n  // Extract company name (usually first text content)\n  const nameMatch = fullMatch.match(/>([^<]{2,60})</); \n  let name = nameMatch ? nameMatch[1].trim() : '';\n  \n  // Extract batch from card text (WINTER 2026, SUMMER 2025, etc.)\n  let batch = '';\n  const batchMatch = fullMatch.match(/(WINTER|SUMMER|SPRING|FALL)\\s*20\\d{2}/i);\n  if (batchMatch) {\n    batch = batchMatch[0].toUpperCase();\n  }\n  \n  // Skip if no name - use slug as fallback\n  if (!name || name.length < 2) {\n    name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n  }\n  if (!batch) continue; // Only include companies with batch info\n  \n  // Normalize batch: 'WINTER 2026' -> 'W26'\n  let batchCode = batch;\n  const yearMatch = batch.match(/20(\\d{2})/);\n  if (yearMatch) {\n    const year = yearMatch[1];\n    if (batch.includes('WINTER')) batchCode = 'W' + year;\n    else if (batch.includes('SUMMER')) batchCode = 'S' + year;\n    else if (batch.includes('SPRING')) batchCode = 'Sp' + year;\n    else if (batch.includes('FALL')) batchCode = 'F' + year;\n  }\n  \n  results.push({\n    'Company Name': name,\n    'VC Firm': 'Y Combinator ' + batchCode,\n    'Company Description': name + ' - YC ' + batchCode,\n    'Company URL': 'https://www.ycombinator.com/companies/' + slug,\n    'Status': 'New',\n    'First Seen Date': today,\n    'Source': 'Accelerator'\n  });\n}\n\nreturn results.length > 0 ? results.map(r => ({ json: r })) : [{ json: { _empty: true, _message: 'No YC companies found' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 450],
+      "id": "micro-vc-yc-parse",
+      "name": "Parse YC"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [660, 375],
+      "id": "micro-vc-merge-2048-yc",
+      "name": "Merge 2048 + YC"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [660, -225],
+      "id": "micro-vc-merge-1",
+      "name": "Merge Pear + Floodgate"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [660, 75],
+      "id": "micro-vc-merge-2",
+      "name": "Merge Afore + Unshackled"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [880, -75],
+      "id": "micro-vc-merge-3",
+      "name": "Merge Groups"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1100, 0],
+      "id": "micro-vc-merge-all",
+      "name": "Combine All Micro-VCs"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "not-empty",
+              "leftValue": "={{ $json._empty }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1320, 0],
+      "id": "micro-vc-filter-empty",
+      "name": "IF: Has Companies"
+    },
+    {
+      "parameters": {
+        "batchSize": 25,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1540, -100],
+      "id": "micro-vc-batch",
+      "name": "Split In Batches (25)"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "rcMNDrfZR6csHRsYKFn0W",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1760, -100],
+      "id": "micro-vc-execute-pipeline",
+      "name": "Execute Enrich & Evaluate Pipeline"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// No companies to process\nreturn { json: { message: 'No new companies found from Micro-VCs', skipped: true } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 100],
+      "id": "micro-vc-no-companies",
+      "name": "No Companies"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Tue/Fri 8am)": {
+      "main": [
+        [
+          {
+            "node": "Browserless Pear VC",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Floodgate",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Afore",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Unshackled",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless 2048",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless YC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless YC": {
+      "main": [
+        [
+          {
+            "node": "Parse YC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Pear VC": {
+      "main": [
+        [
+          {
+            "node": "Parse Pear VC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Pear VC": {
+      "main": [
+        [
+          {
+            "node": "Merge Pear + Floodgate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Floodgate": {
+      "main": [
+        [
+          {
+            "node": "Parse Floodgate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Floodgate": {
+      "main": [
+        [
+          {
+            "node": "Merge Pear + Floodgate",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Browserless Afore": {
+      "main": [
+        [
+          {
+            "node": "Parse Afore",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Afore": {
+      "main": [
+        [
+          {
+            "node": "Merge Afore + Unshackled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Unshackled": {
+      "main": [
+        [
+          {
+            "node": "Parse Unshackled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Unshackled": {
+      "main": [
+        [
+          {
+            "node": "Merge Afore + Unshackled",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Browserless 2048": {
+      "main": [
+        [
+          {
+            "node": "Parse 2048",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse 2048": {
+      "main": [
+        [
+          {
+            "node": "Merge 2048 + YC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse YC": {
+      "main": [
+        [
+          {
+            "node": "Merge 2048 + YC",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge 2048 + YC": {
+      "main": [
+        [
+          {
+            "node": "Combine All Micro-VCs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Pear + Floodgate": {
+      "main": [
+        [
+          {
+            "node": "Merge Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Afore + Unshackled": {
+      "main": [
+        [
+          {
+            "node": "Merge Groups",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Groups": {
+      "main": [
+        [
+          {
+            "node": "Combine All Micro-VCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine All Micro-VCs": {
+      "main": [
+        [
+          {
+            "node": "IF: Has Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Has Companies": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (25)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches (25)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Execute Enrich & Evaluate Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Enrich & Evaluate Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (25)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

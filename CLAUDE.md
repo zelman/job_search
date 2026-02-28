@@ -17,8 +17,9 @@ Current versions (as of Feb 2026):
 - `vc-portfolio-scraper-v26-enriched.json` (v26 - Enterprise/Generalist)
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
-- `VC Scraper - Micro-VC v12.json` (v12) - Pear VC, Floodgate, Afore, Unshackled, 2048 (batched, 2048 uses /function endpoint for infinite scroll, extracts company URLs with news domain filtering)
-- `Enrich & Evaluate Pipeline v2.json` (shared subworkflow - companies, with cross-source dedup)
+- `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
+- `Enrich & Evaluate Pipeline v4.json` (shared subworkflow - companies, with cross-source dedup + Job Listings cross-reference). v4: optimized Check Job Matches with Map lookup instead of combineAll cartesian product; limited Get Existing Companies fields.
+- `Enrich & Evaluate Pipeline v2.json` (previous version, retained for rollback)
 - `Job Evaluation Pipeline v3.json` (shared subworkflow - jobs, with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty)
 - `Dedup Check Subworkflow.json` (cross-source deduplication lookup)
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
@@ -28,12 +29,33 @@ Current versions (as of Feb 2026):
 ## Workflow Architecture
 
 **Company evaluation (VC scrapers):**
-All VC scrapers use the shared `Enrich & Evaluate Pipeline.json` subworkflow via Execute Workflow node.
+All VC scrapers use the shared `Enrich & Evaluate Pipeline v3.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
-Both job workflows use the shared `Job Evaluation Pipeline.json` subworkflow:
+Both job workflows use the shared `Job Evaluation Pipeline v3.json` subworkflow:
 - Work at a Startup Scraper v12
 - Job Alert Email Parser v3-35
+
+**Accelerator monitoring:**
+- Y Combinator is now integrated into `VC Scraper - Micro-VC v13.json`
+- Scrapes YC companies sorted by launch date, extracts batch from cards (W26, S25, etc.)
+- Runs on same Tue/Fri schedule as other Micro-VCs
+
+## Job Listings Cross-Reference (v3 feature)
+
+The Enrich & Evaluate Pipeline v3 adds a cross-reference step that checks if a company already has active job postings in the Job Listings table.
+
+**New fields in Funding Alerts table:**
+- `Has Active Job Posting` (checkbox) - True if company has any active job
+- `Has CX Job Posting` (checkbox) - True if company has active CX/Support job specifically
+- `Matching Job Titles` (text) - List of matching job titles
+
+**New status:**
+- `Immediate Action` - Company has both funding alert AND active CX job posting
+
+**Email notifications:**
+- If `hasCxJobPosting = true`, sends urgent email alert with matching job titles
+- Uses Gmail OAuth2 credentials (same as existing)
 
 ## Cross-Source Deduplication
 
