@@ -7,7 +7,7 @@ flowchart TB
     subgraph Sources["Data Sources"]
         EMAIL[/"Email Alerts<br/>(10 job boards)"/]
         YC[/"Work at a Startup<br/>(YC + Costanoa)"/]
-        VC[/"VC Portfolio Scrapers<br/>(Healthcare, Climate, Social Justice, Enterprise, Micro-VC)"/]
+        VC[/"VC Portfolio Scrapers<br/>(Healthcare, Climate, Social Justice,<br/>Enterprise, Micro-VC + Y Combinator)"/]
     end
 
     subgraph JobPipeline["Job Evaluation Pipeline v3"]
@@ -21,7 +21,7 @@ flowchart TB
         JP_PARSE[Parse Response]
     end
 
-    subgraph CompanyPipeline["Enrich & Evaluate Pipeline v2"]
+    subgraph CompanyPipeline["Enrich & Evaluate Pipeline v3"]
         CP_DEDUP{Dedup Check}
         CP_SKIP[Skip Duplicate]
         CP_BRAVE[Brave Search<br/>Company Enrichment]
@@ -203,7 +203,7 @@ flowchart TD
 flowchart LR
     subgraph Callers["Calling Workflows"]
         JOB_PIPE[Job Evaluation<br/>Pipeline v3]
-        COMP_PIPE[Enrich & Evaluate<br/>Pipeline v2]
+        COMP_PIPE[Enrich & Evaluate<br/>Pipeline v3]
     end
 
     subgraph Check["Dedup Check Subworkflow"]
@@ -299,18 +299,18 @@ flowchart TB
         CT[Climate Tech v23<br/>Khosla, Congruent,<br/>Prelude, Lowercarbon]
         SJ[Social Justice v25<br/>Kapor, Backstage,<br/>Harlem, Collab]
         ENT[Enterprise v26<br/>Unusual, First Round,<br/>Essence, K9, Precursor,<br/>M25, GoAhead]
-        MICRO[Micro-VC v12<br/>Pear, Floodgate, Afore,<br/>Unshackled, 2048]
+        MICRO[Micro-VC v13<br/>Pear, Floodgate, Afore,<br/>Unshackled, 2048,<br/>Y Combinator]
     end
 
     subgraph Methods["Scraping Methods"]
         SITEMAP[Sitemap XML]
         BROWSER[Browserless<br/>Headless]
         STATIC[Static Lists]
-        INFINITE[Infinite Scroll<br/>2048 /function]
+        INFINITE[Infinite Scroll<br/>2048, YC /function]
     end
 
     subgraph Pipeline["Shared Subworkflow"]
-        ENRICH[Enrich & Evaluate<br/>Pipeline v2]
+        ENRICH[Enrich & Evaluate<br/>Pipeline v3]
     end
 
     subgraph Storage
@@ -352,9 +352,9 @@ flowchart LR
 
     subgraph n8n["n8n Workflows"]
         PARSE[Email Parser<br/>v3-35]
-        SCRAPE[Web Scrapers<br/>YC, VC Portfolios]
+        SCRAPE[Web Scrapers<br/>YC Jobs, VC Portfolios,<br/>YC Companies]
         EVAL_JOB[Job Evaluation<br/>Pipeline v3]
-        EVAL_COMP[Enrich & Evaluate<br/>Pipeline v2]
+        EVAL_COMP[Enrich & Evaluate<br/>Pipeline v3]
         DEDUP[Dedup<br/>Subworkflows]
         FEEDBACK[Feedback<br/>Loops]
     end

@@ -20,7 +20,7 @@ The system is designed around a unique personal positioning framework called "Ti
 │                           JOB SOURCE LAYER                                   │
 ├─────────────────┬─────────────────┬─────────────────┬───────────────────────┤
 │  Email Alerts   │   VC Portfolio  │  Direct Scrape  │   Manual/Other        │
-│  (10 sources)   │   Scrapers (4)  │  (YC, Costanoa) │                       │
+│  (10 sources)   │   Scrapers (5)  │  (YC, Costanoa) │                       │
 └────────┬────────┴────────┬────────┴────────┬────────┴───────────────────────┘
          │                 │                 │
          ▼                 ▼                 ▼
@@ -129,10 +129,11 @@ Call Claude API → Parse Response → Airtable
 
 | Scraper | VCs Covered | Schedule | Method |
 |---------|-------------|----------|--------|
-| **Healthcare v24** | WhatIf, Leadout, Flare Capital, 7wireVentures, Oak HC/FT, Cade Ventures, Hustle Fund | Tue/Fri 8am | Browserless + Static |
-| **Climate Tech v22** | Khosla Ventures, Congruent, Prelude, Lowercarbon | Mon/Thu 8am | Browserless + Static |
-| **Social Justice v22** | Kapor Capital, Backstage, Harlem, Collab | Wed/Sat 8am | Sitemap + Static |
-| **Enterprise v22** | Unusual, First Round, Essence, K9 Ventures, Precursor, M25, GoAhead | Mon/Thu 8am | Mixed (Sitemap, Static, Browserless) |
+| **Healthcare v25** | WhatIf, Leadout, Flare Capital, 7wireVentures, Oak HC/FT, Cade Ventures, Hustle Fund | Tue/Fri 8am | Browserless + Static |
+| **Climate Tech v23** | Khosla Ventures, Congruent, Prelude, Lowercarbon | Mon/Thu 8am | Browserless + Static |
+| **Social Justice v25** | Kapor Capital, Backstage, Harlem, Collab | Wed/Sat 8am | Sitemap + Static |
+| **Enterprise v26** | Unusual, First Round, Essence, K9 Ventures, Precursor, M25, GoAhead | Mon/Thu 8am | Mixed (Sitemap, Static, Browserless) |
+| **Micro-VC v13** | Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am | Browserless + Infinite Scroll |
 
 **All VC scrapers use the shared `Enrich & Evaluate Pipeline.json` subworkflow** for deduplication, enrichment, and evaluation.
 
@@ -257,7 +258,7 @@ These are weekly strategic analyses requiring nuanced pattern recognition across
 The dedup system uses a central `Seen Opportunities` table to track all processed jobs and companies.
 
 #### Dedup Check Subworkflow
-- **Called by**: Job Evaluation Pipeline v2, Enrich & Evaluate Pipeline v2
+- **Called by**: Job Evaluation Pipeline v3, Enrich & Evaluate Pipeline v3
 - **Input**: Job/company data with company name, title, source
 - **Process**:
   1. Generate normalized dedup key (`job:{company}:{title}` or `company:{company}`)
@@ -266,7 +267,7 @@ The dedup system uses a central `Seen Opportunities` table to track all processe
 - **Output**: Dedup result with `_originalJobData` for downstream processing
 
 #### Dedup Register Subworkflow
-- **Called by**: Job Evaluation Pipeline v2, Enrich & Evaluate Pipeline v2 (after Airtable upsert)
+- **Called by**: Job Evaluation Pipeline v3, Enrich & Evaluate Pipeline v3 (after Airtable upsert)
 - **Input**: Key, company, title, source, Airtable record ID
 - **Process**: Create record in Seen Opportunities table
 - **Output**: Confirmation with seen record ID
@@ -498,7 +499,7 @@ Weekly automated analysis of user decisions creates a self-improving system:
 
 The complete Tide Pool Agent Lens is maintained at:
 - GitHub: `https://github.com/zelman/tidepool/blob/main/tide-pool-agent-lens.md`
-- Local: `/Users/zelman/Desktop/Quarantine/Side projects/tidepool/tide-pool-agent-lens.md`
+- Local: `/Users/zelman/Desktop/Quarantine/Side Projects/tidepool/tide-pool-agent-lens.md`
 
 Key sections:
 - Core Essence & Pathway Statement
@@ -511,7 +512,7 @@ Key sections:
 ---
 
 *Document updated: February 2026*
-*System Version: Job Alert Email Parser v3-35, Work at a Startup Scraper v12, VC Scrapers v22-v26, Feedback Loops v1, Dedup Subworkflows v1, Job Evaluation Pipeline v3, evaluation-config v2.2*
+*System Version: Job Alert Email Parser v3-35, Work at a Startup Scraper v12, VC Scrapers v22-v26 + Micro-VC v13, Feedback Loops v1, Dedup Subworkflows v1, Job Evaluation Pipeline v3, Enrich & Evaluate Pipeline v3, evaluation-config v2.2*
 
 **Related Documentation**:
 - `ARCHITECTURE.md` - Detailed technical architecture and data flow diagrams
@@ -522,4 +523,4 @@ Key sections:
 - `Dedup Check Subworkflow.json` - Cross-source deduplication lookup
 - `Dedup Register Subworkflow.json` - Cross-source deduplication registration
 - `Job Evaluation Pipeline v3.json` - Job evaluation with dedup, 500-999 employee penalty, Support title penalty
-- `Enrich & Evaluate Pipeline v2.json` - Company evaluation with dedup integration
+- `Enrich & Evaluate Pipeline v3.json` - Company evaluation with dedup + Job Listings cross-reference

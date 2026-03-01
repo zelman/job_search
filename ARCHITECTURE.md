@@ -715,14 +715,14 @@ Feedback Report                    Tide Pool Agent Lens (GitHub)
 | `Work at a Startup Scraper v12.json` | v12 | YC/Costanoa web scraping |
 | `Indeed Job Scraper v4.json` | v4 | Indeed direct scraping |
 | `Job Evaluation Pipeline v3.json` | v3 | Shared subworkflow for job evaluation (with JD fetching, dedup, scoring penalties) |
-| `Enrich & Evaluate Pipeline v2.json` | v2 | Shared subworkflow for company enrichment + evaluation (with dedup) |
+| `Enrich & Evaluate Pipeline v3.json` | v3 | Shared subworkflow for company enrichment + evaluation (with dedup, Job Listings cross-reference) |
 | `Dedup Check Subworkflow.json` | v1 | Cross-source deduplication lookup |
 | `Dedup Register Subworkflow.json` | v1 | Cross-source deduplication registration |
 | `vc-portfolio-scraper-v26-enriched.json` | v26 | Enterprise/generalist VC mining |
 | `VC Scraper - Healthcare.json` | v25 | Healthcare-focused VC mining |
 | `VC Scraper - Climate Tech.json` | v23 | Climate-focused VC mining |
 | `VC Scraper - Social Justice.json` | v24 | Social justice-focused VC mining |
-| `VC Scraper - Micro-VC v6.json` | v6 | Micro-VC mining (Pear, Floodgate, Afore, Unshackled, 2048) |
+| `VC Scraper - Micro-VC v13.json` | v13 | Micro-VC + Accelerator mining (Pear, Floodgate, Afore, Unshackled, 2048, Y Combinator) |
 | `Feedback Loop - Not a Fit.json` | v1 | Weekly pattern analysis for rejected jobs |
 | `Feedback Loop - Applied.json` | v1 | Weekly calibration analysis for applied jobs |
 
@@ -734,6 +734,8 @@ Feedback Report                    Tide Pool Agent Lens (GitHub)
 
 | Date | Change |
 |------|--------|
+| 2026-02-27 | Added Y Combinator to Micro-VC v13 (scrapes public directory sorted by launch date, extracts batch codes) |
+| 2026-02-27 | Updated Enrich & Evaluate Pipeline to v3 with Job Listings cross-reference |
 | 2026-02-27 | Updated Job Evaluation Pipeline to v3 with scoring penalties (500-999 employees: -15 pts, Support title without Director/VP/Head: -15 pts) |
 | 2026-02-27 | Updated evaluation-config.json to v2.2 with new penalty rules |
 | 2026-02-26 | Added cross-source deduplication (Dedup Check + Dedup Register subworkflows) |

@@ -9,7 +9,7 @@ When editing any n8n workflow JSON file:
 2. Update the filename to match (e.g., `v23` → `v24`)
 3. Keep the previous version file if the user wants to preserve it
 
-Current versions (as of Feb 2026):
+Current versions (as of Mar 2026):
 - `Job Alert Email Parser v3-35.json`
 - `Work at a Startup Scraper v12.json`
 - `Indeed Job Scraper v4.json`
@@ -18,7 +18,8 @@ Current versions (as of Feb 2026):
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
-- `Enrich & Evaluate Pipeline v4.json` (shared subworkflow - companies, with cross-source dedup + Job Listings cross-reference). v4: optimized Check Job Matches with Map lookup instead of combineAll cartesian product; limited Get Existing Companies fields.
+- `Enrich & Evaluate Pipeline v5.json` (shared subworkflow - companies). v5: adds LinkedIn Connections cross-reference for Network Match Alerts.
+- `Enrich & Evaluate Pipeline v4.json` (previous version - with cross-source dedup + Job Listings cross-reference, optimized Check Job Matches with Map lookup)
 - `Job Evaluation Pipeline v4.json` (shared subworkflow - jobs, with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty, network connection override for Google VP contact)
 - `Job Evaluation Pipeline v3.json` (previous version, retained for rollback)
 - `Dedup Check Subworkflow.json` (cross-source deduplication lookup)
@@ -29,7 +30,7 @@ Current versions (as of Feb 2026):
 ## Workflow Architecture
 
 **Company evaluation (VC scrapers):**
-All VC scrapers use the shared `Enrich & Evaluate Pipeline v3.json` subworkflow via Execute Workflow node.
+All VC scrapers use the shared `Enrich & Evaluate Pipeline v5.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
 Both job workflows use the shared `Job Evaluation Pipeline v4.json` subworkflow:
@@ -37,7 +38,7 @@ Both job workflows use the shared `Job Evaluation Pipeline v4.json` subworkflow:
 - Job Alert Email Parser v3-35
 
 **Accelerator monitoring:**
-- Y Combinator is now integrated into `VC Scraper - Micro-VC v13.json`
+- Y Combinator is now integrated into `VC Scraper - Micro-VC v14.json`
 - Scrapes YC companies sorted by launch date, extracts batch from cards (W26, S25, etc.)
 - Runs on same Tue/Fri schedule as other Micro-VCs
 
@@ -56,6 +57,26 @@ The Enrich & Evaluate Pipeline v3 adds a cross-reference step that checks if a c
 **Email notifications:**
 - If `hasCxJobPosting = true`, sends urgent email alert with matching job titles
 - Uses Gmail OAuth2 credentials (same as existing)
+
+## Network Match Alerts (v5 feature)
+
+The Enrich & Evaluate Pipeline v5 cross-references companies against your LinkedIn Connections table.
+
+**Airtable table:** `LinkedIn Connections` (tbliKHRPEVI6SceJX)
+- Imported from LinkedIn export CSV
+- Fields: Name, Company, Position, LinkedIn URL, Connected On, Company Normalized (formula)
+
+**New fields in Funding Alerts table:**
+- `Has Network Connection` (checkbox) - True if you have a LinkedIn connection at the company
+- `Connection Name` (text) - Name(s) of connection(s) with their position
+- `Connection LinkedIn URL` (url) - LinkedIn profile URL for outreach
+
+**New status:**
+- `Network Lead` - Company has a network connection (elevated priority for warm outreach)
+
+**Email notifications:**
+- Priority alerts sent when company has network connection OR active CX job posting
+- Email includes connection name and LinkedIn URL for easy outreach
 
 ## Cross-Source Deduplication
 

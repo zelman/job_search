@@ -16,7 +16,7 @@
   "_governance": {
     "north_star": {
       "document": "tide-pool-agent-lens.md",
-      "path": "/Users/zelman/Desktop/Quarantine/Side projects/tidepool/tide-pool-agent-lens.md",
+      "path": "/Users/zelman/Desktop/Quarantine/Side Projects/tidepool/tide-pool-agent-lens.md",
       "github": "https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md",
       "relationship": "This evaluation-config.json is a DERIVED document. All tactical decisions must align with the Tide Pool Agent Lens. When in conflict, the north star governs."
     },

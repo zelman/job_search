@@ -188,7 +188,7 @@ This ensures existing records are recognized as duplicates if they reappear.
 
 All workflow files are in:
 ```
-/Users/zelman/Desktop/Quarantine/Side projects/Job Search/
+/Users/zelman/Desktop/Quarantine/Side Projects/Job Search/
 ```
 
 Key files to modify:

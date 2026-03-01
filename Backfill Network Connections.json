@@ -1,0 +1,267 @@
+{
+  "name": "Backfill Network Connections",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "backfill-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl7yU6QYfIFSC2nD",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": ["Company Name"]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [400, 300],
+      "id": "backfill-get-funding-alerts",
+      "name": "Get All Funding Alerts",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbliKHRPEVI6SceJX",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": ["Name", "Company", "Position", "LinkedIn URL", "Company Normalized"]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [400, 500],
+      "id": "backfill-get-linkedin",
+      "name": "Get All LinkedIn Connections",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [600, 400],
+      "id": "backfill-merge",
+      "name": "Merge Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cross-reference Funding Alerts against LinkedIn Connections\nconst fundingAlerts = $('Get All Funding Alerts').all();\nconst linkedInConnections = $('Get All LinkedIn Connections').all();\n\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\n// Build a Map for O(1) LinkedIn connection lookups\nconst connectionsByCompany = new Map();\nfor (const conn of linkedInConnections) {\n  const fields = conn.json.fields || conn.json;\n  // Use pre-computed normalized field if available, otherwise normalize\n  const company = fields['Company Normalized'] || normalize(fields['Company'] || '');\n  if (!company) continue;\n  if (!connectionsByCompany.has(company)) connectionsByCompany.set(company, []);\n  connectionsByCompany.get(company).push({\n    name: fields['Name'] || '',\n    position: fields['Position'] || '',\n    linkedInUrl: fields['LinkedIn URL'] || ''\n  });\n}\n\n// Find matches and prepare updates\nconst updates = [];\n\nfor (const alert of fundingAlerts) {\n  const fields = alert.json.fields || alert.json;\n  const recordId = alert.json.id;\n  const companyName = fields['Company Name'] || '';\n  const normalizedCompany = normalize(companyName);\n  \n  // Check for matching connections\n  const matchingConnections = connectionsByCompany.get(normalizedCompany) || [];\n  \n  if (matchingConnections.length > 0) {\n    const connectionNames = matchingConnections.map(c => `${c.name} (${c.position})`).join(', ');\n    const connectionLinkedInUrl = matchingConnections[0].linkedInUrl;\n    \n    updates.push({\n      json: {\n        recordId: recordId,\n        companyName: companyName,\n        hasNetworkConnection: true,\n        connectionName: connectionNames,\n        connectionLinkedInUrl: connectionLinkedInUrl,\n        connectionCount: matchingConnections.length\n      }\n    });\n  }\n}\n\nif (updates.length === 0) {\n  return [{ json: { _empty: true, _message: 'No network matches found' } }];\n}\n\nreturn updates;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400],
+      "id": "backfill-find-matches",
+      "name": "Find Network Matches"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._empty }}",
+              "operation": "notEqual",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 400],
+      "id": "backfill-has-matches",
+      "name": "Has Matches?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1200, 250],
+      "id": "backfill-no-matches",
+      "name": "No Matches - Done"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl7yU6QYfIFSC2nD",
+          "mode": "id"
+        },
+        "id": "={{ $json.recordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Has Network Connection": "={{ $json.hasNetworkConnection }}",
+            "Connection Name": "={{ $json.connectionName }}",
+            "Connection LinkedIn URL": "={{ $json.connectionLinkedInUrl }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1200, 550],
+      "id": "backfill-update-records",
+      "name": "Update Funding Alerts",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summary of updates\nconst updates = $input.all();\nreturn [{\n  json: {\n    totalUpdated: updates.length,\n    companies: updates.map(u => u.json.fields?.['Company Name'] || 'Unknown').slice(0, 20),\n    message: `Successfully updated ${updates.length} Funding Alert records with network connection data.`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 550],
+      "id": "backfill-summary",
+      "name": "Summary"
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get All Funding Alerts",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get All LinkedIn Connections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Funding Alerts": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All LinkedIn Connections": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Find Network Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Network Matches": {
+      "main": [
+        [
+          {
+            "node": "Has Matches?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Matches?": {
+      "main": [
+        [
+          {
+            "node": "Update Funding Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Matches - Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Funding Alerts": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
