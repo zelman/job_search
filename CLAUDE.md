@@ -20,7 +20,8 @@ Current versions (as of Feb 2026):
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
 - `Enrich & Evaluate Pipeline v4.json` (shared subworkflow - companies, with cross-source dedup + Job Listings cross-reference). v4: optimized Check Job Matches with Map lookup instead of combineAll cartesian product; limited Get Existing Companies fields.
 - `Enrich & Evaluate Pipeline v2.json` (previous version, retained for rollback)
-- `Job Evaluation Pipeline v3.json` (shared subworkflow - jobs, with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty)
+- `Job Evaluation Pipeline v4.json` (shared subworkflow - jobs, with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty, network connection override for Google VP contact)
+- `Job Evaluation Pipeline v3.json` (previous version, retained for rollback)
 - `Dedup Check Subworkflow.json` (cross-source deduplication lookup)
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
@@ -32,7 +33,7 @@ Current versions (as of Feb 2026):
 All VC scrapers use the shared `Enrich & Evaluate Pipeline v3.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
-Both job workflows use the shared `Job Evaluation Pipeline v3.json` subworkflow:
+Both job workflows use the shared `Job Evaluation Pipeline v4.json` subworkflow:
 - Work at a Startup Scraper v12
 - Job Alert Email Parser v3-35
 

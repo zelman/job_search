@@ -1,0 +1,670 @@
+{
+  "name": "Job Evaluation Pipeline v4",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "job-eval-trigger",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://raw.githubusercontent.com/zelman/tidepool/refs/heads/main/tide-pool-agent-lens.md",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "id": "job-eval-fetch-profile",
+      "name": "Fetch Profile"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare data for dedup check\nconst jobData = $json;\nlet triggerData = {};\ntry { triggerData = $('Execute Workflow Trigger').item?.json || {}; } catch(e) { triggerData = {}; }\n\nconst company = triggerData['Company'] || jobData['Company'] || '';\nconst title = triggerData['Job Title'] || jobData['Job Title'] || '';\nconst source = triggerData['Source'] || jobData['Source'] || 'Unknown';\n\nreturn {\n  json: {\n    company: company,\n    title: title,\n    source: source,\n    recordType: 'job',\n    _originalJobData: triggerData\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "job-eval-prep-dedup",
+      "name": "Prepare Dedup Check"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "bBjeG_RXRI10eAA5TiN7n",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [660, 0],
+      "id": "job-eval-dedup-check",
+      "name": "Dedup Check"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-duplicate",
+              "leftValue": "={{ $json.isDuplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [880, 0],
+      "id": "job-eval-if-duplicate",
+      "name": "IF: Is Duplicate?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Handle duplicate - skip evaluation but return info\nconst dedupResult = $json;\n\n// Get _originalJobData from the dedup result (passed through from Dedup Check Subworkflow)\nconst originalJob = dedupResult._originalJobData || {};\n\nreturn {\n  json: {\n    _skipped: true,\n    _skipReason: 'duplicate',\n    _existingRecordId: dedupResult.existingRecordId,\n    _allSources: dedupResult.allSources,\n    _key: dedupResult.key,\n    'Job Title': originalJob['Job Title'],\n    'Company': originalJob['Company'],\n    'Source': originalJob['Source'],\n    _emailId: originalJob._emailId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, -150],
+      "id": "job-eval-skip-duplicate",
+      "name": "Skip Duplicate"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Restore original job data for processing\nconst dedupResult = $json;\n\n// Get _originalJobData from the dedup result (passed through from Dedup Check Subworkflow)\nconst originalJobData = dedupResult._originalJobData || {};\n\nreturn {\n  json: {\n    ...originalJobData,\n    _dedupKey: dedupResult.key\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 150],
+      "id": "job-eval-restore-data",
+      "name": "Restore Job Data"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.search.brave.com/res/v1/web/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ `\"${$json['Company']}\" funding series employees site:crunchbase.com OR site:pitchbook.com OR site:tracxn.com` }}"
+            },
+            {
+              "name": "count",
+              "value": "5"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 2000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 150],
+      "id": "job-eval-brave-search",
+      "name": "Brave Search Company",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "brave-search-api",
+          "name": "Brave Search API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Restore Job Data').item.json['Job URL'] }}",
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "followRedirects": true,
+            "maxRedirects": 5
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1430, 0],
+      "id": "job-eval-fetch-jd-http",
+      "name": "Fetch JD (HTTP)",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "jd-fetch-success",
+              "leftValue": "={{ $json.data?.length > 500 || (typeof $json === 'string' && $json.length > 500) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1430, 150],
+      "id": "job-eval-if-http-success",
+      "name": "IF: HTTP Success"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $('Restore Job Data').item.json['Job URL'] }}\",\n  \"waitFor\": 3000,\n  \"gotoOptions\": {\n    \"timeout\": 30000,\n    \"waitUntil\": \"networkidle2\"\n  }\n}",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1430, 300],
+      "id": "job-eval-fetch-jd-browserless",
+      "name": "Fetch JD (Browserless)",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "browserless-api",
+          "name": "Browserless API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parse Job Description from HTML\nlet braveData = {};\nlet jobData = {};\nlet httpResult = {};\n\ntry { braveData = $('Brave Search Company').item?.json || {}; } catch(e) { braveData = {}; }\ntry { jobData = $('Restore Job Data').item?.json || {}; } catch(e) { jobData = {}; }\ntry { httpResult = $('Fetch JD (HTTP)').item?.json || {}; } catch(e) { httpResult = {}; }\n\nlet html = '';\nlet fetchSource = 'none';\n\ntry {\n  const browserlessResult = $('Fetch JD (Browserless)').item.json;\n  if (browserlessResult && (browserlessResult.data || typeof browserlessResult === 'string')) {\n    html = browserlessResult.data || browserlessResult;\n    fetchSource = 'browserless';\n  }\n} catch (e) {\n  if (httpResult && (httpResult.data || typeof httpResult === 'string')) {\n    html = httpResult.data || httpResult;\n    fetchSource = 'http';\n  }\n}\n\nif (!html && httpResult) {\n  if (typeof httpResult === 'string' && httpResult.length > 500) {\n    html = httpResult;\n    fetchSource = 'http';\n  } else if (httpResult.data && httpResult.data.length > 500) {\n    html = httpResult.data;\n    fetchSource = 'http';\n  }\n}\n\nconst htmlStr = typeof html === 'string' ? html : JSON.stringify(html || '');\n\nconst selectorPatterns = [\n  /<div[^>]*class=\"[^\"]*content[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/gi,\n  /<div[^>]*class=\"[^\"]*posting-description[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/gi,\n  /<div[^>]*data-automation-id=\"[^\"]*jobPostingDescription[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/gi,\n  /<div[^>]*class=\"[^\"]*job[-_]?description[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/gi,\n  /<section[^>]*class=\"[^\"]*job[-_]?description[^\"]*\"[^>]*>([\\s\\S]*?)<\\/section>/gi,\n  /<div[^>]*id=\"jobDescriptionText\"[^>]*>([\\s\\S]*?)<\\/div>/gi,\n  /<div[^>]*class=\"[^\"]*description__text[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/gi,\n  /<div[^>]*class=\"[^\"]*ashby-job-posting-description[^\"]*\"[^>]*>([\\s\\S]*?)<\\/div>/gi\n];\n\nlet extractedText = '';\nfor (const pattern of selectorPatterns) {\n  const matches = htmlStr.match(pattern);\n  if (matches && matches.length > 0) {\n    const longestMatch = matches.reduce((a, b) => a.length > b.length ? a : b);\n    extractedText = longestMatch;\n    break;\n  }\n}\n\nif (!extractedText || extractedText.length < 200) {\n  const mainMatch = htmlStr.match(/<main[^>]*>([\\s\\S]*?)<\\/main>/gi);\n  const articleMatch = htmlStr.match(/<article[^>]*>([\\s\\S]*?)<\\/article>/gi);\n  if (mainMatch && mainMatch[0].length > (extractedText?.length || 0)) {\n    extractedText = mainMatch[0];\n  } else if (articleMatch && articleMatch[0].length > (extractedText?.length || 0)) {\n    extractedText = articleMatch[0];\n  }\n}\n\nfunction cleanHtml(html) {\n  return html\n    .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')\n    .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '')\n    .replace(/<!--[\\s\\S]*?-->/g, '')\n    .replace(/<\\/?(p|div|br|li|h[1-6]|tr)[^>]*>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/\\s+/g, ' ')\n    .replace(/\\n\\s*\\n/g, '\\n\\n')\n    .trim();\n}\n\nconst cleanedText = cleanHtml(extractedText || '');\nconst quality = cleanedText.length > 1000 ? 'high' : cleanedText.length > 300 ? 'medium' : cleanedText.length > 0 ? 'low' : 'failed';\nconst maxLength = 6000;\nconst truncatedText = cleanedText.length > maxLength ? cleanedText.substring(0, maxLength) + '\\n\\n[...truncated]' : cleanedText;\n\nlet jdSource = 'none';\nif (!jobData['Job URL']) {\n  jdSource = 'no_url';\n} else if (quality === 'failed') {\n  jdSource = 'fetch_failed';\n} else {\n  jdSource = fetchSource;\n}\n\nreturn {\n  json: {\n    ...braveData,\n    _jobData: jobData,\n    _fetchedJobDescription: truncatedText,\n    _jdSource: jdSource,\n    _jdQuality: quality,\n    _jdLength: cleanedText.length\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 150],
+      "id": "job-eval-parse-jd",
+      "name": "Parse Job Description"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parse Brave Search results for company enrichment\nconst jdParseResult = $json;\nlet triggerData = {};\ntry { triggerData = $('Restore Job Data').item?.json || {}; } catch(e) { triggerData = {}; }\nconst jobData = jdParseResult._jobData || triggerData;\nlet braveData = {};\ntry { braveData = $('Brave Search Company').item?.json || {}; } catch(e) { braveData = {}; }\nconst braveResults = braveData.web?.results || [];\n\nconst fetchedJD = jdParseResult._fetchedJobDescription || '';\nconst jdSource = jdParseResult._jdSource || 'none';\nconst jdQuality = jdParseResult._jdQuality || 'none';\n\n// Network connections registry - companies where candidate has direct contacts\n// These bypass size/funding/public auto-disqualifiers but still get honest scoring\nconst NETWORK_CONNECTIONS = {\n  'google': {\n    level: 'VP Connection',\n    note: 'VP-level contact at Google; not preferred fit but worth pursuing via networking advantage',\n    overrideDisqualifiers: ['TOO_LARGE', 'FUNDING_TOO_HIGH', 'PUBLIC']\n  }\n};\n\nlet enrichment = {\n  employeeCount: null,\n  fundingStage: null,\n  totalFunding: null,\n  isPEBacked: false,\n  isVCBacked: false,\n  foundedYear: null,\n  companyAge: null,\n  enrichmentSource: null,\n  rawSnippets: []\n};\n\nconst combinedText = braveResults.map(r => `${r.title || ''} ${r.description || ''}`).join(' ').toLowerCase();\nenrichment.rawSnippets = braveResults.slice(0, 3).map(r => (r.description || '').substring(0, 200));\n\nconst empPatterns = [\n  /(\\d{1,3}(?:,\\d{3})*)\\s*(?:\\+\\s*)?employees/i,\n  /(\\d{1,3}(?:,\\d{3})*)\\s*(?:-|to|–)\\s*(\\d{1,3}(?:,\\d{3})*)\\s*employees/i,\n  /employees?:?\\s*(\\d{1,3}(?:,\\d{3})*)/i,\n  /team\\s+(?:of\\s+)?(\\d{1,3}(?:,\\d{3})*)/i,\n  /headcount:?\\s*(\\d{1,3}(?:,\\d{3})*)/i\n];\n\nfor (const pattern of empPatterns) {\n  const match = combinedText.match(pattern);\n  if (match) {\n    const num1 = parseInt((match[1] || '').replace(/,/g, ''));\n    const num2 = match[2] ? parseInt(match[2].replace(/,/g, '')) : null;\n    enrichment.employeeCount = num2 ? Math.max(num1, num2) : num1;\n    break;\n  }\n}\n\nconst stagePatterns = [\n  { pattern: /(?:ipo|went public|publicly traded|nasdaq|nyse)/i, stage: 'Public' },\n  { pattern: /series\\s*[d-z]\\b/i, stage: 'Series D+' },\n  { pattern: /series\\s*c\\b/i, stage: 'Series C' },\n  { pattern: /series\\s*b\\b/i, stage: 'Series B' },\n  { pattern: /series\\s*a\\b/i, stage: 'Series A' },\n  { pattern: /seed\\s+(?:round|funding|stage)/i, stage: 'Seed' },\n  { pattern: /pre[- ]?seed/i, stage: 'Pre-Seed' },\n  { pattern: /bootstrapped/i, stage: 'Bootstrapped' }\n];\n\nfor (const { pattern, stage } of stagePatterns) {\n  if (pattern.test(combinedText)) {\n    enrichment.fundingStage = stage;\n    break;\n  }\n}\n\nconst fundingPatterns = [\n  /(?:raised|funding|total\\s+funding)[^$]*\\$([\\d.]+)\\s*(billion)\\b/i,\n  /(?:raised|funding|total\\s+funding)[^$]*\\$([\\d.]+)\\s*(million|m)\\b/i,\n  /\\$([\\d.]+)\\s*(billion)\\s*(?:raised|funding|in\\s+funding)/i,\n  /\\$([\\d.]+)\\s*(million|m)\\s*(?:raised|funding|in\\s+funding)/i,\n  /(?:funding|raised):\\s*\\$([\\d.]+)\\s*(billion|million|m)?/i\n];\n\nfor (const pattern of fundingPatterns) {\n  const match = combinedText.match(pattern);\n  if (match) {\n    let amount = parseFloat(match[1]);\n    const unit = (match[2] || 'm').toLowerCase();\n    if (unit === 'billion') amount *= 1000;\n    enrichment.totalFunding = amount;\n    break;\n  }\n}\n\nconst PE_FIRMS = [\n  'vista equity', 'thoma bravo', 'kkr', 'blackstone', 'carlyle',\n  'bain capital', 'tpg', 'apollo', 'warburg pincus', 'silver lake',\n  'francisco partners', 'ares management', 'golden gate capital',\n  'insight partners', 'vector capital', 'ta associates', 'nordic capital',\n  'hellman friedman', 'permira', 'advent international', 'cinven',\n  'eqt partners', 'cvc capital', 'bc partners', 'apax partners',\n  'general atlantic', 'summit partners', 'providence equity',\n  'welsh carson', 'gtcr', 'leonard green', 'american securities',\n  'clearlake capital', 'platinum equity', 'kohlberg'\n];\nconst pePatterns = /private\\s+equity|pe[- ]backed|buyout|lbo|acquired\\s+by.*(?:capital|partners)/i;\nconst peByName = PE_FIRMS.some(firm => combinedText.includes(firm));\nconst vcPatterns = /venture\\s+capital|vc[- ]backed|backed\\s+by|investors?\\s+include|a16z|sequoia|accel|greylock|benchmark|andreessen/i;\n\nenrichment.isPEBacked = pePatterns.test(combinedText) || peByName;\nenrichment.isVCBacked = vcPatterns.test(combinedText) && !enrichment.isPEBacked;\n\nconst foundedPatterns = [\n  /founded\\s*(?:in\\s*)?(\\d{4})/i,\n  /established\\s*(?:in\\s*)?(\\d{4})/i,\n  /since\\s+(\\d{4})/i,\n  /started\\s*(?:in\\s*)?(\\d{4})/i\n];\n\nfor (const pattern of foundedPatterns) {\n  const match = combinedText.match(pattern);\n  if (match) {\n    const year = parseInt(match[1]);\n    if (year >= 1900 && year <= new Date().getFullYear()) {\n      enrichment.foundedYear = year;\n      enrichment.companyAge = new Date().getFullYear() - year;\n      break;\n    }\n  }\n}\n\nif (braveResults.length > 0) {\n  const crunchbaseResult = braveResults.find(r => r.url?.includes('crunchbase.com'));\n  enrichment.enrichmentSource = crunchbaseResult?.url || braveResults[0].url;\n}\n\nenrichment.autoDisqualifiers = [];\nenrichment.scoringPenalties = [];\nif (enrichment.isPEBacked) enrichment.autoDisqualifiers.push('PE-backed company');\nif (enrichment.employeeCount && enrichment.employeeCount >= 1000) enrichment.autoDisqualifiers.push(`${enrichment.employeeCount} employees (>=1000)`);\nif (enrichment.employeeCount && enrichment.employeeCount >= 500 && enrichment.employeeCount < 1000) enrichment.scoringPenalties.push(`${enrichment.employeeCount} employees (500-999): -15 pts`);\n\nconst jobTitle = (jobData['Job Title'] || '').toLowerCase();\nconst hasSupportInTitle = /\\bsupport\\b/i.test(jobTitle);\nconst hasSeniorTitle = /\\b(director|vp|vice president|head|svp|chief)\\b/i.test(jobTitle);\nif (hasSupportInTitle && !hasSeniorTitle) {\n  enrichment.scoringPenalties.push('Support role without Director/VP/Head title: -15 pts');\n}\n\nif (enrichment.totalFunding && enrichment.totalFunding >= 500) {\n  const fundingDisplay = enrichment.totalFunding >= 1000 ? `$${(enrichment.totalFunding / 1000).toFixed(1)}B` : `$${enrichment.totalFunding}M`;\n  enrichment.autoDisqualifiers.push(`${fundingDisplay} funding (>=500M)`);\n}\nif (enrichment.fundingStage === 'Public') enrichment.autoDisqualifiers.push('Public company');\n\nif (enrichment.companyAge && enrichment.companyAge >= 7) {\n  const earlyStages = ['Seed', 'Pre-Seed', 'Bootstrapped', null];\n  const isStillEarly = earlyStages.includes(enrichment.fundingStage);\n  const isSmall = !enrichment.employeeCount || enrichment.employeeCount < 100;\n  if (isStillEarly && isSmall) {\n    enrichment.autoDisqualifiers.push(`Stalled company (${enrichment.companyAge}yr old, still ${enrichment.fundingStage || 'early stage'}, <100 emp)`);\n  }\n}\n\n// Network connection override - suppress size/funding/public disqualifiers for companies with direct contacts\nconst companyLower = (jobData['Company'] || '').toLowerCase();\nlet networkConnection = null;\nfor (const [key, conn] of Object.entries(NETWORK_CONNECTIONS)) {\n  if (companyLower.includes(key)) {\n    networkConnection = conn;\n    const overrideable = ['employees (>=1000)', 'funding (>=500M)', 'Public company'];\n    const originalCount = enrichment.autoDisqualifiers.length;\n    enrichment.autoDisqualifiers = enrichment.autoDisqualifiers.filter(d => !overrideable.some(o => d.includes(o)));\n    if (enrichment.autoDisqualifiers.length < originalCount) {\n      enrichment.connectionOverride = `${conn.level}: ${originalCount - enrichment.autoDisqualifiers.length} disqualifier(s) overridden`;\n    }\n    break;\n  }\n}\n\nreturn {\n  json: {\n    ...jobData,\n    _enrichment: enrichment,\n    _networkConnection: networkConnection,\n    _braveResultCount: braveResults.length,\n    _hasAutoDisqualifier: enrichment.autoDisqualifiers.length > 0,\n    'Job Description': fetchedJD || jobData['Job Description'] || jobData['Description'] || '',\n    _jdSource: jdSource,\n    _jdQuality: jdQuality\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 150],
+      "id": "job-eval-parse-enrichment",
+      "name": "Parse Enrichment"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Build comprehensive prompt for Claude API\nconst jobData = $json;\nconst profileData = $('Fetch Profile').first().json;\nconst profileRaw = profileData.data || profileData;\nconst profileContent = typeof profileRaw === 'string' ? profileRaw : JSON.stringify(profileRaw);\n\nif (jobData._empty || jobData._skip) {\n  return { json: { ...jobData, _skip: true } };\n}\n\nconst enrichment = jobData._enrichment || {};\nconst networkConnection = jobData._networkConnection || null;\n\nconst systemPrompt = `You are a job matching assistant. Use the following personal profile to evaluate job opportunities.\n\n=== CANDIDATE PROFILE (Tide Pool Agent Lens) ===\n${profileContent}\n=== END PROFILE ===\n\n## Your Task\nAnalyze the job posting against the profile above. Pay special attention to:\n1. The \"Job Search Parameters\" section for ideal company fit criteria\n2. The \"Auto-Disqualifiers\" - these are HARD NO criteria\n3. The \"Opportunity Scoring Framework\" for how to score\n4. The \"Role Type Exclusions\" section\n5. The \"Title Flexibility\" guidance for early-stage companies\n\n## Critical Distinction: BUILDER vs MAINTAINER\nThis candidate wants BUILDER roles (creating from scratch) NOT MAINTAINER roles (managing existing).\n\n**BUILDER signals:** build from scratch, first hire, founding team, greenfield, define playbook, series A/B, startup, player-coach, hands-on\n**MAINTAINER signals:** book of business, portfolio of accounts, retention targets, renewal rate, established processes, proven playbook\n\n## IMPORTANT: Company Enrichment Data\nYou have been provided with verified company data from web search. Use this data to:\n1. IMMEDIATELY DISQUALIFY if any auto-disqualifier is present (PE-backed, 1000+ employees, $500M+ funding, public company)\n2. Accurately score company stage (this is worth up to 50 points!)\n3. Apply bonus points for VC-backed, recently founded, etc.\n\n## SCORING PENALTIES (apply these deductions):\n- 500-999 employees: -15 pts (too large for builder roles but not auto-disqualify)\n- Any \"Support\" role WITHOUT Director/VP/Head title: -15 pts (Support Manager/Supervisor roles consistently rejected)\n\n## NETWORK CONNECTION OVERRIDE\nSome companies have direct networking contacts. When a network connection is indicated in the enrichment data, do NOT auto-disqualify on company size, funding amount, or public status. Instead, evaluate the SPECIFIC ROLE for fit honestly. Score the role on its own merits but note the networking advantage. Do not inflate the score - be candid about large-company trade-offs (bureaucracy, maintainer vs builder, etc.).\n\n## Response Format\nRespond with ONLY valid JSON:\n{\n  \"score\": <0-100 using the scoring framework from profile>,\n  \"role_type\": \"builder\" | \"maintainer\" | \"hybrid\",\n  \"is_dealbreaker\": <true/false based on auto-disqualifiers>,\n  \"dealbreaker_reason\": \"<reason if dealbreaker, null otherwise>\",\n  \"score_breakdown\": {\n    \"company_stage_fit\": <0-50>,\n    \"role_type\": <0-30>,\n    \"mission_alignment\": <0-20>\n  },\n  \"builder_evidence\": [<quotes/signals suggesting builder role>],\n  \"maintainer_evidence\": [<quotes/signals suggesting maintainer role>],\n  \"industry\": \"<company's industry>\",\n  \"company_stage_detected\": \"<pre_a|series_a|series_b|series_c|growth|late|public|unknown>\",\n  \"company_size_detected\": \"<number or range if mentioned, null if not>\",\n  \"salary_detected\": { \"base_min\": <number or null>, \"base_max\": <number or null>, \"has_equity\": <true/false/null> },\n  \"what_excites\": [<aspects that align with profile>],\n  \"concerns\": [<red flags or misalignments>],\n  \"recommendation\": \"apply\" | \"research\" | \"skip\",\n  \"summary\": \"<2-3 sentence assessment focused on builder vs maintainer fit>\"\n}`;\n\nconst prefilterInfo = jobData.prefilterAnalysis ? `\\nPREFILTER ANALYSIS (from title only):\\n- Estimated role type: ${jobData.prefilterAnalysis.estimatedRoleType}\\n- Has seniority: ${jobData.prefilterAnalysis.hasSeniority}` : '';\n\nconst fundingDisplay = enrichment.totalFunding ? (enrichment.totalFunding >= 1000 ? '$' + (enrichment.totalFunding / 1000).toFixed(1) + 'B' : '$' + enrichment.totalFunding + 'M') : 'Unknown';\nconst enrichmentBlock = `\nCOMPANY ENRICHMENT DATA (verified from web search - USE THIS FOR SCORING):\n- Employee Count: ${enrichment.employeeCount || 'Unknown'}\n- Funding Stage: ${enrichment.fundingStage || 'Unknown'}\n- Total Funding: ${fundingDisplay}\n- PE-Backed: ${enrichment.isPEBacked ? 'YES - AUTO-DISQUALIFIER!' : 'No'}\n- VC-Backed: ${enrichment.isVCBacked ? 'Yes (+10 bonus)' : 'Unknown'}\n- Founded: ${enrichment.foundedYear || 'Unknown'}${enrichment.companyAge ? ' (' + enrichment.companyAge + ' years old)' : ''}${enrichment.companyAge && enrichment.companyAge <= 3 ? ' - RECENT (+10 bonus)' : ''}\n- Enrichment Source: ${enrichment.enrichmentSource || 'No results found'}\n${enrichment.autoDisqualifiers?.length > 0 ? '\\n⚠️ AUTO-DISQUALIFIERS DETECTED: ' + enrichment.autoDisqualifiers.join(', ') : ''}\n${enrichment.scoringPenalties?.length > 0 ? '\\n⚠️ SCORING PENALTIES TO APPLY: ' + enrichment.scoringPenalties.join(', ') : ''}\n${networkConnection ? '\\n🤝 NETWORK CONNECTION: ' + networkConnection.level + ' - ' + networkConnection.note + (enrichment.connectionOverride ? ' (' + enrichment.connectionOverride + ')' : '') : ''}\n`;\n\nconst jobDescription = jobData['Job Description'] || jobData['Description'] || '';\nconst descriptionNote = jobDescription ? `\\n\\nJOB DESCRIPTION:\\n${jobDescription.substring(0, 3000)}` : '\\n\\nNote: Full job description not available - analyze based on title, company context, and the enrichment data above.';\n\nconst userPrompt = `Analyze this job posting using the Tide Pool profile criteria above.${prefilterInfo}\n\nJOB POSTING:\nTitle: ${jobData['Job Title']}\nCompany: ${jobData['Company']}\nLocation: ${jobData['Location']}\nSalary: ${jobData['Salary Info'] || 'Not specified'}\nSource: ${jobData['Source']}\n${enrichmentBlock}${descriptionNote}\n\nApply the scoring framework from the profile and return JSON. Remember to use the enrichment data for accurate company stage scoring!`;\n\nreturn {\n  json: {\n    ...jobData,\n    _systemPrompt: systemPrompt,\n    _userPrompt: userPrompt\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 150],
+      "id": "job-eval-build-prompt",
+      "name": "Build Prompt"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [2200, 150],
+      "id": "job-eval-wait",
+      "name": "Wait (Rate Limit)",
+      "webhookId": "job-eval-rate-limit"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5\",\n  \"max_tokens\": 2000,\n  \"system\": {{ JSON.stringify($json._systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json._userPrompt) }}}]\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3000
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 150],
+      "id": "job-eval-claude-api",
+      "name": "Call Claude API",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic-api",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parse Claude response\nconst input = $json;\nlet jobData = {};\ntry { jobData = $('Build Prompt').item?.json || {}; } catch(e) { jobData = {}; }\nif (!jobData['Job Title'] && input['Job Title']) { jobData = input; }\nif (!jobData['Company'] && input['Company']) { jobData['Company'] = input['Company']; }\n\nif (jobData._skip) {\n  return { json: jobData };\n}\n\nlet fitScore = 0;\nlet fitRationale = 'Unable to rate';\nlet industry = '';\nlet companyStage = '';\nlet roleType = '';\nlet builderEvidence = '';\nlet maintainerEvidence = '';\nlet recommendation = '';\n\nconst enrichment = jobData._enrichment || {};\n\nfunction extractJSON(text) {\n  let depth = 0;\n  let start = -1;\n  for (let i = 0; i < text.length; i++) {\n    if (text[i] === '{') {\n      if (depth === 0) start = i;\n      depth++;\n    } else if (text[i] === '}') {\n      depth--;\n      if (depth === 0 && start !== -1) {\n        return text.substring(start, i + 1);\n      }\n    }\n  }\n  return null;\n}\n\ntry {\n  if (input.content && input.content[0] && input.content[0].text) {\n    const content = input.content[0].text;\n    const jsonStr = extractJSON(content);\n    \n    if (jsonStr) {\n      const cleaned = jsonStr\n        .replace(/,\\s*}/g, '}')\n        .replace(/,\\s*]/g, ']')\n        .replace(/\\n/g, ' ')\n        .replace(/\\t/g, ' ')\n        .replace(/\"\\s+\"/g, '\", \"')\n        .replace(/]\\s*\"/g, '], \"')\n        .replace(/\"\\s*\\[/g, '\": [')\n        .replace(/}\\s*\"/g, '}, \"');\n      \n      const parsed = JSON.parse(cleaned);\n      \n      fitScore = parsed.score || 0;\n      roleType = parsed.role_type || '';\n      recommendation = parsed.recommendation || '';\n      fitRationale = parsed.summary || 'No summary provided';\n      companyStage = parsed.company_stage_detected || enrichment.fundingStage || '';\n      industry = parsed.industry || '';\n      \n      if (parsed.builder_evidence) {\n        const arr = Array.isArray(parsed.builder_evidence) ? parsed.builder_evidence : [parsed.builder_evidence];\n        builderEvidence = arr.slice(0, 3).join('; ');\n      }\n      if (parsed.maintainer_evidence) {\n        const arr = Array.isArray(parsed.maintainer_evidence) ? parsed.maintainer_evidence : [parsed.maintainer_evidence];\n        maintainerEvidence = arr.slice(0, 3).join('; ');\n      }\n      \n      if (parsed.is_dealbreaker && parsed.dealbreaker_reason) {\n        fitRationale = `DEALBREAKER: ${parsed.dealbreaker_reason}. ${fitRationale}`;\n      }\n    } else {\n      fitRationale = 'Could not extract JSON from response';\n    }\n  } else if (input.error) {\n    fitRationale = 'API Error: ' + (input.error.message || JSON.stringify(input.error));\n  }\n} catch (e) {\n  const content = input.content?.[0]?.text || '';\n  const scoreMatch = content.match(/\"score\"\\s*:\\s*(\\d+)/i);\n  const roleMatch = content.match(/\"role_type\"\\s*:\\s*\"(builder|maintainer|hybrid)\"/i);\n  const recMatch = content.match(/\"recommendation\"\\s*:\\s*\"(apply|research|skip)\"/i);\n  const summaryMatch = content.match(/\"summary\"\\s*:\\s*\"([^\"]+)\"/i);\n  const industryMatch = content.match(/\"industry\"\\s*:\\s*\"([^\"]+)\"/i);\n  const stageMatch = content.match(/\"company_stage_detected\"\\s*:\\s*\"([^\"]+)\"/i);\n  \n  if (scoreMatch || summaryMatch) {\n    fitScore = scoreMatch ? parseInt(scoreMatch[1]) : 0;\n    roleType = roleMatch ? roleMatch[1] : '';\n    recommendation = recMatch ? recMatch[1] : '';\n    fitRationale = summaryMatch ? summaryMatch[1] : 'Partial parse - see score';\n    industry = industryMatch ? industryMatch[1] : '';\n    companyStage = stageMatch ? stageMatch[1] : enrichment.fundingStage || '';\n  } else {\n    fitRationale = 'Parse Error: ' + e.message;\n  }\n}\n\nconst enrichmentParts = [];\nif (enrichment.employeeCount) enrichmentParts.push(`Employees: ${enrichment.employeeCount}`);\nif (enrichment.totalFunding) {\n  const fundingStr = enrichment.totalFunding >= 1000 ? `$${(enrichment.totalFunding / 1000).toFixed(1)}B` : `$${enrichment.totalFunding}M`;\n  enrichmentParts.push(`Funding: ${fundingStr}`);\n}\nif (enrichment.isPEBacked) enrichmentParts.push('PE-backed');\nif (enrichment.isVCBacked) enrichmentParts.push('VC-backed');\nif (enrichment.foundedYear) enrichmentParts.push(`Founded: ${enrichment.foundedYear}`);\nif (enrichmentParts.length > 0) {\n  fitRationale = fitRationale + ' | Enrichment: ' + enrichmentParts.join(', ');\n}\n\nconst { _systemPrompt, _userPrompt, _skip, prefilterAnalysis, _enrichment, _braveResultCount, _hasAutoDisqualifier, _networkConnection, ...cleanJobData } = jobData;\n\nconst networkConnectionLabel = _networkConnection ? _networkConnection.level + ': ' + _networkConnection.note : '';\n\nreturn {\n  json: {\n    ...cleanJobData,\n    'Tide-Pool Score': fitScore,\n    'Tide-Pool Rationale': fitRationale,\n    'Industry': industry,\n    'Company Stage': companyStage,\n    'Role Type': roleType,\n    'Builder Evidence': builderEvidence,\n    'Maintainer Evidence': maintainerEvidence,\n    'Recommendation': recommendation,\n    'Network Connection': networkConnectionLabel\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 150],
+      "id": "job-eval-parse-response",
+      "name": "Parse Response"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Job Title": "={{ $json['Job Title'] }}",
+            "Company": "={{ $json['Company'] }}",
+            "Location": "={{ $json['Location'] }}",
+            "Source": "={{ $json['Source'] }}",
+            "Job URL": "={{ $json['Job URL'] }}",
+            "Job ID": "={{ $json['Job ID'] }}",
+            "Salary Info": "={{ $json['Salary Info'] }}",
+            "Date Found": "={{ $json['Date Found'] }}",
+            "Review Status": "={{ $json['Review Status'] || 'New' }}",
+            "Tide-Pool Score": "={{ $json['Tide-Pool Score'] }}",
+            "Tide-Pool Rationale": "={{ $json['Tide-Pool Rationale'] }}",
+            "Industry": "={{ $json['Industry'] }}",
+            "Company Stage": "={{ $json['Company Stage'] }}",
+            "Role Type": "={{ $json['Role Type'] }}",
+            "Builder Evidence": "={{ $json['Builder Evidence'] }}",
+            "Maintainer Evidence": "={{ $json['Maintainer Evidence'] }}",
+            "Recommendation": "={{ $json['Recommendation'] }}",
+            "Network Connection": "={{ $json['Network Connection'] }}"
+          },
+          "matchingColumns": ["Job URL"],
+          "schema": []
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [2860, 150],
+      "id": "job-eval-airtable",
+      "name": "Upsert to Airtable",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare data for dedup registration\nconst airtableRecord = $json;\nlet parseResponseData = {};\nlet restoreData = {};\ntry { parseResponseData = $('Parse Response').item?.json || {}; } catch(e) { parseResponseData = {}; }\ntry { restoreData = $('Restore Job Data').item?.json || {}; } catch(e) { restoreData = {}; }\n\n// Normalize function for key generation\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\nconst company = parseResponseData['Company'] || '';\nconst title = parseResponseData['Job Title'] || '';\nconst source = parseResponseData['Source'] || 'Unknown';\nconst key = `job:${normalize(company)}:${normalize(title)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: title,\n    source: source,\n    recordType: 'job',\n    airtableRecordId: airtableRecord.id,\n    _emailId: parseResponseData._emailId,\n    _originalRecord: airtableRecord\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 150],
+      "id": "job-eval-prep-register",
+      "name": "Prepare Dedup Register"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MDzcHPZMySqn1DrGh8J0-",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [3300, 150],
+      "id": "job-eval-dedup-register",
+      "name": "Dedup Register"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Merge _emailId and return final output\nconst registerResult = $json;\nlet prepData = {};\ntry { prepData = $('Prepare Dedup Register').item?.json || {}; } catch(e) { prepData = {}; }\n\nreturn {\n  json: {\n    ...prepData._originalRecord,\n    _emailId: prepData._emailId,\n    _dedupRegistered: registerResult.registered || false\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3520, 150],
+      "id": "job-eval-merge-email-id",
+      "name": "Merge Email ID"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Profile": {
+      "main": [
+        [
+          {
+            "node": "Prepare Dedup Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Dedup Check": {
+      "main": [
+        [
+          {
+            "node": "Dedup Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check": {
+      "main": [
+        [
+          {
+            "node": "IF: Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Skip Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Restore Job Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Job Data": {
+      "main": [
+        [
+          {
+            "node": "Brave Search Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brave Search Company": {
+      "main": [
+        [
+          {
+            "node": "Fetch JD (HTTP)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF: HTTP Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch JD (HTTP)": {
+      "main": [
+        [
+          {
+            "node": "IF: HTTP Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: HTTP Success": {
+      "main": [
+        [
+          {
+            "node": "Parse Job Description",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch JD (Browserless)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch JD (Browserless)": {
+      "main": [
+        [
+          {
+            "node": "Parse Job Description",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Job Description": {
+      "main": [
+        [
+          {
+            "node": "Parse Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Enrichment": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Wait (Rate Limit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (Rate Limit)": {
+      "main": [
+        [
+          {
+            "node": "Call Claude API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude API": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Upsert to Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert to Airtable": {
+      "main": [
+        [
+          {
+            "node": "Prepare Dedup Register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Dedup Register": {
+      "main": [
+        [
+          {
+            "node": "Dedup Register",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Register": {
+      "main": [
+        [
+          {
+            "node": "Merge Email ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
