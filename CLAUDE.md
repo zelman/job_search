@@ -10,8 +10,9 @@ When editing any n8n workflow JSON file:
 3. Keep the previous version file if the user wants to preserve it
 
 Current versions (as of Mar 2026):
-- `Job Alert Email Parser v3-38.json` - v3-38: fixed OmniJobs scraper - `/en/` path was being parsed as regex division causing "en is not defined" error. Used String.fromCharCode() to escape path.
-- `Job Alert Email Parser v3-37.json` (previous version) - v3-37: added OmniJobs scraping via Browserless (Senior/Lead CS roles, Remote US, B2B/Healthtech/SaaS/AI tags), reduced Gmail limit to 2 emails/run to prevent OOM
+- `Job Alert Email Parser v3-40.json` - v3-40: CRITICAL FIX - dedup was treating existing Airtable records as new jobs (400+ jobs re-evaluated). Fixed by using `id.startsWith('rec')` to identify Airtable records. Also improved OmniJobs parser to extract clean title/company from card text.
+- `Job Alert Email Parser v3-39.json` (previous version) - v3-39: reduced OmniJobs pagination to 3 pages to prevent timeout
+- `Job Alert Email Parser v3-38.json` (previous version) - v3-38: fixed OmniJobs scraper - `/en/` path was being parsed as regex division causing "en is not defined" error
 - `Work at a Startup Scraper v12.json`
 - `Indeed Job Scraper v4.json`
 - `VC Scraper - Healthcare.json` (v25)
