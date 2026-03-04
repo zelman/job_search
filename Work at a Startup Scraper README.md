@@ -1,6 +1,8 @@
-# Work at a Startup Scraper v6
+# Work at a Startup Scraper v12
 
 An n8n workflow that scrapes job listings from Y Combinator's Work at a Startup and Costanoa Ventures portfolio, using the standardized Tide Pool evaluation sub-routine for AI-powered job scoring.
+
+**Note:** Uses shared `Job Evaluation Pipeline v6` subworkflow for evaluation.
 
 ## Overview
 
@@ -204,9 +206,15 @@ The 7-node evaluation chain provides:
 
 ## Version History
 
-- **v6**: Refactored to use standardized evaluation sub-routine (Brave Search enrichment + dynamic Tide Pool profile)
-- **v5**: Added Costanoa Ventures scraping, prefilter for builder/maintainer
-- **v4**: Initial YC Work at a Startup scraper with built-in Claude rating
+- **v12**: Uses Job Evaluation Pipeline v6 with Review Status preservation fix.
+- **v11**: Uses Job Evaluation Pipeline v5 with tighter scoring thresholds.
+- **v10**: Added cross-source deduplication via shared subworkflows.
+- **v9**: Refactored to use shared Job Evaluation Pipeline subworkflow.
+- **v8**: Added JD fetching with HTTP fallback to Browserless.
+- **v7**: Added network connection override for companies with direct contacts.
+- **v6**: Refactored to use standardized evaluation sub-routine (Brave Search enrichment + dynamic Tide Pool profile).
+- **v5**: Added Costanoa Ventures scraping, prefilter for builder/maintainer.
+- **v4**: Initial YC Work at a Startup scraper with built-in Claude rating.
 
 ---
 

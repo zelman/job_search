@@ -10,7 +10,8 @@ When editing any n8n workflow JSON file:
 3. Keep the previous version file if the user wants to preserve it
 
 Current versions (as of Mar 2026):
-- `Job Alert Email Parser v3-35.json`
+- `Job Alert Email Parser v3-37.json` - v3-37: added OmniJobs scraping via Browserless (Senior/Lead CS roles, Remote US, B2B/Healthtech/SaaS/AI tags), reduced Gmail limit to 2 emails/run to prevent OOM
+- `Job Alert Email Parser v3-36.json` (previous version)
 - `Work at a Startup Scraper v12.json`
 - `Indeed Job Scraper v4.json`
 - `VC Scraper - Healthcare.json` (v25)
@@ -18,24 +19,30 @@ Current versions (as of Mar 2026):
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
-- `Enrich & Evaluate Pipeline v5.json` (shared subworkflow - companies). v5: adds LinkedIn Connections cross-reference for Network Match Alerts.
-- `Enrich & Evaluate Pipeline v4.json` (previous version - with cross-source dedup + Job Listings cross-reference, optimized Check Job Matches with Map lookup)
-- `Job Evaluation Pipeline v4.json` (shared subworkflow - jobs, with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty, network connection override for Google VP contact)
-- `Job Evaluation Pipeline v3.json` (previous version, retained for rollback)
+- `Enrich & Evaluate Pipeline v7.json` (shared subworkflow - companies). v7: aligned pre-filter with Funding Alerts Rescore v2 - expanded PE list (29 firms), acquisition detection, tightened thresholds (>100 employees, >$500M funding), removed founded-year disqualifier.
+- `Enrich & Evaluate Pipeline v6.json` (previous version). v6: consumer/DTC exclusion, defense/govt penalty (cap 35), hardware vs SaaS distinction, maturity detection (cap 40), biotech/pharma drug development exclusion (cap 35, distinct from healthcare SaaS).
+- `Enrich & Evaluate Pipeline v5.json` (previous version - adds LinkedIn Connections cross-reference for Network Match Alerts)
+- `Enrich & Evaluate Pipeline v4.json` (older version - with cross-source dedup + Job Listings cross-reference, optimized Check Job Matches with Map lookup)
+- `Job Evaluation Pipeline v6.json` (shared subworkflow - jobs). v6: **CRITICAL FIX** - upsert no longer overwrites Review Status; only sets "New" for genuinely new records. Preserves "Applied" and other user-set statuses. (Mar 4, 2026: Restored 157 records that had statuses overwritten by v5 bug.)
+- `Job Evaluation Pipeline v5.json` (previous version). v5: tighter scoring thresholds - 200-499 emp penalty, $50M+ funding penalty, >5yr at Series B+ penalty, stronger MAINTAINER detection (scale existing org, multi-tier, global teams 30+)
+- `Job Evaluation Pipeline v4.json` (older version - with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty, network connection override)
+- `Job Evaluation Pipeline v3.json` (older version, retained for rollback)
 - `Dedup Check Subworkflow.json` (cross-source deduplication lookup)
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
 - `Feedback Loop - Applied.json` (weekly calibration analysis)
+- `Funding Alerts Rescore v2.json` (v2 - adds pre-filter node to skip obvious disqualifications before Claude call)
+- `Funding Alerts Rescore v1.json` (v1 - original, no pre-filter)
 
 ## Workflow Architecture
 
 **Company evaluation (VC scrapers):**
-All VC scrapers use the shared `Enrich & Evaluate Pipeline v5.json` subworkflow via Execute Workflow node.
+All VC scrapers use the shared `Enrich & Evaluate Pipeline v6.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
-Both job workflows use the shared `Job Evaluation Pipeline v4.json` subworkflow:
+Both job workflows use the shared `Job Evaluation Pipeline v6.json` subworkflow:
 - Work at a Startup Scraper v12
-- Job Alert Email Parser v3-35
+- Job Alert Email Parser v3-37 (includes OmniJobs scraping, Gmail limit: 2)
 
 **Accelerator monitoring:**
 - Y Combinator is now integrated into `VC Scraper - Micro-VC v14.json`
@@ -77,6 +84,37 @@ The Enrich & Evaluate Pipeline v5 cross-references companies against your Linked
 **Email notifications:**
 - Priority alerts sent when company has network connection OR active CX job posting
 - Email includes connection name and LinkedIn URL for easy outreach
+
+## Pre-Filter Disqualification (v2 feature)
+
+The Funding Alerts Rescore v2 adds a pre-filter node that auto-disqualifies companies before the expensive Claude API call.
+
+**Disqualification criteria** (any triggers auto-skip):
+- Employee count > 100
+- Total funding > $500M
+- PE/Growth Equity investor detected
+- Company was acquired
+- Series D+ stage
+
+**Expanded PE/Growth Equity firm list** (v2):
+Vista Equity, Thoma Bravo, KKR, Blackstone, Bain Capital, Silver Lake, Apollo, Insight Partners, Clearlake, TA Associates, Brighton Park Capital, General Atlantic, Warburg Pincus, Francisco Partners, Summit Partners, Providence Equity, Welsh Carson, TPG Capital, Hellman & Friedman, Advent International, Permira, EQT Partners, Carlyle, SoftBank Vision Fund
+
+**Disqualified records**:
+- Score set to 30, Status to "Skip"
+- `Disqualify Reasons` field populated with specific reasons
+- `Summary` field shows "Auto-disqualified: {reasons}"
+- Enriched fields (Stage, Funding, Employee Count) still updated
+
+**Workflow flow**:
+```
+Enrich → Pre-Filter → Check DQ?
+  ├── Yes (disqualified) → Skip Parse → Update (no Claude call)
+  └── No (evaluate) → Prompt → Claude → Parse → Update
+```
+
+**Expected savings**: ~30-40% reduction in Claude API calls
+
+---
 
 ## Cross-Source Deduplication
 

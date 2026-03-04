@@ -1,6 +1,8 @@
-# Job Alert Email Parser v3-32
+# Job Alert Email Parser v3-37
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, enriches company data via Brave Search, uses AI to rate job fit with builder vs maintainer classification, and adds them to an Airtable database.
+
+**Note:** Uses shared `Job Evaluation Pipeline v6` subworkflow for evaluation.
 
 ## Overview
 
@@ -247,6 +249,11 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-37**: Added OmniJobs scraping via Browserless (Senior/Lead CS roles, Remote US, B2B/Healthtech/SaaS/AI tags). Reduced Gmail limit to 2 emails/run to prevent OOM. Uses Job Evaluation Pipeline v6.
+- **v3-36**: Previous version.
+- **v3-35**: Uses Job Evaluation Pipeline v5 with tighter scoring thresholds.
+- **v3-34**: Added cross-source deduplication via shared subworkflows.
+- **v3-33**: Refactored to use shared Job Evaluation Pipeline subworkflow.
 - **v3-32**: Removed Underdog.io source (reverse recruiting platform, not a job board). Now 10 job sources.
 - **v3-31**: Added "zombie company" auto-disqualifier for stalled companies (7+ years old, still at Seed/Pre-Seed/Bootstrapped, <100 employees). Companies like Project Expedition (10yr old, $500K seed, never progressed) now flagged automatically.
 - **v3-30**: Improved filtering accuracy: expanded CSM/IC title exclusions (Customer Engagement Manager, Escalation Manager, etc.); added 30+ PE firm names for detection (KKR, Bain, TPG, etc.); added known large company list (Anthropic, Pinterest, Google, etc.) for auto-flagging; added healthcare compliance skills mismatch detection (HIPAA/PHI requirements)
