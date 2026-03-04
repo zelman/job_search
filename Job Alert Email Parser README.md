@@ -1,4 +1,4 @@
-# Job Alert Email Parser v3-37
+# Job Alert Email Parser v3-38
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, enriches company data via Brave Search, uses AI to rate job fit with builder vs maintainer classification, and adds them to an Airtable database.
 
@@ -249,6 +249,7 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-38**: Fixed OmniJobs scraper bug - `/en/` in URL was being parsed as regex division causing "en is not defined" error. Used `String.fromCharCode()` to escape the path.
 - **v3-37**: Added OmniJobs scraping via Browserless (Senior/Lead CS roles, Remote US, B2B/Healthtech/SaaS/AI tags). Reduced Gmail limit to 2 emails/run to prevent OOM. Uses Job Evaluation Pipeline v6.
 - **v3-36**: Previous version.
 - **v3-35**: Uses Job Evaluation Pipeline v5 with tighter scoring thresholds.
