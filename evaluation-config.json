@@ -1,8 +1,8 @@
 {
   "_metadata": {
     "name": "Customer Journey Leader Evaluation Framework",
-    "version": "2.2",
-    "last_updated": "2026-02-27",
+    "version": "2.3",
+    "last_updated": "2026-03-05",
     "description": "Machine-optimized evaluation logic DERIVED from the Tide Pool Agent Lens. This document implements the tactical 'how' - the source of truth for identity, values, and 'why' lives in the north star document.",
     "author": "Eric Zelman",
     "usage": [
@@ -234,6 +234,28 @@
       },
       {
         "priority": 5,
+        "id": "FUNCTION_MISMATCH",
+        "label": "Role is marketing/advocacy/content function, not CS/support/CX operations",
+        "action": "INSTANT_DISQUALIFY",
+        "keywords": [
+          "customer advisory board", "CAB governance", "customer reference program",
+          "reference database", "analyst relations", "analyst engagement",
+          "speaking program", "customer marketing", "advocacy content",
+          "case study production", "customer stories", "review site management",
+          "award submissions", "conference speaker sourcing", "content pipeline",
+          "customer advocacy"
+        ],
+        "context": "Disqualify if PRIMARY deliverables are CABs, reference databases, content pipelines, speaking programs, or analyst engagement — regardless of customer-centric title. OK if 'advocacy' is secondary to support operations ownership.",
+        "confirming_cs_signals": [
+          "support ticket operations", "escalation management", "SLA ownership",
+          "customer onboarding", "CSAT", "NPS", "churn", "health scores",
+          "support team hiring", "support tooling", "Zendesk", "Intercom",
+          "VoC feedback to product", "customer retention through service quality"
+        ],
+        "notes": "Pre-scoring gate: classify function BEFORE weighted scoring. Catches roles like Customer Advocacy Manager, Customer Marketing Manager, Customer Reference Manager where title sounds CS-adjacent but function is marketing."
+      },
+      {
+        "priority": 6,
         "id": "PAYER_HEALTHCARE",
         "label": "Healthcare role requiring payer-side expertise",
         "action": "INSTANT_DISQUALIFY",
@@ -241,7 +263,7 @@
         "notes": "Candidate background is provider-side. Payer-side is a domain mismatch."
       },
       {
-        "priority": 6,
+        "priority": 7,
         "id": "UNDERFUNDED_WRONG_SECTOR",
         "label": "Total funding < $500K AND not in target sector",
         "action": "DISQUALIFY",
@@ -250,7 +272,7 @@
         "notes": "Cannot support $125K+ comp at this funding level unless exceptional sector fit"
       },
       {
-        "priority": 7,
+        "priority": 8,
         "id": "TOO_EARLY",
         "label": "Company < 5 employees AND pre-seed stage",
         "action": "SOFT_DISQUALIFY",
@@ -258,7 +280,7 @@
         "notes": "Flag as 'too early' - revisit in 6-12 months. Add to watch list if sector matches."
       },
       {
-        "priority": 8,
+        "priority": 9,
         "id": "NO_REMOTE",
         "label": "No remote option available",
         "action": "DISQUALIFY",
