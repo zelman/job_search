@@ -1,7 +1,7 @@
 ---
 # Tide Pool Agent Lens - Machine-Readable Header
 # Automation tools: parse this block for quick state checks
-# Full doc: https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md
+# Full doc: https://github.com/zelman/tidepool/
 
 version: "2.9"
 schema_version: 1
