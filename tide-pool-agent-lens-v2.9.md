@@ -112,7 +112,7 @@ Three questions for evaluating any opportunity, decision, or commitment:
 
 ## Current State
 <!-- ⚡ VOLATILE SECTION - Update frequently. Everything else in this doc is stable. -->
-<!-- Last updated: 2026-02-13 -->
+<!-- Last updated: 2026-03-05 -->
 
 ### Status
 **Actively job searching** - Director/VP/Head of Customer Support/Success Operations roles, $125K+ base compensation target. Pipeline urgency is **high**.
