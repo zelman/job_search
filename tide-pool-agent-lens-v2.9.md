@@ -3,9 +3,9 @@
 # Automation tools: parse this block for quick state checks
 # Full doc: https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md
 
-version: "2.8"
+version: "2.9"
 schema_version: 1
-last_updated: "2026-02-24"
+last_updated: "2026-03-05"
 
 # Identity
 name: Eric Zelman
@@ -366,6 +366,33 @@ Auto-disqualifiers may be waived for direct founder relationships where:
 - **IT Customer Success**: No internal IT support, IT service desk, or roles supporting internal employees. Target is external product/customer support.
 - **Technical Support / Help Desk**: Variants of IT Support - internal-facing, not customer-facing product support.
 
+### Function Classification Gate (Pre-Scoring)
+
+**Before scoring any role, classify its function**: Is this a CS/support/CX operations hire, or a marketing/advocacy/content/communications hire? Titles with "Customer" can belong to either function. Classify by deliverables, not title.
+
+**Marketing/advocacy function = SKIP** (regardless of customer-centric title):
+- Customer Advisory Board (CAB) management or governance
+- Customer reference programs or reference databases
+- Customer story/case study production
+- Analyst relations or analyst engagement pipelines
+- Speaking program coordination or conference speaker sourcing
+- Customer marketing campaigns
+- Advocacy content creation or content pipelines
+- Review site management (G2, TrustRadius)
+- Award/recognition program submissions
+- Role requires X years in "customer marketing" or "customer advocacy" (marketing function)
+
+**CS/support/CX operations = proceed to scoring**:
+- Support ticket operations, escalation management, SLA ownership
+- Customer onboarding program design and delivery
+- Customer success metrics ownership (CSAT, NPS, churn, health scores)
+- Support team hiring, training, and management
+- Support tooling and infrastructure (Zendesk, Intercom, etc.)
+- Voice of Customer feedback loops TO product (not FROM customers for marketing)
+- Customer retention through service quality (not through reference programs)
+
+**Decision rule**: If the role's primary deliverables are CABs, reference databases, content pipelines, speaking programs, or analyst engagement, SKIP before scoring. This catches roles like Customer Advocacy Manager, Customer Marketing Manager, Customer Reference Manager, and Customer Community Manager (when content/events-focused).
+
 ### Title Flexibility at Early-Stage Companies
 
 **CRITICAL**: At companies <50 people (Pre-A to Series A), title matters far less than scope and builder opportunity.
@@ -417,6 +444,7 @@ Auto-disqualifiers may be waived for direct founder relationships where:
 - IT internal support role = **STOP**
 - Technical Support / Help Desk role = **STOP**
 - Stalled company (founded >10 years ago, <200 employees) = **STOP**
+- Marketing/advocacy/content function disguised as CS role = **STOP** (see Function Classification Gate)
 - Requires domain expertise I don't have = **STOP** (see Experience Boundaries section)
   - "X years pharmaceutical/healthcare marketing"
   - "Agency experience required"
@@ -571,8 +599,8 @@ Before spending time on any application, verify:
 
 ---
 
-*Last Updated: February 24, 2026*
-*Version: 2.8*
+*Last Updated: March 5, 2026*
+*Version: 2.9*
 
 ---
 
@@ -581,6 +609,7 @@ Before spending time on any application, verify:
 This document serves as a "lens" for AI agents. Import or paste into system prompts to create agents that understand my context, values, and working style. The essence, pathway, and evaluation questions are not abstract philosophy; they are active decision-making tools for career search and daily life. Update periodically as circumstances change.
 
 ### Changelog
+- **v2.9** (Mar 2026): Added Function Classification Gate to Role Type Exclusions - pre-scoring binary check that catches marketing/advocacy/content roles disguised as CS/support hires (e.g., Customer Advocacy Manager, Customer Marketing Manager). Added to Auto-Disqualifiers list. Triggered by dbt Labs Customer Advocacy Manager false positive (scored 45, should have been skipped).
 - **v2.8** (Feb 2026): Added feedback loop insights: (1) Stalled company disqualifier - founded >10 years ago with <200 employees indicates growth issues; (2) Expanded IT Support disqualifier to include "Technical Support" and "Help Desk" variants; (3) Added funding stage penalties: -15 pts for $200M-$500M total funding, -10 pts for Series C+. Updated YAML frontmatter, Quick Reference, Role Type Exclusions, Auto-Disqualifiers, and Pre-Application Checklist.
 - **v2.7** (Feb 2026): Added "Experience Boundaries" section for gap detection - distinguishes field marketing experience (HP/Palm, Alliance) from pharma/agency/digital marketing I don't have. Added HP/Palm to Career Arc. Added domain expertise gaps as auto-disqualifiers (pharma marketing, agency experience, FinServ, Legal, AdTech, Gov). Updated Quick Reference table.
 - **v2.6** (Feb 2026): Added Career Arc section, expanded Bigtincan details (13 products, 3 data centers, marquee accounts), added n8n workflow automation to Core Competencies and Active Projects, created resume-base.md and n8n-workflow-portfolio-summary.md in repo

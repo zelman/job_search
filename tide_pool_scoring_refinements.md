@@ -70,6 +70,14 @@ Prevents false positives on roles like:
 
 ### Configuration Changes
 
-- `evaluation-config.json`: Added `FUNCTION_MISMATCH` disqualifier (priority 4.5)
-- `Job Evaluation Pipeline v7.json`: Added STEP 0 function gate to Claude system prompt
-- `CLAUDE.md`: Updated version references
+- `tide-pool-agent-lens-v2.9.md`: Added "Function Classification Gate" section under Role Type Exclusions + added to Auto-Disqualifiers list. This is the primary implementation — the lens is fetched by all consumers (n8n pipeline, Claude.ai manual eval).
+- `evaluation-config.json`: Added `FUNCTION_MISMATCH` disqualifier (priority 5) with keyword lists and confirming CS signals.
+- `Job Evaluation Pipeline v7.json`: Added `function_classification` to response format and Parse Response output. No STEP 0 in prompt — Claude picks up the gate from the lens.
+- `CLAUDE.md`: Updated version references.
+
+### Architecture Decision
+
+The function gate lives in the **tide-pool-agent-lens** (north star doc), not in the n8n Build Prompt system prompt. Rationale:
+- The lens already has Auto-Disqualifiers, Role Type Exclusions, and Experience Boundaries — function classification is the same category.
+- Build Prompt already fetches and passes the full lens to Claude, so no duplication needed.
+- Manual evaluations via Claude.ai get the gate for free — single source of truth.
