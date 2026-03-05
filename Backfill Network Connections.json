@@ -19,8 +19,8 @@
         },
         "table": {
           "__rl": true,
-          "value": "tbl7yU6QYfIFSC2nD",
-          "mode": "id"
+          "value": "Funding Alerts",
+          "mode": "list"
         },
         "returnAll": true,
         "options": {
@@ -49,8 +49,8 @@
         },
         "table": {
           "__rl": true,
-          "value": "tbliKHRPEVI6SceJX",
-          "mode": "id"
+          "value": "LinkedIn Connections",
+          "mode": "list"
         },
         "returnAll": true,
         "options": {
@@ -71,8 +71,7 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "combineBy": "combineAll",
+        "mode": "append",
         "options": {}
       },
       "type": "n8n-nodes-base.merge",
@@ -83,7 +82,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Cross-reference Funding Alerts against LinkedIn Connections\nconst fundingAlerts = $('Get All Funding Alerts').all();\nconst linkedInConnections = $('Get All LinkedIn Connections').all();\n\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\n// Build a Map for O(1) LinkedIn connection lookups\nconst connectionsByCompany = new Map();\nfor (const conn of linkedInConnections) {\n  const fields = conn.json.fields || conn.json;\n  // Use pre-computed normalized field if available, otherwise normalize\n  const company = fields['Company Normalized'] || normalize(fields['Company'] || '');\n  if (!company) continue;\n  if (!connectionsByCompany.has(company)) connectionsByCompany.set(company, []);\n  connectionsByCompany.get(company).push({\n    name: fields['Name'] || '',\n    position: fields['Position'] || '',\n    linkedInUrl: fields['LinkedIn URL'] || ''\n  });\n}\n\n// Find matches and prepare updates\nconst updates = [];\n\nfor (const alert of fundingAlerts) {\n  const fields = alert.json.fields || alert.json;\n  const recordId = alert.json.id;\n  const companyName = fields['Company Name'] || '';\n  const normalizedCompany = normalize(companyName);\n  \n  // Check for matching connections\n  const matchingConnections = connectionsByCompany.get(normalizedCompany) || [];\n  \n  if (matchingConnections.length > 0) {\n    const connectionNames = matchingConnections.map(c => `${c.name} (${c.position})`).join(', ');\n    const connectionLinkedInUrl = matchingConnections[0].linkedInUrl;\n    \n    updates.push({\n      json: {\n        recordId: recordId,\n        companyName: companyName,\n        hasNetworkConnection: true,\n        connectionName: connectionNames,\n        connectionLinkedInUrl: connectionLinkedInUrl,\n        connectionCount: matchingConnections.length\n      }\n    });\n  }\n}\n\nif (updates.length === 0) {\n  return [{ json: { _empty: true, _message: 'No network matches found' } }];\n}\n\nreturn updates;"
+        "jsCode": "// Cross-reference Funding Alerts against LinkedIn Connections\nconst fundingAlerts = $('Get All Funding Alerts').all();\nconst linkedInConnections = $('Get All LinkedIn Connections').all();\n\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\n// Helper to extract record ID from various n8n Airtable structures\nconst getRecordId = (item) => {\n  // Try common locations for record ID in n8n Airtable node\n  return item.json.id || item.json._rawData?.id || item.id || null;\n};\n\n// Build a Map for O(1) LinkedIn connection lookups\nconst connectionsByCompany = new Map();\nfor (const conn of linkedInConnections) {\n  const data = conn.json;\n  // Handle both flattened and nested field structures\n  const company = data['Company Normalized'] || data.fields?.['Company Normalized'] || normalize(data['Company'] || data.fields?.['Company'] || '');\n  if (!company) continue;\n  if (!connectionsByCompany.has(company)) connectionsByCompany.set(company, []);\n  connectionsByCompany.get(company).push({\n    name: data['Name'] || data.fields?.['Name'] || '',\n    position: data['Position'] || data.fields?.['Position'] || '',\n    linkedInUrl: data['LinkedIn URL'] || data.fields?.['LinkedIn URL'] || ''\n  });\n}\n\n// Find matches and prepare updates\nconst updates = [];\n\nfor (const alert of fundingAlerts) {\n  const data = alert.json;\n  const recordId = getRecordId(alert);\n  const companyName = data['Company Name'] || data.fields?.['Company Name'] || '';\n  const normalizedCompany = normalize(companyName);\n  \n  // Skip if no valid record ID\n  if (!recordId) {\n    console.log('Skipping record without ID:', JSON.stringify(data).slice(0, 200));\n    continue;\n  }\n  \n  // Check for matching connections\n  const matchingConnections = connectionsByCompany.get(normalizedCompany) || [];\n  \n  if (matchingConnections.length > 0) {\n    const connectionNames = matchingConnections.map(c => `${c.name} (${c.position})`).join(', ');\n    const connectionLinkedInUrl = matchingConnections[0].linkedInUrl;\n    \n    updates.push({\n      json: {\n        recordId: recordId,\n        companyName: companyName,\n        hasNetworkConnection: true,\n        connectionName: connectionNames,\n        connectionLinkedInUrl: connectionLinkedInUrl,\n        connectionCount: matchingConnections.length\n      }\n    });\n  }\n}\n\nif (updates.length === 0) {\n  return [{ json: { _empty: true, _message: 'No network matches found' } }];\n}\n\nreturn updates;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -127,16 +126,16 @@
         },
         "table": {
           "__rl": true,
-          "value": "tbl7yU6QYfIFSC2nD",
-          "mode": "id"
+          "value": "Funding Alerts",
+          "mode": "list"
         },
         "id": "={{ $json.recordId }}",
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
             "Has Network Connection": "={{ $json.hasNetworkConnection }}",
-            "Connection Name": "={{ $json.connectionName }}",
-            "Connection LinkedIn URL": "={{ $json.connectionLinkedInUrl }}"
+            "Connection Name": "={{ $json.connectionName || '' }}",
+            "Connection LinkedIn URL": "={{ $json.connectionLinkedInUrl || '' }}"
           }
         },
         "options": {
@@ -157,7 +156,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Summary of updates\nconst updates = $input.all();\nreturn [{\n  json: {\n    totalUpdated: updates.length,\n    companies: updates.map(u => u.json.fields?.['Company Name'] || 'Unknown').slice(0, 20),\n    message: `Successfully updated ${updates.length} Funding Alert records with network connection data.`\n  }\n}];"
+        "jsCode": "// Summary of updates\nconst updates = $input.all();\nreturn [{\n  json: {\n    totalUpdated: updates.length,\n    companies: updates.map(u => u.json.companyName || 'Unknown').slice(0, 20),\n    message: `Successfully updated ${updates.length} Funding Alert records with network connection data.`\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

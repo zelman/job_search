@@ -1,7 +1,7 @@
 # Job Search Automation Enhancement Ideas
 
 *Created: February 24, 2026*
-*Updated: March 1, 2026*
+*Updated: March 3, 2026*
 
 ## Overview
 
@@ -107,6 +107,96 @@ Potential enhancements to the n8n job search automation system, organized by cat
 - Jobs >30 days old with no action → archive
 - Recheck job URLs for 404s (position filled)
 
+### 23. Tide-Pool Scoring Pipeline Improvements [NEW - March 2026]
+
+**Context**: Analysis of 20 companies scored 68-72 revealed only 5% yield (1 strong fit). Many companies should have been auto-disqualified before expensive Claude evaluation.
+
+**Problem**: Current workflow relies on:
+1. Brave Search regex extraction (unreliable for employee counts, funding)
+2. Claude prompt "hard caps" (advisory, not enforced)
+3. No pre-filters (every record goes to Claude even if obviously disqualified)
+
+**Evidence from Pipeline Research Report (March 3, 2026)**:
+| Company | Score | Should Have Been | Actual Issue |
+|---------|-------|------------------|--------------|
+| Torq | 72 | Auto-skip | 350+ employees, $332M funding |
+| Together AI | 68 | Auto-skip | 313 employees, $534M funding |
+| Labelbox | 68 | Auto-skip | 144-232 employees, $189M funding |
+| Clearbit | 68 | Auto-skip | Acquired by HubSpot (2023) |
+| AG5 | 68 | Auto-skip | Amsterdam HQ (non-US) |
+| Flocean | 68 | Auto-skip | Oslo HQ, hardware company |
+
+**Proposed Improvements**:
+
+#### A. Pre-Filter Node (Quick Win)
+Add node after Enrich, before Claude call:
+```javascript
+const disqualifyReasons = [];
+
+// Hard filters
+if (employee_count && employee_count > 100) {
+  disqualifyReasons.push(`${employee_count} employees exceeds 100 cap`);
+}
+if (total_funding_parsed > 500000000) {
+  disqualifyReasons.push(`Funding exceeds $500M cap`);
+}
+if (pe_backed) {
+  disqualifyReasons.push(`PE-backed investor detected`);
+}
+
+// If disqualified, skip Claude call entirely
+if (disqualifyReasons.length > 0) {
+  return { bucket: 'PASS', score: 30, disqualifyReasons: disqualifyReasons.join('; ') };
+}
+```
+
+#### B. Expand PE Investor Detection
+Current list missing growth equity firms. Add:
+- Brighton Park Capital
+- General Atlantic
+- Warburg Pincus
+- Francisco Partners
+- Summit Partners
+- Providence Equity
+- Welsh Carson
+- TPG Capital
+
+#### C. HQ Location Extraction
+Add to Brave Search query: `"{company}" headquarters location`
+Extract and filter non-US HQ companies (significant penalty or auto-skip)
+
+#### D. Acquisition Status Check
+Add to Brave Search query: `"{company}" acquired OR acquisition site:techcrunch.com OR site:crunchbase.com`
+Auto-skip if acquired (no longer independent company)
+
+#### E. Business Model Classification
+Improve prompt to distinguish:
+- B2B SaaS (target)
+- Hardware/infrastructure (skip)
+- B2C/consumer (skip)
+- Marketplace (evaluate case-by-case)
+
+**New Airtable Fields Needed**:
+| Field | Type | Purpose |
+|-------|------|---------|
+| `HQ Location` | singleLineText | Extracted headquarters city/country |
+| `HQ Country` | singleSelect | US / Non-US / Unknown |
+| `Acquisition Status` | singleSelect | Independent / Acquired / Unknown |
+| `Acquired By` | singleLineText | Acquiring company if applicable |
+| `Business Model` | singleSelect | B2B SaaS / Hardware / B2C / Marketplace |
+| `Auto-Disqualified` | checkbox | True if pre-filter skipped Claude |
+
+**Implementation Priority**:
+1. **Immediate**: Add pre-filter node to `Funding Alerts Rescore v1`
+2. **Short-term**: Expand PE investor list in Enrich node
+3. **Medium-term**: Add HQ/acquisition extraction to Brave Search queries
+4. **Deferred**: Crunchbase API integration (too expensive ~$500/mo)
+
+**Expected Impact**:
+- Reduce Claude API costs by ~30-40% (skip obvious disqualifications)
+- Improve signal quality in 68-72 score range
+- Faster pipeline throughput (fewer records to evaluate)
+
 ---
 
 ## Outreach Automation
@@ -189,6 +279,9 @@ Potential enhancements to the n8n job search automation system, organized by cat
 | Pipeline optimization | Low | Medium - performance gains | ✅ Done |
 | Founder research pipeline | High | High - better outreach | Manual |
 | Network match alerts | Medium | High - warm intros | ✅ Done |
+| Scoring pre-filters | Low | High - API cost savings, better signal | |
+| PE investor list expansion | Low | Medium - catch growth equity | |
+| HQ/acquisition extraction | Medium | Medium - catch non-US, acquired | |
 | Weekly digest email | Low | Medium - stay on top of pipeline | |
 | Cover letter drafting | Medium | High - time savings | |
 
@@ -263,9 +356,11 @@ Both feedback loops form a **closed-loop learning system**:
 
 ## Next Priority Items
 
-Based on current job search status (~90 applications, ~5% response rate):
+Based on current job search status (~90 applications, ~5% response rate) and pipeline research report (March 2026):
 
-1. **Founder Research Automation** - Reduce manual research time for top companies
-2. **Application Funnel Tracking** - Better understand what's working
-3. **Weekly Digest Email** - Stay on top of pipeline without checking Airtable daily
-4. ~~**Network Match Alerts**~~ ✅ Implemented in v5
+1. **Scoring Pre-Filter Node** - Quick win: skip obvious disqualifications before Claude call (saves ~30-40% API costs)
+2. **PE Investor List Expansion** - Add growth equity firms to detection list
+3. **Founder Research Automation** - Reduce manual research time for top companies
+4. **Application Funnel Tracking** - Better understand what's working
+5. **Weekly Digest Email** - Stay on top of pipeline without checking Airtable daily
+6. ~~**Network Match Alerts**~~ ✅ Implemented in v5

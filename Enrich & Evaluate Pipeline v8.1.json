@@ -1,5 +1,5 @@
 {
-  "name": "Enrich & Evaluate Pipeline v4",
+  "name": "Enrich & Evaluate Pipeline v8.1",
   "nodes": [
     {
       "parameters": {
@@ -223,7 +223,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const braveResponses = $input.all();\nconst companyDataItems = $('Build Search Query').all();\n\nconst peFirms = [\n  'Vista Equity', 'Thoma Bravo', 'KKR', 'Blackstone', 'TPG', 'Carlyle',\n  'Bain Capital', 'Silver Lake', 'Francisco Partners', 'Accel-KKR',\n  'LLR Partners', 'Warburg Pincus', 'Apollo', 'Insight Partners', 'GTCR',\n  'Clearlake', 'Welsh Carson', 'Providence Equity', 'Leonard Green',\n  'Hellman & Friedman', 'Advent', 'Golden Gate Capital', 'TA Associates'\n];\n\nconst currentYear = new Date().getFullYear();\n\nreturn braveResponses.map((item, index) => {\n  const braveResponse = item.json;\n  const companyData = companyDataItems[index]?.json || {};\n  const searchResults = braveResponse?.web?.results || [];\n  const allText = searchResults.map(r => `${r.title || ''} ${r.description || ''}`).join(' ');\n  \n  let employeeCount = null;\n  const empMatch = allText.match(/([\\d,]+)\\s*(?:to\\s*[\\d,]+)?\\s*employees?/i);\n  if (empMatch) employeeCount = parseInt(empMatch[1].replace(/,/g, ''));\n  \n  let fundingStage = null;\n  const stagePatterns = {\n    'Series D': /Series\\s*D/i,\n    'Series C': /Series\\s*C/i,\n    'Series B': /Series\\s*B/i,\n    'Series A': /Series\\s*A/i,\n    'Seed': /\\bSeed\\b/i\n  };\n  for (const [stage, pattern] of Object.entries(stagePatterns)) {\n    if (pattern.test(allText)) { fundingStage = stage; break; }\n  }\n  \n  let totalFunding = null, totalFundingRaw = null;\n  const fundMatch = allText.match(/\\$([\\d.]+)\\s*(million|billion|M|B)/i);\n  if (fundMatch) {\n    const amount = parseFloat(fundMatch[1]);\n    const unit = fundMatch[2].toLowerCase();\n    totalFunding = (unit === 'billion' || unit === 'b') ? amount * 1000000000 : amount * 1000000;\n    totalFundingRaw = `$${amount}${unit.charAt(0).toUpperCase()}`;\n  }\n  \n  const isPEBacked = peFirms.some(f => new RegExp(f, 'i').test(allText));\n  const peBackerFound = peFirms.find(f => new RegExp(f, 'i').test(allText)) || null;\n  \n  let foundedYear = null;\n  const foundMatch = allText.match(/(?:founded|established|since)\\s*(?:in)?\\s*(\\d{4})/i);\n  if (foundMatch) foundedYear = parseInt(foundMatch[1]);\n  \n  const autoDisqualifiers = [];\n  if (isPEBacked) autoDisqualifiers.push(`PE-backed (${peBackerFound})`);\n  if (employeeCount >= 500) autoDisqualifiers.push(`500+ employees (${employeeCount})`);\n  if (totalFunding >= 200000000) autoDisqualifiers.push(`$200M+ funding (${totalFundingRaw})`);\n  if (foundedYear && foundedYear < 2017) autoDisqualifiers.push(`Founded ${foundedYear}`);\n  if (['Series D'].includes(fundingStage)) autoDisqualifiers.push(`Late stage (${fundingStage})`);\n  \n  return {\n    json: {\n      company_name: companyData.company_name || companyData['Company Name'],\n      company_url: companyData.company_url || companyData['Company URL'],\n      description: companyData.description || companyData['Company Description'],\n      source: companyData.source || companyData['VC Firm'] || 'Unknown',\n      funding_stage: fundingStage,\n      total_funding: totalFundingRaw,\n      employee_count: employeeCount,\n      pe_backed: isPEBacked,\n      founded_year: foundedYear,\n      investors: peBackerFound || '',\n      autoDisqualifiers,\n      isAutoDisqualified: autoDisqualifiers.length > 0,\n      _dedupKey: companyData._dedupKey,\n      _updateRecordId: companyData._updateRecordId\n    }\n  };\n});"
+        "jsCode": "// v8.1: Fixed funding extraction - sanity cap at $5B, contextual matching, ignore PE fund sizes\nconst braveResponses = $input.all();\nconst companyDataItems = $('Build Search Query').all();\n\n// Expanded PE/Growth Equity firm list (29 firms)\nconst peFirms = [\n  'Vista Equity', 'Thoma Bravo', 'KKR', 'Blackstone', 'TPG', 'Carlyle',\n  'Bain Capital', 'Silver Lake', 'Francisco Partners', 'Accel-KKR',\n  'LLR Partners', 'Warburg Pincus', 'Apollo', 'Insight Partners', 'GTCR',\n  'Clearlake', 'Welsh Carson', 'Providence Equity', 'Leonard Green',\n  'Hellman & Friedman', 'Advent', 'Golden Gate Capital', 'TA Associates',\n  'Brighton Park Capital', 'General Atlantic', 'Summit Partners', 'SoftBank Vision Fund',\n  'EQT Partners', 'Permira'\n];\n\n// Helper: Parse funding amount string to numeric value\nconst parseFundingAmount = (amountStr, unitStr) => {\n  const amount = parseFloat(amountStr);\n  const unit = unitStr.toLowerCase();\n  if (unit === 'billion' || unit === 'b') return amount * 1000000000;\n  if (unit === 'million' || unit === 'm') return amount * 1000000;\n  if (unit === 'k' || unit === 'thousand') return amount * 1000;\n  return amount;\n};\n\n// Helper: Format funding for display\nconst formatFunding = (numeric) => {\n  if (numeric >= 1000000000) return `$${(numeric / 1000000000).toFixed(1)}B`;\n  if (numeric >= 1000000) return `$${(numeric / 1000000).toFixed(1)}M`;\n  if (numeric >= 1000) return `$${(numeric / 1000).toFixed(0)}K`;\n  return `$${numeric}`;\n};\n\nconst currentYear = new Date().getFullYear();\nconst MAX_BELIEVABLE_FUNDING = 5000000000; // $5B cap - no startup has raised more\n\nreturn braveResponses.map((item, index) => {\n  const braveResponse = item.json;\n  const companyData = companyDataItems[index]?.json || {};\n  const companyName = companyData.company_name || companyData['Company Name'] || '';\n  const searchResults = braveResponse?.web?.results || [];\n  const allText = searchResults.map(r => `${r.title || ''} ${r.description || ''}`).join(' ');\n  \n  // Extract employee count\n  let employeeCount = null;\n  const empMatch = allText.match(/([\\d,]+)\\s*(?:to\\s*[\\d,]+)?\\s*employees?/i);\n  if (empMatch) employeeCount = parseInt(empMatch[1].replace(/,/g, ''));\n  \n  // Extract funding stage\n  let fundingStage = null;\n  const stagePatterns = {\n    'Series D': /Series\\s*D/i,\n    'Series C': /Series\\s*C/i,\n    'Series B': /Series\\s*B/i,\n    'Series A': /Series\\s*A/i,\n    'Seed': /\\bSeed\\b/i\n  };\n  for (const [stage, pattern] of Object.entries(stagePatterns)) {\n    if (pattern.test(allText)) { fundingStage = stage; break; }\n  }\n  \n  // v8.1: IMPROVED funding extraction with sanity checks\n  // Priority 1: Contextual patterns (raised, funding, secured)\n  // Priority 2: Any dollar amount with M/B suffix\n  // Filter: Ignore amounts > $5B (PE fund sizes, not company funding)\n  let totalFunding = null, totalFundingRaw = null;\n  const fundingCandidates = [];\n  \n  // Priority patterns - these are more likely to be actual company funding\n  const contextualPatterns = [\n    /(?:raised|secur(?:ed|es)|total funding of|funding of|announced)\\s*\\$([\\d.]+)\\s*(million|billion|M|B)/gi,\n    /\\$([\\d.]+)\\s*(million|billion|M|B)\\s*(?:raised|funding|round|series)/gi,\n    /series\\s*[A-D]\\s*(?:funding|round)?\\s*(?:of)?\\s*\\$([\\d.]+)\\s*(million|billion|M|B)/gi\n  ];\n  \n  for (const pattern of contextualPatterns) {\n    let match;\n    while ((match = pattern.exec(allText)) !== null) {\n      const numeric = parseFundingAmount(match[1], match[2]);\n      if (numeric <= MAX_BELIEVABLE_FUNDING && numeric >= 100000) { // Min $100K, Max $5B\n        fundingCandidates.push({ numeric, raw: formatFunding(numeric), priority: 1 });\n      }\n    }\n  }\n  \n  // Fallback: Any dollar amount (lower priority)\n  if (fundingCandidates.length === 0) {\n    const fallbackPattern = /\\$([\\d.]+)\\s*(million|billion|M|B)/gi;\n    let match;\n    while ((match = fallbackPattern.exec(allText)) !== null) {\n      const numeric = parseFundingAmount(match[1], match[2]);\n      if (numeric <= MAX_BELIEVABLE_FUNDING && numeric >= 100000) {\n        fundingCandidates.push({ numeric, raw: formatFunding(numeric), priority: 2 });\n      }\n    }\n  }\n  \n  // Select best candidate: prefer contextual matches, then largest reasonable amount\n  if (fundingCandidates.length > 0) {\n    // Sort by priority (1 first), then by amount (descending)\n    fundingCandidates.sort((a, b) => {\n      if (a.priority !== b.priority) return a.priority - b.priority;\n      return b.numeric - a.numeric;\n    });\n    const best = fundingCandidates[0];\n    totalFunding = best.numeric;\n    totalFundingRaw = best.raw;\n  }\n  \n  // Check for PE backing\n  const isPEBacked = peFirms.some(f => new RegExp(f, 'i').test(allText));\n  const peBackerFound = peFirms.find(f => new RegExp(f, 'i').test(allText)) || null;\n  \n  // Extract founded year\n  let foundedYear = null;\n  const foundMatch = allText.match(/(?:founded|established|since)\\s*(?:in)?\\s*(\\d{4})/i);\n  if (foundMatch) foundedYear = parseInt(foundMatch[1]);\n  \n  // Detect acquisition status\n  let isAcquired = false;\n  let acquiredBy = null;\n  const acquirePatterns = [\n    /acquired\\s+by\\s+([A-Z][a-zA-Z0-9\\s]+)/i,\n    /([A-Z][a-zA-Z0-9\\s]+)\\s+acquires?/i,\n    /acquisition\\s+by\\s+([A-Z][a-zA-Z0-9\\s]+)/i,\n    /bought\\s+by\\s+([A-Z][a-zA-Z0-9\\s]+)/i\n  ];\n  for (const pattern of acquirePatterns) {\n    const match = allText.match(pattern);\n    if (match) {\n      isAcquired = true;\n      acquiredBy = match[1]?.trim() || 'Unknown';\n      break;\n    }\n  }\n  if (!isAcquired && /\\b(was acquired|has been acquired|acquired in \\d{4})\\b/i.test(allText)) {\n    isAcquired = true;\n  }\n  \n  // Detect if public company\n  const isPublic = /\\b(NYSE|NASDAQ|publicly traded|IPO|stock ticker|went public)\\b/i.test(allText);\n  \n  // Detect if not B2B SaaS (biotech, hardware, crypto, consumer)\n  const isBiotech = /\\b(therapeutic|biologics|drug development|clinical trial|FDA approval|cell therapy|gene therapy)\\b/i.test(allText);\n  const isHardware = /\\b(hardware|sensors|devices|robotics|manufacturing|IoT devices|chip|semiconductor)\\b/i.test(allText) && !/\\b(SaaS|software platform|cloud)\\b/i.test(allText);\n  const isCrypto = /\\b(blockchain|cryptocurrency|web3|NFT|DeFi|token)\\b/i.test(allText);\n  const isConsumer = /\\b(consumer app|DTC|direct-to-consumer|e-commerce|retail brand|vitamins|supplements|skincare)\\b/i.test(allText);\n  const isNotB2BSaaS = isBiotech || isHardware || isCrypto || isConsumer;\n  \n  // v8: Updated auto-disqualification logic with NEW thresholds\n  // Gates: PE-backed, >$75M funding, >150 employees, acquired, public, not B2B SaaS, Series D+\n  const autoDisqualifiers = [];\n  if (isPEBacked) autoDisqualifiers.push(`PE-backed (${peBackerFound})`);\n  if (employeeCount && employeeCount > 150) autoDisqualifiers.push(`>150 employees (${employeeCount})`);\n  if (totalFunding && totalFunding > 75000000) autoDisqualifiers.push(`>$75M funding (${totalFundingRaw})`);\n  if (isAcquired) autoDisqualifiers.push(`Acquired${acquiredBy ? ' by ' + acquiredBy : ''}`);\n  if (isPublic) autoDisqualifiers.push('Public company');\n  if (isNotB2BSaaS) {\n    if (isBiotech) autoDisqualifiers.push('Biotech/pharma (not B2B SaaS)');\n    else if (isHardware) autoDisqualifiers.push('Hardware company (not B2B SaaS)');\n    else if (isCrypto) autoDisqualifiers.push('Crypto/Web3 (not B2B SaaS)');\n    else if (isConsumer) autoDisqualifiers.push('Consumer/DTC (not B2B SaaS)');\n  }\n  if (['Series D'].includes(fundingStage)) autoDisqualifiers.push(`Late stage (${fundingStage})`);\n  \n  return {\n    json: {\n      company_name: companyData.company_name || companyData['Company Name'],\n      company_url: companyData.company_url || companyData['Company URL'],\n      description: companyData.description || companyData['Company Description'],\n      source: companyData.source || companyData['VC Firm'] || 'Unknown',\n      funding_stage: fundingStage,\n      total_funding: totalFundingRaw,\n      total_funding_numeric: totalFunding,\n      employee_count: employeeCount,\n      pe_backed: isPEBacked,\n      pe_backer: peBackerFound,\n      founded_year: foundedYear,\n      is_acquired: isAcquired,\n      acquired_by: acquiredBy,\n      is_public: isPublic,\n      is_biotech: isBiotech,\n      is_hardware: isHardware,\n      is_crypto: isCrypto,\n      is_consumer: isConsumer,\n      investors: peBackerFound || '',\n      autoDisqualifiers,\n      disqualify_reasons: autoDisqualifiers.join('; '),\n      isAutoDisqualified: autoDisqualifiers.length > 0,\n      _dedupKey: companyData._dedupKey,\n      _updateRecordId: companyData._updateRecordId\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -279,9 +279,9 @@
             "VC Firm": "={{ $json.source }}",
             "Status": "Auto-Disqualified",
             "Next Steps": "Skip",
-            "Disqualify Reasons": "={{ $json.autoDisqualifiers.join('; ') }}",
+            "Disqualify Reasons": "={{ $json.disqualify_reasons }}",
             "Tide-Pool Score": 0,
-            "Summary": "={{ 'Auto-disqualified: ' + $json.autoDisqualifiers.join('; ') }}",
+            "Summary": "={{ 'Auto-disqualified: ' + $json.disqualify_reasons }}",
             "Stage": "={{ $json.funding_stage || '' }}",
             "Total Funding": "={{ $json.total_funding || '' }}",
             "Employee Count": "={{ $json.employee_count || null }}",
@@ -337,7 +337,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const companyItems = $input.all();\n\nconst systemPrompt = `You are evaluating a company for job search fit using the Customer Journey Leader framework.\n\nCANDIDATE PROFILE:\n- VP/Head/Director of Customer Support/Success\n- 13+ years building support orgs from scratch (0-to-1)\n- Healthcare experience is PROVIDER-SIDE (not payer)\n- Target: Early-stage VC-backed companies at founder-led relationship breakdown\n\nSCORING (0-10 each, 80 max):\n1. build_opportunity: 10=first CX hire, 7=small team, 4=scaling, 0=PE optimization\n2. company_stage: 10=Seed/A, 8=B, 5=C, 2=D+, 0=PE\n3. company_size: 10=10-30, 8=30-50, 6=50-100, 4=100-200, 0=500+\n4. sector_fit: 10=healthcare/life sci, 9=dev tools, 7=tech B2B, 5=general B2B, 0=mismatch\n5. technical_complexity: 10=APIs/clinical, 8=enterprise, 5=mid-market, 0=non-tech\n6. customer_journey_scope: 10=full post-sale, 7=2-3 areas, 4=support only, 0=renewals\n\nBUCKETS: APPLY (50+), WATCH (35-49), PASS (<35)\n\nTHREE QUESTIONS (for APPLY):\n1. Does this fill the pool or require emptying? (Energy)\n2. Can I be sincere or must I perform? (Authenticity)\n3. Does this create conditions for flourishing? (Purpose)\n\nReturn JSON only:\n{\n  \"bucket\": \"APPLY|WATCH|PASS\",\n  \"scores\": {\"build_opportunity\": N, \"company_stage\": N, \"company_size\": N, \"sector_fit\": N, \"technical_complexity\": N, \"customer_journey_scope\": N},\n  \"total_score\": N,\n  \"three_questions\": {\"fills_pool\": \"yes|maybe|no\", \"can_be_sincere\": \"yes|maybe|no\", \"creates_flourishing\": \"yes|maybe|no\"},\n  \"sector_match\": \"target|adjacent|unrelated\",\n  \"cs_hire_likelihood\": \"high|medium|low|unlikely\",\n  \"product_type\": \"high-touch enterprise|mid-market|self-serve|consumer\",\n  \"summary\": \"2-3 sentences\",\n  \"watch_triggers\": [\"trigger1\"]\n}`;\n\nreturn companyItems.map(item => {\n  const c = item.json;\n  const userPrompt = `COMPANY:\\nName: ${c.company_name}\\nURL: ${c.company_url}\\nDescription: ${c.description}\\nSource: ${c.source}\\nFunding: ${c.funding_stage || 'Unknown'}, ${c.total_funding || 'Unknown'}\\nEmployees: ${c.employee_count || 'Unknown'}\\nFounded: ${c.founded_year || 'Unknown'}\\n\\nEvaluate and return JSON.`;\n  \n  return { json: { ...c, evaluationPrompt: { systemPrompt, userPrompt } } };\n});"
+        "jsCode": "// v8: NEW 100-point scoring model aligned with Funding Alerts Rescore v2\nconst companyItems = $input.all();\n\nconst systemPrompt = `You are evaluating a company for job search fit using the Customer Journey Leader framework.\n\nCANDIDATE PROFILE:\n- VP/Head/Director of Customer Support/Success\n- 13+ years building support orgs from scratch (0-to-1)\n- Healthcare experience is PROVIDER-SIDE (not payer)\n- Target: Early-stage VC-backed companies at founder-led relationship breakdown\n\nPRE-SCORING GATES (already checked - if company reached this prompt, it passed):\n- NOT PE/Growth Equity backed\n- Total funding <= $75M\n- Employee count <= 150\n- Not acquired or shuttered\n- Not public company\n- Is B2B SaaS (not biotech, hardware, crypto, consumer)\n- Not late stage (Series D+)\n\nSCORING (100 points total):\n\n1. CS HIRE READINESS (30 points max)\n   Does the company need a CS hire NOW?\n   - 30 = First CX hire needed (no existing CX team, product launched, paying customers)\n   - 25 = Very small team (<5), needs senior leadership\n   - 20 = Small team (<10), building out org\n   - 15 = Team exists but scaling challenges\n   - 10 = Established team, looking to upgrade\n   - 5 = Large team, incremental hire\n   - 0 = No CX hiring signals\n\n2. STAGE & SIZE FIT (25 points max)\n   Is this the right company stage/size for a builder?\n   - 25 = Seed/Series A, 10-50 employees (sweet spot)\n   - 20 = Series B, 30-80 employees\n   - 15 = Pre-seed or Series C, appropriate size\n   - 10 = Growth stage but still building\n   - 5 = Later stage or larger company\n   - 0 = Too early (pre-product) or too late (PE/public)\n\n3. ROLE MANDATE (20 points max)\n   Is this a BUILDER role (0-to-1) or MAINTAINER role (scale existing)?\n   - 20 = Clear builder opportunity (first hire, greenfield, transformational)\n   - 15 = Mostly builder with some existing foundation\n   - 10 = Mix of building and maintaining\n   - 5 = Mostly maintaining/optimizing existing org\n   - 0 = Pure optimization/cost-cutting role\n\n   MAINTAINER signals (cap at 5 max):\n   - \"Scale existing org\", \"multi-tier team\", \"global teams\", \"30+ person team\"\n   - \"Optimize processes\", \"drive efficiency\", \"reduce costs\"\n\n4. SECTOR & MISSION (15 points max)\n   Does the sector/mission align?\n   - 15 = Healthcare B2B SaaS (providers, clinical, care coordination)\n   - 12 = Developer tools, infrastructure, DevOps\n   - 10 = Enterprise B2B SaaS (high-touch)\n   - 8 = Mid-market B2B SaaS\n   - 5 = General B2B tech\n   - 2 = Adjacent sectors\n   - 0 = Consumer, DTC, e-commerce, retail\n\n5. OUTREACH FEASIBILITY (10 points max)\n   How accessible is this opportunity?\n   - 10 = YC company (network advantage) + founder accessible\n   - 8 = Known VC portfolio + clear founder contact\n   - 6 = Good VC backing + standard application path\n   - 4 = Less accessible but possible\n   - 2 = Difficult to reach decision makers\n   - 0 = No clear path\n\nSCORE INTERPRETATION:\n- 85-100: Strong target - Apply immediately\n- 70-84: Good target - Worth pursuing\n- 55-69: Marginal - Only if specific signal\n- Below 55: Pass\n\nBUCKETS: APPLY (70+), WATCH (55-69), PASS (<55)\n\nReturn JSON only:\n{\n  \"bucket\": \"APPLY|WATCH|PASS\",\n  \"scores\": {\n    \"cs_hire_readiness\": N,\n    \"stage_size_fit\": N,\n    \"role_mandate\": N,\n    \"sector_mission\": N,\n    \"outreach_feasibility\": N\n  },\n  \"total_score\": N,\n  \"sector_match\": \"target|adjacent|unrelated\",\n  \"cs_hire_likelihood\": \"high|medium|low|unlikely\",\n  \"product_type\": \"high-touch enterprise|mid-market|self-serve|consumer\",\n  \"summary\": \"2-3 sentences explaining score\",\n  \"watch_triggers\": [\"trigger1\"]\n}`;\n\nreturn companyItems.map(item => {\n  const c = item.json;\n  const userPrompt = `COMPANY:\\nName: ${c.company_name}\\nURL: ${c.company_url}\\nDescription: ${c.description}\\nSource: ${c.source}\\nFunding: ${c.funding_stage || 'Unknown'}, ${c.total_funding || 'Unknown'}\\nEmployees: ${c.employee_count || 'Unknown'}\\nFounded: ${c.founded_year || 'Unknown'}\\n\\nEvaluate and return JSON.`;\n  \n  return { json: { ...c, evaluationPrompt: { systemPrompt, userPrompt } } };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -435,6 +435,36 @@
     },
     {
       "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbliKHRPEVI6SceJX",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": ["Name", "Company", "Position", "LinkedIn URL", "Company Normalized"]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [3400, 1100],
+      "id": "pipeline-search-linkedin",
+      "name": "Search LinkedIn Connections",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-token",
+          "name": "Airtable Token"
+        }
+      }
+    },
+    {
+      "parameters": {
         "mode": "combine",
         "combineBy": "combineAll",
         "options": {}
@@ -447,13 +477,25 @@
     },
     {
       "parameters": {
-        "jsCode": "// OPTIMIZED: Check job matches using Map lookup instead of combineAll cartesian product\nconst evalItems = $('Parse Evaluation').all();\nconst jobListings = $('Search Job Listings').all();\n\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\n// Build a Map for O(1) lookups instead of O(n) filtering per company\nconst jobsByCompany = new Map();\nfor (const job of jobListings) {\n  const fields = job.json.fields || job.json;\n  const company = normalize(fields['Company'] || fields['company'] || '');\n  if (!company) continue;\n  if (!jobsByCompany.has(company)) jobsByCompany.set(company, []);\n  jobsByCompany.get(company).push(job);\n}\n\nconst cxKeywords = ['customer', 'support', 'success', 'cx', 'experience', 'service', 'care', 'advocate', 'onboarding', 'implementation'];\nconst activeStatuses = ['new', 'reviewing', 'applied', 'interviewing', 'phone screen', 'on-site', 'offer'];\n\nreturn evalItems.map(evalItem => {\n  const companyName = evalItem.json.company_name || '';\n  const normalizedCompany = normalize(companyName);\n  \n  const matchingJobs = jobsByCompany.get(normalizedCompany) || [];\n  \n  const activeJobs = matchingJobs.filter(job => {\n    const fields = job.json.fields || job.json;\n    const status = (fields['Review Status'] || '').toLowerCase();\n    return activeStatuses.includes(status);\n  });\n  \n  const cxJobs = activeJobs.filter(job => {\n    const fields = job.json.fields || job.json;\n    const title = (fields['Job Title'] || '').toLowerCase();\n    return cxKeywords.some(kw => title.includes(kw));\n  });\n  \n  return {\n    json: {\n      ...evalItem.json,\n      hasActiveJobPosting: activeJobs.length > 0,\n      hasCxJobPosting: cxJobs.length > 0,\n      matchingJobCount: activeJobs.length,\n      matchingCxJobCount: cxJobs.length,\n      matchingJobTitles: activeJobs.map(j => (j.json.fields || j.json)['Job Title'] || '').filter(Boolean).join(', '),\n      matchingJobIds: activeJobs.map(j => j.json.id).filter(Boolean)\n    }\n  };\n});"
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [3600, 1050],
+      "id": "pipeline-merge-linkedin-check",
+      "name": "Merge for LinkedIn Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "// OPTIMIZED: Check job matches and LinkedIn connections using Map lookups\nconst evalItems = $('Parse Evaluation').all();\nconst jobListings = $('Search Job Listings').all();\nconst linkedInConnections = $('Search LinkedIn Connections').all();\n\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\n// Build a Map for O(1) job lookups\nconst jobsByCompany = new Map();\nfor (const job of jobListings) {\n  const fields = job.json.fields || job.json;\n  const company = normalize(fields['Company'] || fields['company'] || '');\n  if (!company) continue;\n  if (!jobsByCompany.has(company)) jobsByCompany.set(company, []);\n  jobsByCompany.get(company).push(job);\n}\n\n// Build a Map for O(1) LinkedIn connection lookups\nconst connectionsByCompany = new Map();\nfor (const conn of linkedInConnections) {\n  const fields = conn.json.fields || conn.json;\n  // Use pre-computed normalized field if available, otherwise normalize\n  const company = fields['Company Normalized'] || normalize(fields['Company'] || '');\n  if (!company) continue;\n  if (!connectionsByCompany.has(company)) connectionsByCompany.set(company, []);\n  connectionsByCompany.get(company).push({\n    name: fields['Name'] || '',\n    position: fields['Position'] || '',\n    linkedInUrl: fields['LinkedIn URL'] || ''\n  });\n}\n\nconst cxKeywords = ['customer', 'support', 'success', 'cx', 'experience', 'service', 'care', 'advocate', 'onboarding', 'implementation'];\nconst activeStatuses = ['new', 'reviewing', 'applied', 'interviewing', 'phone screen', 'on-site', 'offer'];\n\nreturn evalItems.map(evalItem => {\n  const companyName = evalItem.json.company_name || '';\n  const normalizedCompany = normalize(companyName);\n  \n  // Check job matches\n  const matchingJobs = jobsByCompany.get(normalizedCompany) || [];\n  const activeJobs = matchingJobs.filter(job => {\n    const fields = job.json.fields || job.json;\n    const status = (fields['Review Status'] || '').toLowerCase();\n    return activeStatuses.includes(status);\n  });\n  const cxJobs = activeJobs.filter(job => {\n    const fields = job.json.fields || job.json;\n    const title = (fields['Job Title'] || '').toLowerCase();\n    return cxKeywords.some(kw => title.includes(kw));\n  });\n  \n  // Check LinkedIn connections\n  const matchingConnections = connectionsByCompany.get(normalizedCompany) || [];\n  const hasNetworkConnection = matchingConnections.length > 0;\n  const connectionNames = matchingConnections.map(c => `${c.name} (${c.position})`).join(', ');\n  const connectionLinkedInUrl = matchingConnections.length > 0 ? matchingConnections[0].linkedInUrl : '';\n  \n  return {\n    json: {\n      ...evalItem.json,\n      // Job matching fields\n      hasActiveJobPosting: activeJobs.length > 0,\n      hasCxJobPosting: cxJobs.length > 0,\n      matchingJobCount: activeJobs.length,\n      matchingCxJobCount: cxJobs.length,\n      matchingJobTitles: activeJobs.map(j => (j.json.fields || j.json)['Job Title'] || '').filter(Boolean).join(', '),\n      matchingJobIds: activeJobs.map(j => j.json.id).filter(Boolean),\n      // LinkedIn connection fields\n      hasNetworkConnection: hasNetworkConnection,\n      connectionName: connectionNames,\n      connectionLinkedInUrl: connectionLinkedInUrl,\n      connectionCount: matchingConnections.length\n    }\n  };\n});"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3800, 850],
-      "id": "pipeline-check-job-matches",
-      "name": "Check Job Matches"
+      "position": [3800, 950],
+      "id": "pipeline-check-matches",
+      "name": "Check Job & Network Matches"
     },
     {
       "parameters": {
@@ -474,28 +516,28 @@
               }
             }
           ],
-          "combinator": "and"
+          "combinator": "or"
         },
         "options": {}
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [4000, 850],
-      "id": "pipeline-if-has-cx-job",
-      "name": "IF: Has Active CX Job?"
+      "position": [4000, 950],
+      "id": "pipeline-if-priority",
+      "name": "IF: Priority Alert?"
     },
     {
       "parameters": {
         "sendTo": "={{ $env.NOTIFICATION_EMAIL || 'eric@example.com' }}",
-        "subject": "=ACTIVE CX ROLE: {{ $json.company_name }} (Score: {{ $json.total_score }})",
+        "subject": "={{ $json.hasNetworkConnection ? '🔗 NETWORK + ' : '' }}{{ $json.hasCxJobPosting ? 'ACTIVE CX ROLE: ' : 'PRIORITY: ' }}{{ $json.company_name }} (Score: {{ $json.total_score }})",
         "emailType": "text",
-        "message": "={{ $json.company_name }} has an ACTIVE job posting matching your target role.\n\nThis is a high-priority lead - they're hiring for CX/Support NOW.\n\nMatching Jobs:\n{{ $json.matchingJobTitles }}\n\nTide-Pool Score: {{ $json.total_score }}/80\nStatus: {{ $json.status }}\nSector: {{ $json.sector_match }}\nCS Hire Likelihood: {{ $json.cs_hire_likelihood }}\n\nSummary: {{ $json.summary }}\n\nAction: Apply immediately via the Job Listings table, then follow up with founder outreach.\n\nFunding Stage: {{ $json.funding_stage || 'Unknown' }}\nEmployees: {{ $json.employee_count || 'Unknown' }}\nSource: {{ $json.source }}"
+        "message": "={{ $json.company_name }} is a HIGH-PRIORITY lead!\n\n{{ $json.hasCxJobPosting ? '✅ ACTIVE CX JOB POSTING:\\n' + $json.matchingJobTitles + '\\n\\n' : '' }}{{ $json.hasNetworkConnection ? '🔗 NETWORK CONNECTION:\\n' + $json.connectionName + '\\nLinkedIn: ' + $json.connectionLinkedInUrl + '\\n\\n' : '' }}Tide-Pool Score: {{ $json.total_score }}/100\nStatus: {{ $json.status }}\nSector: {{ $json.sector_match }}\nCS Hire Likelihood: {{ $json.cs_hire_likelihood }}\n\nSummary: {{ $json.summary }}\n\nAction: {{ $json.hasCxJobPosting ? 'Apply immediately via Job Listings, then ' : '' }}{{ $json.hasNetworkConnection ? 'Reach out to your connection for a warm intro.' : 'Follow up with founder outreach.' }}\n\nFunding Stage: {{ $json.funding_stage || 'Unknown' }}\nEmployees: {{ $json.employee_count || 'Unknown' }}\nSource: {{ $json.source }}"
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [4200, 750],
-      "id": "pipeline-notify-cx-job",
-      "name": "Send Urgent CX Job Alert",
+      "position": [4200, 850],
+      "id": "pipeline-notify-priority",
+      "name": "Send Priority Alert",
       "credentials": {
         "gmailOAuth2": {
           "id": "gmail-oauth",
@@ -528,7 +570,7 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [4400, 850],
+      "position": [4400, 950],
       "id": "pipeline-if-update",
       "name": "IF: Update Existing?"
     },
@@ -551,8 +593,8 @@
           "value": {
             "Company URL": "={{ $json.company_url }}",
             "Company Description": "={{ $json.description }}",
-            "Status": "={{ $json.hasCxJobPosting ? 'Immediate Action' : $json.status }}",
-            "Next Steps": "={{ $json.hasCxJobPosting ? 'Apply Now - Active CX Role' : $json.next_steps }}",
+            "Status": "={{ $json.hasCxJobPosting ? 'Immediate Action' : ($json.hasNetworkConnection ? 'Network Lead' : $json.status) }}",
+            "Next Steps": "={{ $json.hasCxJobPosting ? 'Apply Now - Active CX Role' : ($json.hasNetworkConnection ? 'Reach Out to Connection' : $json.next_steps) }}",
             "Tide-Pool Score": "={{ $json.total_score }}",
             "Sector Match": "={{ $json.sector_match }}",
             "CS Hire Likelihood": "={{ $json.cs_hire_likelihood }}",
@@ -565,7 +607,10 @@
             "Founded Year": "={{ $json.founded_year || null }}",
             "Has Active Job Posting": "={{ $json.hasActiveJobPosting }}",
             "Has CX Job Posting": "={{ $json.hasCxJobPosting }}",
-            "Matching Job Titles": "={{ $json.matchingJobTitles || '' }}"
+            "Matching Job Titles": "={{ $json.matchingJobTitles || '' }}",
+            "Has Network Connection": "={{ $json.hasNetworkConnection }}",
+            "Connection Name": "={{ $json.connectionName || '' }}",
+            "Connection LinkedIn URL": "={{ $json.connectionLinkedInUrl || '' }}"
           }
         },
         "options": {
@@ -574,7 +619,7 @@
       },
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [4600, 750],
+      "position": [4600, 850],
       "id": "pipeline-airtable-update",
       "name": "Airtable: Update Record",
       "credentials": {
@@ -604,8 +649,8 @@
             "Company URL": "={{ $json.company_url }}",
             "Company Description": "={{ $json.description }}",
             "VC Firm": "={{ $json.source }}",
-            "Status": "={{ $json.hasCxJobPosting ? 'Immediate Action' : $json.status }}",
-            "Next Steps": "={{ $json.hasCxJobPosting ? 'Apply Now - Active CX Role' : $json.next_steps }}",
+            "Status": "={{ $json.hasCxJobPosting ? 'Immediate Action' : ($json.hasNetworkConnection ? 'Network Lead' : $json.status) }}",
+            "Next Steps": "={{ $json.hasCxJobPosting ? 'Apply Now - Active CX Role' : ($json.hasNetworkConnection ? 'Reach Out to Connection' : $json.next_steps) }}",
             "Tide-Pool Score": "={{ $json.total_score }}",
             "Sector Match": "={{ $json.sector_match }}",
             "CS Hire Likelihood": "={{ $json.cs_hire_likelihood }}",
@@ -619,7 +664,10 @@
             "Source": "={{ $json.source }}",
             "Has Active Job Posting": "={{ $json.hasActiveJobPosting }}",
             "Has CX Job Posting": "={{ $json.hasCxJobPosting }}",
-            "Matching Job Titles": "={{ $json.matchingJobTitles || '' }}"
+            "Matching Job Titles": "={{ $json.matchingJobTitles || '' }}",
+            "Has Network Connection": "={{ $json.hasNetworkConnection }}",
+            "Connection Name": "={{ $json.connectionName || '' }}",
+            "Connection LinkedIn URL": "={{ $json.connectionLinkedInUrl || '' }}"
           }
         },
         "options": {
@@ -628,7 +676,7 @@
       },
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,
-      "position": [4600, 950],
+      "position": [4600, 1050],
       "id": "pipeline-airtable-evaluated",
       "name": "Airtable: Create Evaluated Record",
       "credentials": {
@@ -641,11 +689,11 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Prepare dedup registration for evaluated records\nconst airtableRecord = $json;\nlet parseData = {};\ntry { parseData = $('Check Job Matches').item?.json || {}; } catch(e) { parseData = {}; }\n\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst company = parseData.company_name || '';\nconst key = `company:${normalize(company)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: '',\n    source: parseData.source || 'Unknown',\n    recordType: 'company',\n    airtableRecordId: airtableRecord.id\n  }\n};"
+        "jsCode": "// Prepare dedup registration for evaluated records\nconst airtableRecord = $json;\nlet parseData = {};\ntry { parseData = $('Check Job & Network Matches').item?.json || {}; } catch(e) { parseData = {}; }\n\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst company = parseData.company_name || '';\nconst key = `company:${normalize(company)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: '',\n    source: parseData.source || 'Unknown',\n    recordType: 'company',\n    airtableRecordId: airtableRecord.id\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [4800, 850],
+      "position": [4800, 950],
       "id": "pipeline-prep-register-eval",
       "name": "Prep Register (Evaluated)"
     },
@@ -662,7 +710,7 @@
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
-      "position": [5000, 850],
+      "position": [5000, 950],
       "id": "pipeline-dedup-register-eval",
       "name": "Dedup Register (Evaluated)"
     }
@@ -890,7 +938,17 @@
             "index": 0
           },
           {
+            "node": "Search LinkedIn Connections",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "Merge for Job Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge for LinkedIn Check",
             "type": "main",
             "index": 0
           }
@@ -908,33 +966,55 @@
         ]
       ]
     },
+    "Search LinkedIn Connections": {
+      "main": [
+        [
+          {
+            "node": "Merge for LinkedIn Check",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
     "Merge for Job Check": {
       "main": [
         [
           {
-            "node": "Check Job Matches",
+            "node": "Check Job & Network Matches",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Check Job Matches": {
+    "Merge for LinkedIn Check": {
       "main": [
         [
           {
-            "node": "IF: Has Active CX Job?",
+            "node": "Check Job & Network Matches",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "IF: Has Active CX Job?": {
+    "Check Job & Network Matches": {
       "main": [
         [
           {
-            "node": "Send Urgent CX Job Alert",
+            "node": "IF: Priority Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Priority Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send Priority Alert",
             "type": "main",
             "index": 0
           }
@@ -948,7 +1028,7 @@
         ]
       ]
     },
-    "Send Urgent CX Job Alert": {
+    "Send Priority Alert": {
       "main": [
         [
           {

@@ -5,7 +5,7 @@ flowchart TB
         VC[/"VC Portfolio Scrapers<br/>(Healthcare, Climate, Social Justice,<br/>Enterprise, Micro-VC + Y Combinator)"/]
     end
 
-    subgraph JobPipeline["Job Evaluation Pipeline v3"]
+    subgraph JobPipeline["Job Evaluation Pipeline v6"]
         JP_DEDUP{Dedup Check}
         JP_SKIP[Skip Duplicate]
         JP_BRAVE[Brave Search<br/>Company Enrichment]
@@ -16,11 +16,14 @@ flowchart TB
         JP_PARSE[Parse Response]
     end
 
-    subgraph CompanyPipeline["Enrich & Evaluate Pipeline v4"]
+    subgraph CompanyPipeline["Enrich & Evaluate Pipeline v8.1"]
         CP_DEDUP{Dedup Check}
         CP_SKIP[Skip Duplicate]
         CP_BRAVE[Brave Search<br/>Company Enrichment]
         CP_ENRICH[Parse Enrichment]
+        CP_PREFILTER{Pre-Filter<br/>Gates}
+        CP_AUTODQ[Auto-Disqualify<br/>Score: 0]
+        CP_NETWORK[LinkedIn<br/>Cross-Reference]
         CP_PROMPT[Build Prompt<br/>w/ Tide Pool Lens]
         CP_CLAUDE[Claude Haiku<br/>Scoring]
         CP_PARSE[Parse Response]
@@ -61,11 +64,15 @@ flowchart TB
     CP_DEDUP -->|Duplicate| CP_SKIP
     CP_DEDUP -->|New| CP_BRAVE
     CP_BRAVE --> CP_ENRICH
-    CP_ENRICH --> CP_PROMPT
+    CP_ENRICH --> CP_PREFILTER
+    CP_PREFILTER -->|Disqualified| CP_AUTODQ
+    CP_PREFILTER -->|Evaluate| CP_NETWORK
+    CP_NETWORK --> CP_PROMPT
     LENS -.->|Fetch at runtime| CP_PROMPT
     CP_PROMPT --> CP_CLAUDE
     CP_CLAUDE --> CP_PARSE
     CP_PARSE --> COMPANIES
+    CP_AUTODQ --> COMPANIES
     COMPANIES --> SEEN
 
     %% Feedback loops

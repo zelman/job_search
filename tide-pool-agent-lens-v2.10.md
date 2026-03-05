@@ -3,9 +3,9 @@
 # Automation tools: parse this block for quick state checks
 # Full doc: https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md
 
-version: "2.8"
+version: "2.10"
 schema_version: 1
-last_updated: "2026-02-24"
+last_updated: "2026-03-05"
 
 # Identity
 name: Eric Zelman
@@ -45,6 +45,17 @@ disqualify:
   role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
   domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government]
   stalled_company: { founded_years_ago_min: 10, employee_count_max: 200 }
+
+# Scoring Penalties (non-disqualifying)
+penalties:
+  - rule: "500-999 employees"
+    points: -15
+  - rule: "Support title without Director/VP/Head"
+    points: -15
+  - rule: "Total funding $200M-$500M"
+    points: -15
+  - rule: "Series C or later"
+    points: -10
 
 # Scoring Threshold
 min_score: 60
@@ -462,9 +473,11 @@ Auto-disqualifiers may be waived for direct founder relationships where:
 - On-site in acceptable cities: **+0 pts**
 - On-site elsewhere: **-10 pts**
 
-**Funding Stage Penalties (New in v2.8)**
+**Scoring Penalties**
 - Total funding $200M-$500M: **-15 pts** (approaching enterprise scale)
 - Series C or later: **-10 pts** (past prime builder phase)
+- 500-999 employees: **-15 pts** (gap between 500-1000 still too large for builder roles)
+- Support title without Director/VP/Head: **-15 pts** (Support Manager/Supervisor roles consistently rejected)
 
 **Network Opportunity Bonus**
 - Direct founder relationship: **+15 pts**
@@ -564,6 +577,7 @@ Before spending time on any application, verify:
 | Domain Gaps | Pharma marketing, agency work, FinServ, Legal, AdTech, Gov |
 | Field Marketing | YES (HP/Palm, Alliance) - but NOT agency/pharma/digital marketing |
 | Auto-Disqualify | PE-backed, 1,000+ employees, $500M+ funding, Fortune 500, stalled companies (>10yr/<200 emp), domain expertise gaps |
+| Scoring Penalties | 500-999 employees (-15), Support without Dir/VP/Head (-15), $200M-$500M funding (-15), Series C+ (-10) |
 | Research Time | ~11 min verification before applying |
 | Investor Check | VCs good, PE firms = red flag |
 | Scoring Threshold | 60+ points to proceed with application |
@@ -571,8 +585,8 @@ Before spending time on any application, verify:
 
 ---
 
-*Last Updated: February 24, 2026*
-*Version: 2.8*
+*Last Updated: March 5, 2026*
+*Version: 2.10*
 
 ---
 
@@ -581,6 +595,7 @@ Before spending time on any application, verify:
 This document serves as a "lens" for AI agents. Import or paste into system prompts to create agents that understand my context, values, and working style. The essence, pathway, and evaluation questions are not abstract philosophy; they are active decision-making tools for career search and daily life. Update periodically as circumstances change.
 
 ### Changelog
+- **v2.10** (Mar 2026): Merged v2.9 additions from tidepool repo - added scoring penalties from feedback loop pattern analysis: 500-999 employees (-15 pts), Support title without Director/VP/Head (-15 pts). Added penalties section to YAML frontmatter for machine-readable access. Consolidated all scoring penalties under single "Scoring Penalties" heading. Added Scoring Penalties row to Quick Reference table.
 - **v2.8** (Feb 2026): Added feedback loop insights: (1) Stalled company disqualifier - founded >10 years ago with <200 employees indicates growth issues; (2) Expanded IT Support disqualifier to include "Technical Support" and "Help Desk" variants; (3) Added funding stage penalties: -15 pts for $200M-$500M total funding, -10 pts for Series C+. Updated YAML frontmatter, Quick Reference, Role Type Exclusions, Auto-Disqualifiers, and Pre-Application Checklist.
 - **v2.7** (Feb 2026): Added "Experience Boundaries" section for gap detection - distinguishes field marketing experience (HP/Palm, Alliance) from pharma/agency/digital marketing I don't have. Added HP/Palm to Career Arc. Added domain expertise gaps as auto-disqualifiers (pharma marketing, agency experience, FinServ, Legal, AdTech, Gov). Updated Quick Reference table.
 - **v2.6** (Feb 2026): Added Career Arc section, expanded Bigtincan details (13 products, 3 data centers, marquee accounts), added n8n workflow automation to Core Competencies and Active Projects, created resume-base.md and n8n-workflow-portfolio-summary.md in repo

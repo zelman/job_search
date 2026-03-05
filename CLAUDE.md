@@ -1,5 +1,116 @@
 # Claude Code Project Instructions
 
+## File Location
+
+All workflow JSON files are stored in:
+```
+/Users/zelman/Desktop/Quarantine/Side Projects/Job Search/
+```
+
+---
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              VC SCRAPERS                                     │
+│  Healthcare, Climate Tech, Social Justice, Micro-VC, Enterprise/Generalist │
+│                                    │                                         │
+│                                    ▼                                         │
+│                    ┌───────────────────────────────┐                        │
+│                    │ Enrich & Evaluate Pipeline v8.1│◄── rcMNDrfZR6csHRsYKFn0W
+│                    │   (100-point company scoring) │    (UPDATE after import)
+│                    └───────────────┬───────────────┘                        │
+│                                    │                                         │
+│              ┌─────────────────────┼─────────────────────┐                  │
+│              ▼                     ▼                     ▼                  │
+│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐          │
+│   │ Dedup Check     │   │ Brave Search    │   │ Claude API      │          │
+│   │ bBjeG_RXRI...   │   │ (enrichment)    │   │ (evaluation)    │          │
+│   └─────────────────┘   └─────────────────┘   └─────────────────┘          │
+│              │                                           │                  │
+│              ▼                                           ▼                  │
+│   ┌─────────────────┐                         ┌─────────────────┐          │
+│   │ Dedup Register  │                         │ Funding Alerts  │          │
+│   │ MDzcHPZMyS...   │                         │ (Airtable)      │          │
+│   └─────────────────┘                         └─────────────────┘          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              JOB SCRAPERS                                    │
+│        Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v4       │
+│                                    │                                         │
+│                                    ▼                                         │
+│                    ┌───────────────────────────────┐                        │
+│                    │  Job Evaluation Pipeline v6   │◄── v24qHkIsp8GVCwFkscHP8
+│                    │    (100-point job scoring)    │                        │
+│                    └───────────────┬───────────────┘                        │
+│                                    │                                         │
+│              ┌─────────────────────┼─────────────────────┐                  │
+│              ▼                     ▼                     ▼                  │
+│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐          │
+│   │ Dedup Check     │   │ JD Fetch        │   │ Claude API      │          │
+│   │ bBjeG_RXRI...   │   │ (Browserless)   │   │ (evaluation)    │          │
+│   └─────────────────┘   └─────────────────┘   └─────────────────┘          │
+│              │                                           │                  │
+│              ▼                                           ▼                  │
+│   ┌─────────────────┐                         ┌─────────────────┐          │
+│   │ Dedup Register  │                         │  Job Listings   │          │
+│   │ MDzcHPZMyS...   │                         │  (Airtable)     │          │
+│   └─────────────────┘                         └─────────────────┘          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           BACKFILL / RESCORE                                 │
+│                                    │                                         │
+│                                    ▼                                         │
+│                    ┌───────────────────────────────┐                        │
+│                    │  Funding Alerts Rescore v2.1  │ (standalone)           │
+│                    │  (re-evaluates existing)      │                        │
+│                    └───────────────┬───────────────┘                        │
+│                                    │                                         │
+│                                    ▼                                         │
+│                         ┌─────────────────┐                                 │
+│                         │ Funding Alerts  │                                 │
+│                         │ (Airtable)      │                                 │
+│                         └─────────────────┘                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## n8n Workflow IDs
+
+These IDs are assigned by n8n on import. Update Execute Workflow nodes when replacing subworkflows.
+
+| Workflow | ID | Used By |
+|----------|-----|---------|
+| **Enrich & Evaluate Pipeline** | `rcMNDrfZR6csHRsYKFn0W` | All VC scrapers |
+| **Job Evaluation Pipeline** | `v24qHkIsp8GVCwFkscHP8` | WaaS, Job Alert Parser, Indeed |
+| **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
+| **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
+
+**After importing a new pipeline version:**
+1. Note the new workflow ID from n8n
+2. Update the Execute Workflow nodes in parent workflows
+3. Update this table
+
+---
+
+## Airtable Reference
+
+**Base ID:** `appFEzXvPWvRtXgRY` (Job Search)
+
+| Table | ID | Description |
+|-------|-----|-------------|
+| **Funding Alerts** | `tblXXX` (use list mode) | Company evaluations from VC scrapers |
+| **Job Listings** | `tbl6ZV2rHjWz56pP3` | Job evaluations from job scrapers |
+| **LinkedIn Connections** | `tbliKHRPEVI6SceJX` | Imported from LinkedIn CSV |
+| **Seen Opportunities** | `tbll8igHTftSqsTtQ` | Cross-source dedup registry |
+| **Indeed Searches** | `tblofzQpzGEN8igVS` | Indeed job search configs |
+
+---
+
 ## Version Numbering
 
 **Always iterate version numbers when modifying workflows.**
@@ -23,7 +134,8 @@ Current versions (as of Mar 2026):
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
-- `Enrich & Evaluate Pipeline v7.json` (shared subworkflow - companies). v7: aligned pre-filter with Funding Alerts Rescore v2 - expanded PE list (29 firms), acquisition detection, tightened thresholds (>100 employees, >$500M funding), removed founded-year disqualifier.
+- `Enrich & Evaluate Pipeline v8.1.json` (shared subworkflow - companies). v8.1: Fixed funding extraction - $5B sanity cap to ignore PE fund sizes, contextual matching (prioritizes "raised $X", "funding of $X" patterns), min $100K threshold. v8: aligned with 100-point model (>150 employees, >$75M funding), 5-category scoring, auto-disqualified records get score 0, public company and not-B2B-SaaS gates.
+- `Enrich & Evaluate Pipeline v7.json` (previous version). v7: aligned pre-filter with Funding Alerts Rescore v2 - expanded PE list (29 firms), acquisition detection, tightened thresholds (>100 employees, >$500M funding), removed founded-year disqualifier.
 - `Enrich & Evaluate Pipeline v6.json` (previous version). v6: consumer/DTC exclusion, defense/govt penalty (cap 35), hardware vs SaaS distinction, maturity detection (cap 40), biotech/pharma drug development exclusion (cap 35, distinct from healthcare SaaS).
 - `Enrich & Evaluate Pipeline v5.json` (previous version - adds LinkedIn Connections cross-reference for Network Match Alerts)
 - `Enrich & Evaluate Pipeline v4.json` (older version - with cross-source dedup + Job Listings cross-reference, optimized Check Job Matches with Map lookup)
@@ -35,13 +147,13 @@ Current versions (as of Mar 2026):
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
 - `Feedback Loop - Applied.json` (weekly calibration analysis)
-- `Funding Alerts Rescore v2.json` (v2 - adds pre-filter node to skip obvious disqualifications before Claude call)
+- `Funding Alerts Rescore v2.1.json` (v2.1 - fixed funding extraction with $5B cap, aligned thresholds >150 emp/>$75M, score 0 for disqualified)
 - `Funding Alerts Rescore v1.json` (v1 - original, no pre-filter)
 
 ## Workflow Architecture
 
 **Company evaluation (VC scrapers):**
-All VC scrapers use the shared `Enrich & Evaluate Pipeline v6.json` subworkflow via Execute Workflow node.
+All VC scrapers use the shared `Enrich & Evaluate Pipeline v8.1.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
 Both job workflows use the shared `Job Evaluation Pipeline v6.json` subworkflow:
@@ -89,22 +201,24 @@ The Enrich & Evaluate Pipeline v5 cross-references companies against your Linked
 - Priority alerts sent when company has network connection OR active CX job posting
 - Email includes connection name and LinkedIn URL for easy outreach
 
-## Pre-Filter Disqualification (v2 feature)
+## Pre-Filter Disqualification (v8 gates)
 
-The Funding Alerts Rescore v2 adds a pre-filter node that auto-disqualifies companies before the expensive Claude API call.
+Both the Enrich & Evaluate Pipeline v8 and Funding Alerts Rescore v2 use pre-scoring gates that auto-disqualify companies before the Claude API call.
 
-**Disqualification criteria** (any triggers auto-skip):
-- Employee count > 100
-- Total funding > $500M
-- PE/Growth Equity investor detected
-- Company was acquired
+**Disqualification criteria** (any triggers score = 0, status = Auto-Disqualified):
+- PE/Growth Equity backed
+- Total funding > $75M
+- Employee count > 150
+- Acquired or shuttered
+- Public company
+- Not B2B SaaS (biotech, hardware, crypto, consumer)
 - Series D+ stage
 
 **Expanded PE/Growth Equity firm list** (v2):
 Vista Equity, Thoma Bravo, KKR, Blackstone, Bain Capital, Silver Lake, Apollo, Insight Partners, Clearlake, TA Associates, Brighton Park Capital, General Atlantic, Warburg Pincus, Francisco Partners, Summit Partners, Providence Equity, Welsh Carson, TPG Capital, Hellman & Friedman, Advent International, Permira, EQT Partners, Carlyle, SoftBank Vision Fund
 
 **Disqualified records**:
-- Score set to 30, Status to "Skip"
+- Score set to 0, Status to "Auto-Disqualified"
 - `Disqualify Reasons` field populated with specific reasons
 - `Summary` field shows "Auto-disqualified: {reasons}"
 - Enriched fields (Stage, Funding, Employee Count) still updated
