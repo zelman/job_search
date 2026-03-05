@@ -327,7 +327,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Parse Claude response\nconst input = $json;\nlet jobData = {};\ntry { jobData = $('Build Prompt').item?.json || {}; } catch(e) { jobData = {}; }\nif (!jobData['Job Title'] && input['Job Title']) { jobData = input; }\nif (!jobData['Company'] && input['Company']) { jobData['Company'] = input['Company']; }\n\nif (jobData._skip) {\n  return { json: jobData };\n}\n\nlet fitScore = 0;\nlet fitRationale = 'Unable to rate';\nlet industry = '';\nlet companyStage = '';\nlet roleType = '';\nlet builderEvidence = '';\nlet maintainerEvidence = '';\nlet recommendation = '';\n\nconst enrichment = jobData._enrichment || {};\n\nfunction extractJSON(text) {\n  let depth = 0;\n  let start = -1;\n  for (let i = 0; i < text.length; i++) {\n    if (text[i] === '{') {\n      if (depth === 0) start = i;\n      depth++;\n    } else if (text[i] === '}') {\n      depth--;\n      if (depth === 0 && start !== -1) {\n        return text.substring(start, i + 1);\n      }\n    }\n  }\n  return null;\n}\n\ntry {\n  if (input.content && input.content[0] && input.content[0].text) {\n    const content = input.content[0].text;\n    const jsonStr = extractJSON(content);\n    \n    if (jsonStr) {\n      const cleaned = jsonStr\n        .replace(/,\\s*}/g, '}')\n        .replace(/,\\s*]/g, ']')\n        .replace(/\\n/g, ' ')\n        .replace(/\\t/g, ' ')\n        .replace(/\"\\s+\"/g, '\", \"')\n        .replace(/]\\s*\"/g, '], \"')\n        .replace(/\"\\s*\\[/g, '\": [')\n        .replace(/}\\s*\"/g, '}, \"');\n      \n      const parsed = JSON.parse(cleaned);\n      \n      fitScore = parsed.score || 0;\n      roleType = parsed.role_type || '';\n      recommendation = parsed.recommendation || '';\n      fitRationale = parsed.summary || 'No summary provided';\n      companyStage = parsed.company_stage_detected || enrichment.fundingStage || '';\n      industry = parsed.industry || '';\n      \n      if (parsed.builder_evidence) {\n        const arr = Array.isArray(parsed.builder_evidence) ? parsed.builder_evidence : [parsed.builder_evidence];\n        builderEvidence = arr.slice(0, 3).join('; ');\n      }\n      if (parsed.maintainer_evidence) {\n        const arr = Array.isArray(parsed.maintainer_evidence) ? parsed.maintainer_evidence : [parsed.maintainer_evidence];\n        maintainerEvidence = arr.slice(0, 3).join('; ');\n      }\n      \n      if (parsed.is_dealbreaker && parsed.dealbreaker_reason) {\n        fitRationale = `DEALBREAKER: ${parsed.dealbreaker_reason}. ${fitRationale}`;\n      }\n    } else {\n      fitRationale = 'Could not extract JSON from response';\n    }\n  } else if (input.error) {\n    fitRationale = 'API Error: ' + (input.error.message || JSON.stringify(input.error));\n  }\n} catch (e) {\n  const content = input.content?.[0]?.text || '';\n  const scoreMatch = content.match(/\"score\"\\s*:\\s*(\\d+)/i);\n  const roleMatch = content.match(/\"role_type\"\\s*:\\s*\"(builder|maintainer|hybrid)\"/i);\n  const recMatch = content.match(/\"recommendation\"\\s*:\\s*\"(apply|research|skip)\"/i);\n  const summaryMatch = content.match(/\"summary\"\\s*:\\s*\"([^\"]+)\"/i);\n  const industryMatch = content.match(/\"industry\"\\s*:\\s*\"([^\"]+)\"/i);\n  const stageMatch = content.match(/\"company_stage_detected\"\\s*:\\s*\"([^\"]+)\"/i);\n  \n  if (scoreMatch || summaryMatch) {\n    fitScore = scoreMatch ? parseInt(scoreMatch[1]) : 0;\n    roleType = roleMatch ? roleMatch[1] : '';\n    recommendation = recMatch ? recMatch[1] : '';\n    fitRationale = summaryMatch ? summaryMatch[1] : 'Partial parse - see score';\n    industry = industryMatch ? industryMatch[1] : '';\n    companyStage = stageMatch ? stageMatch[1] : enrichment.fundingStage || '';\n  } else {\n    fitRationale = 'Parse Error: ' + e.message;\n  }\n}\n\nconst enrichmentParts = [];\nif (enrichment.employeeCount) enrichmentParts.push(`Employees: ${enrichment.employeeCount}`);\nif (enrichment.totalFunding) {\n  const fundingStr = enrichment.totalFunding >= 1000 ? `$${(enrichment.totalFunding / 1000).toFixed(1)}B` : `$${enrichment.totalFunding}M`;\n  enrichmentParts.push(`Funding: ${fundingStr}`);\n}\nif (enrichment.isPEBacked) enrichmentParts.push('PE-backed');\nif (enrichment.isVCBacked) enrichmentParts.push('VC-backed');\nif (enrichment.foundedYear) enrichmentParts.push(`Founded: ${enrichment.foundedYear}`);\nif (enrichmentParts.length > 0) {\n  fitRationale = fitRationale + ' | Enrichment: ' + enrichmentParts.join(', ');\n}\n\nconst { _systemPrompt, _userPrompt, _skip, prefilterAnalysis, _enrichment, _braveResultCount, _hasAutoDisqualifier, _networkConnection, ...cleanJobData } = jobData;\n\nconst networkConnectionLabel = _networkConnection ? _networkConnection.level + ': ' + _networkConnection.note : '';\n\nreturn {\n  json: {\n    ...cleanJobData,\n    'Tide-Pool Score': fitScore,\n    'Tide-Pool Rationale': fitRationale,\n    'Industry': industry,\n    'Company Stage': companyStage,\n    'Role Type': roleType,\n    'Builder Evidence': builderEvidence,\n    'Maintainer Evidence': maintainerEvidence,\n    'Recommendation': recommendation,\n    'Network Connection': networkConnectionLabel\n  }\n};"
+        "jsCode": "// Parse Claude response\nconst input = $json;\nlet jobData = {};\ntry { jobData = $('Build Prompt').item?.json || {}; } catch(e) { jobData = {}; }\nif (!jobData['Job Title'] && input['Job Title']) { jobData = input; }\nif (!jobData['Company'] && input['Company']) { jobData['Company'] = input['Company']; }\n\nif (jobData._skip) {\n  return { json: jobData };\n}\n\nlet fitScore = 0;\nlet fitRationale = 'Unable to rate';\nlet industry = '';\nlet companyStage = '';\nlet roleType = '';\nlet builderEvidence = '';\nlet maintainerEvidence = '';\nlet recommendation = '';\n\nconst enrichment = jobData._enrichment || {};\n\nfunction extractJSON(text) {\n  let depth = 0;\n  let start = -1;\n  for (let i = 0; i < text.length; i++) {\n    if (text[i] === '{') {\n      if (depth === 0) start = i;\n      depth++;\n    } else if (text[i] === '}') {\n      depth--;\n      if (depth === 0 && start !== -1) {\n        return text.substring(start, i + 1);\n      }\n    }\n  }\n  return null;\n}\n\ntry {\n  if (input.content && input.content[0] && input.content[0].text) {\n    const content = input.content[0].text;\n    const jsonStr = extractJSON(content);\n    \n    if (jsonStr) {\n      const cleaned = jsonStr\n        .replace(/,\\s*}/g, '}')\n        .replace(/,\\s*]/g, ']')\n        .replace(/\\n/g, ' ')\n        .replace(/\\t/g, ' ')\n        .replace(/\"\\s+\"/g, '\", \"')\n        .replace(/]\\s*\"/g, '], \"')\n        .replace(/\"\\s*\\[/g, '\": [')\n        .replace(/}\\s*\"/g, '}, \"');\n      \n      const parsed = JSON.parse(cleaned);\n      \n      fitScore = parsed.score || 0;\n      roleType = parsed.role_type || '';\n      recommendation = parsed.recommendation || '';\n      fitRationale = parsed.summary || 'No summary provided';\n      companyStage = parsed.company_stage_detected || enrichment.fundingStage || '';\n      industry = parsed.industry || '';\n      \n      if (parsed.builder_evidence) {\n        const arr = Array.isArray(parsed.builder_evidence) ? parsed.builder_evidence : [parsed.builder_evidence];\n        builderEvidence = arr.slice(0, 3).join('; ');\n      }\n      if (parsed.maintainer_evidence) {\n        const arr = Array.isArray(parsed.maintainer_evidence) ? parsed.maintainer_evidence : [parsed.maintainer_evidence];\n        maintainerEvidence = arr.slice(0, 3).join('; ');\n      }\n      \n      if (parsed.is_dealbreaker && parsed.dealbreaker_reason) {\n        fitRationale = `DEALBREAKER: ${parsed.dealbreaker_reason}. ${fitRationale}`;\n      }\n    } else {\n      fitRationale = 'Could not extract JSON from response';\n    }\n  } else if (input.error) {\n    fitRationale = 'API Error: ' + (input.error.message || JSON.stringify(input.error));\n  }\n} catch (e) {\n  const content = input.content?.[0]?.text || '';\n  const scoreMatch = content.match(/\"score\"\\s*:\\s*(\\d+)/i);\n  const roleMatch = content.match(/\"role_type\"\\s*:\\s*\"(builder|maintainer|hybrid)\"/i);\n  const recMatch = content.match(/\"recommendation\"\\s*:\\s*\"(apply|research|skip)\"/i);\n  const summaryMatch = content.match(/\"summary\"\\s*:\\s*\"([^\"]+)\"/i);\n  const industryMatch = content.match(/\"industry\"\\s*:\\s*\"([^\"]+)\"/i);\n  const stageMatch = content.match(/\"company_stage_detected\"\\s*:\\s*\"([^\"]+)\"/i);\n  \n  if (scoreMatch || summaryMatch) {\n    fitScore = scoreMatch ? parseInt(scoreMatch[1]) : 0;\n    roleType = roleMatch ? roleMatch[1] : '';\n    recommendation = recMatch ? recMatch[1] : '';\n    fitRationale = summaryMatch ? summaryMatch[1] : 'Partial parse - see score';\n    industry = industryMatch ? industryMatch[1] : '';\n    companyStage = stageMatch ? stageMatch[1] : enrichment.fundingStage || '';\n  } else {\n    fitRationale = 'Parse Error: ' + e.message;\n  }\n}\n\nconst enrichmentParts = [];\nif (enrichment.employeeCount) enrichmentParts.push(`Employees: ${enrichment.employeeCount}`);\nif (enrichment.totalFunding) {\n  const fundingStr = enrichment.totalFunding >= 1000 ? `$${(enrichment.totalFunding / 1000).toFixed(1)}B` : `$${enrichment.totalFunding}M`;\n  enrichmentParts.push(`Funding: ${fundingStr}`);\n}\nif (enrichment.isPEBacked) enrichmentParts.push('PE-backed');\nif (enrichment.isVCBacked) enrichmentParts.push('VC-backed');\nif (enrichment.foundedYear) enrichmentParts.push(`Founded: ${enrichment.foundedYear}`);\nif (enrichmentParts.length > 0) {\n  fitRationale = fitRationale + ' | Enrichment: ' + enrichmentParts.join(', ');\n}\n\nconst { _systemPrompt, _userPrompt, _skip, prefilterAnalysis, _enrichment, _braveResultCount, _hasAutoDisqualifier, _networkConnection, ...cleanJobData } = jobData;\n\nreturn {\n  json: {\n    ...cleanJobData,\n    'Tide-Pool Score': fitScore,\n    'Tide-Pool Rationale': fitRationale,\n    'Industry': industry,\n    'Company Stage': companyStage,\n    'Role Type': roleType,\n    'Builder Evidence': builderEvidence,\n    'Maintainer Evidence': maintainerEvidence,\n    'Recommendation': recommendation\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -366,8 +366,7 @@
             "Role Type": "={{ $json['Role Type'] }}",
             "Builder Evidence": "={{ $json['Builder Evidence'] }}",
             "Maintainer Evidence": "={{ $json['Maintainer Evidence'] }}",
-            "Recommendation": "={{ $json['Recommendation'] }}",
-            "Network Connection": "={{ $json['Network Connection'] }}"
+            "Recommendation": "={{ $json['Recommendation'] }}"
           },
           "matchingColumns": ["Job URL"],
           "schema": []
@@ -399,11 +398,11 @@
           "conditions": [
             {
               "id": "review-status-empty",
-              "leftValue": "={{ $json.fields ? $json.fields['Review Status'] : $json['Review Status'] }}",
+              "leftValue": "={{ $json['Review Status']?.name || $json['Review Status'] || '' }}",
               "rightValue": "",
               "operator": {
                 "type": "string",
-                "operation": "empty"
+                "operation": "equals"
               }
             }
           ],
@@ -419,7 +418,7 @@
     },
     {
       "parameters": {
-        "operation": "update",
+        "operation": "upsert",
         "base": {
           "__rl": true,
           "value": "appFEzXvPWvRtXgRY",
@@ -430,14 +429,18 @@
           "value": "tbl6ZV2rHjWz56pP3",
           "mode": "id"
         },
-        "id": "={{ $json.id }}",
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
+            "Job URL": "={{ $('Parse Response').item.json['Job URL'] }}",
             "Review Status": "New"
-          }
+          },
+          "matchingColumns": ["Job URL"],
+          "schema": []
         },
-        "options": {}
+        "options": {
+          "typecast": true
+        }
       },
       "type": "n8n-nodes-base.airtable",
       "typeVersion": 2.1,

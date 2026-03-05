@@ -10,7 +10,10 @@ When editing any n8n workflow JSON file:
 3. Keep the previous version file if the user wants to preserve it
 
 Current versions (as of Mar 2026):
-- `Job Alert Email Parser v3-40.json` - v3-40: CRITICAL FIX - dedup was treating existing Airtable records as new jobs (400+ jobs re-evaluated). Fixed by using `id.startsWith('rec')` to identify Airtable records. Also improved OmniJobs parser to extract clean title/company from card text.
+- `Job Alert Email Parser v3-43.json` - v3-43: Rewrote Browserless scraper title extraction using `isTitleLine()` keyword matching. Added `isRemoteLocation()` to detect "Remote - Location" patterns. Added "IF: Has Email ID?" node to skip Gmail labeling for OmniJobs jobs (fixes "'id' required" error). Updated Job Evaluation Pipeline v6 to use Upsert for Review Status (fixes "Could not get parameter" error).
+- `Job Alert Email Parser v3-42.json` (previous version) - v3-42: Fixed OmniJobs company extraction - added comprehensive location detection (US state names, "City, State" patterns) to Browserless scraper. Parse OmniJobs node now uses Browserless extracted fields directly with location validation. Marks location strings as "Unknown (check listing)".
+- `Job Alert Email Parser v3-41.json` (previous version) - v3-41: Improved OmniJobs company extraction - scraper now skips location words (Remote, USA, etc.) and tags when looking for company. Added dedup debug logging to show why jobs are filtered. Marks unknown companies as "Unknown (check listing)" instead of garbage values.
+- `Job Alert Email Parser v3-40.json` (previous version) - v3-40: CRITICAL FIX - dedup was treating existing Airtable records as new jobs (400+ jobs re-evaluated). Fixed by using `id.startsWith('rec')` to identify Airtable records.
 - `Job Alert Email Parser v3-39.json` (previous version) - v3-39: reduced OmniJobs pagination to 3 pages to prevent timeout
 - `Job Alert Email Parser v3-38.json` (previous version) - v3-38: fixed OmniJobs scraper - `/en/` path was being parsed as regex division causing "en is not defined" error
 - `Work at a Startup Scraper v12.json`
@@ -24,7 +27,7 @@ Current versions (as of Mar 2026):
 - `Enrich & Evaluate Pipeline v6.json` (previous version). v6: consumer/DTC exclusion, defense/govt penalty (cap 35), hardware vs SaaS distinction, maturity detection (cap 40), biotech/pharma drug development exclusion (cap 35, distinct from healthcare SaaS).
 - `Enrich & Evaluate Pipeline v5.json` (previous version - adds LinkedIn Connections cross-reference for Network Match Alerts)
 - `Enrich & Evaluate Pipeline v4.json` (older version - with cross-source dedup + Job Listings cross-reference, optimized Check Job Matches with Map lookup)
-- `Job Evaluation Pipeline v6.json` (shared subworkflow - jobs). v6: **CRITICAL FIX** - upsert no longer overwrites Review Status; only sets "New" for genuinely new records. Preserves "Applied" and other user-set statuses. (Mar 4, 2026: Restored 157 records that had statuses overwritten by v5 bug.)
+- `Job Evaluation Pipeline v6.json` (shared subworkflow - jobs). v6: **CRITICAL FIX** - upsert no longer overwrites Review Status; only sets "New" for genuinely new records. Preserves "Applied" and other user-set statuses. (Mar 4, 2026: Restored 157 records that had statuses overwritten by v5 bug.) Fixed "Set Review Status New" to use Upsert matching by Job URL instead of Update (prevents "Could not get parameter" error). Fixed IF condition to handle Airtable single-select object format (`$json['Review Status']?.name`). Removed "Network Connection" field (not in Job Listings table).
 - `Job Evaluation Pipeline v5.json` (previous version). v5: tighter scoring thresholds - 200-499 emp penalty, $50M+ funding penalty, >5yr at Series B+ penalty, stronger MAINTAINER detection (scale existing org, multi-tier, global teams 30+)
 - `Job Evaluation Pipeline v4.json` (older version - with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty, network connection override)
 - `Job Evaluation Pipeline v3.json` (older version, retained for rollback)
@@ -43,7 +46,7 @@ All VC scrapers use the shared `Enrich & Evaluate Pipeline v6.json` subworkflow 
 **Job evaluation:**
 Both job workflows use the shared `Job Evaluation Pipeline v6.json` subworkflow:
 - Work at a Startup Scraper v12
-- Job Alert Email Parser v3-37 (includes OmniJobs scraping, Gmail limit: 2)
+- Job Alert Email Parser v3-43 (includes OmniJobs scraping, Gmail limit: 2)
 
 **Accelerator monitoring:**
 - Y Combinator is now integrated into `VC Scraper - Micro-VC v14.json`

@@ -1,4 +1,4 @@
-# Job Alert Email Parser v3-40
+# Job Alert Email Parser v3-43
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, enriches company data via Brave Search, uses AI to rate job fit with builder vs maintainer classification, and adds them to an Airtable database.
 
@@ -249,6 +249,9 @@ Modify the Schedule Trigger node to run at different intervals.
 
 ## Version History
 
+- **v3-43**: Rewrote Browserless scraper title extraction using `isTitleLine()` keyword matching (manager, director, head, lead, etc.). Added `isRemoteLocation()` function to detect "Remote - Location" patterns (e.g., "Remote - United States (West)"). Added "IF: Has Email ID?" node to skip Gmail labeling for OmniJobs jobs (fixes "'id' required" error). Fixed Job Evaluation Pipeline v6 to use Upsert matching by Job URL for Review Status instead of Update (fixes "Could not get parameter" error). Fixed IF condition to handle Airtable single-select object format.
+- **v3-42**: Fixed OmniJobs company extraction - added comprehensive location detection (US state names, "City, State" patterns) to Browserless scraper. Parse OmniJobs node now uses Browserless extracted fields directly with location validation. Marks location strings as "Unknown (check listing)". Also fixed Job Evaluation Pipeline v6 to check for record ID existence before updating, preventing "Could not get parameter" error.
+- **v3-41**: Improved OmniJobs company extraction - scraper now skips location words (Remote, USA, etc.) and tags when looking for company. Added dedup debug logging to show why jobs are filtered. Marks unknown companies as "Unknown (check listing)" instead of garbage values.
 - **v3-40**: CRITICAL FIX - Dedup logic was treating existing Airtable records as new jobs, causing 400+ jobs to be re-evaluated. Fixed by using `id.startsWith('rec')` to identify Airtable records. Also improved OmniJobs parser to extract clean title/company from raw card text.
 - **v3-39**: Reduced OmniJobs pagination from 20 to 3 pages to prevent Browserless timeout. Reduced sleep times.
 - **v3-38**: Fixed OmniJobs scraper bug - `/en/` in URL was being parsed as regex division causing "en is not defined" error. Used `String.fromCharCode()` to escape the path.
