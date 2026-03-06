@@ -2,6 +2,7 @@ flowchart TB
     subgraph Sources["Data Sources"]
         EMAIL[/"Email Alerts<br/>(10 job boards)"/]
         YC[/"Work at a Startup<br/>(YC + Costanoa)"/]
+        FR[/"First Round Jobs<br/>(API - talent network)"/]
         VC[/"VC Portfolio Scrapers<br/>(Healthcare, Climate, Social Justice,<br/>Enterprise, Micro-VC + Y Combinator)"/]
     end
 
@@ -46,6 +47,7 @@ flowchart TB
     %% Source to Pipeline connections
     EMAIL --> JP_DEDUP
     YC --> JP_DEDUP
+    FR --> JP_DEDUP
     VC --> CP_DEDUP
 
     %% Job Pipeline flow

@@ -10,6 +10,7 @@ flowchart LR
     subgraph n8n["n8n Workflows"]
         PARSE[Email Parser<br/>v3-43]
         SCRAPE[Web Scrapers<br/>YC Jobs, VC Portfolios,<br/>YC Companies]
+        FR_SCRAPE[First Round Jobs<br/>API v1]
         EVAL_JOB[Job Evaluation<br/>Pipeline v6]
         EVAL_COMP[Enrich & Evaluate<br/>Pipeline v8.1]
         DEDUP[Dedup<br/>Subworkflows]
@@ -27,6 +28,7 @@ flowchart LR
     PARSE --> EVAL_JOB
     SCRAPE --> EVAL_JOB
     SCRAPE --> EVAL_COMP
+    FR_SCRAPE --> EVAL_JOB
 
     GITHUB -->|Tide Pool Lens| EVAL_JOB
     GITHUB -->|Tide Pool Lens| EVAL_COMP

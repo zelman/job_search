@@ -38,7 +38,7 @@ All workflow JSON files are stored in:
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              JOB SCRAPERS                                    │
-│        Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v4       │
+│  Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v4, First Round v1 │
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
@@ -86,7 +86,7 @@ These IDs are assigned by n8n on import. Update Execute Workflow nodes when repl
 | Workflow | ID | Used By |
 |----------|-----|---------|
 | **Enrich & Evaluate Pipeline** | `rcMNDrfZR6csHRsYKFn0W` | All VC scrapers |
-| **Job Evaluation Pipeline** | `v24qHkIsp8GVCwFkscHP8` | WaaS, Job Alert Parser, Indeed |
+| **Job Evaluation Pipeline** | `v24qHkIsp8GVCwFkscHP8` | WaaS, Job Alert Parser, Indeed, First Round |
 | **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
 | **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
 
@@ -129,6 +129,7 @@ Current versions (as of Mar 2026):
 - `Job Alert Email Parser v3-38.json` (previous version) - v3-38: fixed OmniJobs scraper - `/en/` path was being parsed as regex division causing "en is not defined" error
 - `Work at a Startup Scraper v12.json`
 - `Indeed Job Scraper v4.json`
+- `First Round Jobs Scraper v1.json` - v1: API-based scraper for First Round Capital talent network. Fetches from `jobs.firstround.com/api-boards/search-jobs` with session cookie auth. Filters for CX-relevant roles, includes salary data. Runs Tue/Fri 7am. **Note:** Session cookies expire; refresh from Chrome DevTools when 401 errors occur.
 - `VC Scraper - Healthcare.json` (v25)
 - `vc-portfolio-scraper-v26-enriched.json` (v26 - Enterprise/Generalist)
 - `VC Scraper - Climate Tech.json` (v23)
@@ -156,9 +157,10 @@ Current versions (as of Mar 2026):
 All VC scrapers use the shared `Enrich & Evaluate Pipeline v8.1.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
-Both job workflows use the shared `Job Evaluation Pipeline v6.json` subworkflow:
+All job workflows use the shared `Job Evaluation Pipeline v6.json` subworkflow:
 - Work at a Startup Scraper v12
 - Job Alert Email Parser v3-43 (includes OmniJobs scraping, Gmail limit: 2)
+- First Round Jobs Scraper v1 (API-based, session cookie auth, CX roles only)
 
 **Accelerator monitoring:**
 - Y Combinator is now integrated into `VC Scraper - Micro-VC v14.json`
