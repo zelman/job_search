@@ -39,8 +39,11 @@ projects:
 # Auto-Disqualifiers (for automated job filtering)
 disqualify:
   investor_type: [PE]
-  employee_count_min: 1000
-  total_funding_max: 500000000
+  employee_count_max: 1000        # Too large - enterprise operations
+  employee_count_min: 15          # Too early - pre-CS inflection, founder-led support
+  total_funding_max: 500000000    # $500M+
+  valuation_max: 500000000        # $500M+ valuation = unicorn territory
+  company_status: [Acquired, Shut Down, Merged]  # No longer independent
   company_type: [Fortune 500, Public]
   business_model: [B2C, Consumer, Hardware, Industrial, Cleantech Hardware, Robotics Hardware]  # Must be B2B SaaS
   role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
@@ -376,11 +379,24 @@ Before sector alignment (healthcare, dev tools, climate) does ANY scoring work, 
 - **Consulting Firm Acquisitions** - Company that acquired a consulting practice signals services-heavy model, not product-led SaaS.
 - **Fortune 100 Customer Base** - "Enterprise AI for Fortune 100" = horizontal platform, established sales motion, no CS build signal.
 
-**Pre-CS Inflection Threshold:**
-At <25 employees, support/success is typically founder-and-community-led. No structured CS function exists to build. Worth monitoring as they scale, but not actionable until:
-- 30-50+ employees, OR
-- Series A+ with clear "founder relationships breaking down" signal, OR
-- Explicit CS/Support hire in the job posting
+**Pre-CS Inflection Threshold (Hard Gate: <15 employees = auto-disqualify):**
+At <15 employees, support/success is founder-and-community-led. No structured CS function exists to build. These are **not actionable**:
+- getbluejay.ai (3 employees), AgentOps (pre-seed), Variant AI (5 emp), Groundlight (1-10 emp), Fused.io (pre-seed), Unkey (10 emp)
+
+Soft threshold 15-30 employees: Worth monitoring but likely pre-inflection unless explicit CS hire signal.
+
+Actionable threshold: 30-50+ employees, OR Series A+ with clear "founder relationships breaking down" signal.
+
+**Too Large / Past Window (Hard Gate: >150 employees OR $500M+ valuation):**
+- Gamma ($2.1B valuation, 179 emp, $100M ARR) — unicorn, existing CS org
+- Distyl ($1.8B valuation, 130 emp) — unicorn territory
+- Descope ($88M seed, 91 emp, 1,200 customers) — effectively Series B scale
+- MotherDuck (124 emp, $100M raised) — past builder window
+
+**Acquired = Auto-Disqualify:**
+- Farcaster (acquired by Neynar Jan 2026)
+- Echo AI (acquired by Calabrio Dec 2024)
+Check Crunchbase/PitchBook for acquisition status before scoring.
 
 **The pattern**: Sector keywords (healthcare, climate, dev tools) were surfacing companies on alignment without validating the fundamental requirement. A 17-company batch with 0 fits is the signal that business model validation must happen FIRST.
 
