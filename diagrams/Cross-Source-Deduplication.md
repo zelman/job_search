@@ -1,7 +1,7 @@
 flowchart LR
     subgraph Callers["Calling Workflows"]
-        JOB_PIPE[Job Evaluation<br/>Pipeline v3]
-        COMP_PIPE[Enrich & Evaluate<br/>Pipeline v4]
+        JOB_PIPE[Job Evaluation<br/>Pipeline v6]
+        COMP_PIPE[Enrich & Evaluate<br/>Pipeline v8.1]
     end
 
     subgraph Check["Dedup Check Subworkflow"]

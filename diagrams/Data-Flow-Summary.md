@@ -8,10 +8,10 @@ flowchart LR
     end
 
     subgraph n8n["n8n Workflows"]
-        PARSE[Email Parser<br/>v3-35]
+        PARSE[Email Parser<br/>v3-43]
         SCRAPE[Web Scrapers<br/>YC Jobs, VC Portfolios,<br/>YC Companies]
-        EVAL_JOB[Job Evaluation<br/>Pipeline v3]
-        EVAL_COMP[Enrich & Evaluate<br/>Pipeline v4]
+        EVAL_JOB[Job Evaluation<br/>Pipeline v6]
+        EVAL_COMP[Enrich & Evaluate<br/>Pipeline v8.1]
         DEDUP[Dedup<br/>Subworkflows]
         FEEDBACK[Feedback<br/>Loops]
     end

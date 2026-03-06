@@ -15,7 +15,7 @@ flowchart TB
     end
 
     subgraph Pipeline["Shared Subworkflow"]
-        ENRICH[Enrich & Evaluate<br/>Pipeline v4]
+        ENRICH[Enrich & Evaluate<br/>Pipeline v8.1]
     end
 
     subgraph Storage

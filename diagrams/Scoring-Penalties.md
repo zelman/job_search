@@ -11,11 +11,13 @@ flowchart TD
         PEN_TITLE["-15 pts<br/>Non-senior Support role"]
     end
 
-    subgraph Disqualifiers["Auto-Disqualifiers"]
+    subgraph Disqualifiers["Auto-Disqualifiers (Company Pipeline)"]
         CHECK_PE{PE-backed?}
-        CHECK_1000{1000+<br/>employees?}
-        CHECK_FUND{$500M+<br/>funding?}
-        DISQ[Auto-Disqualify]
+        CHECK_150{>150<br/>employees?}
+        CHECK_FUND{>$75M<br/>funding?}
+        CHECK_PUBLIC{Public or<br/>Acquired?}
+        CHECK_SECTOR{Not B2B SaaS?}
+        DISQ[Auto-Disqualify<br/>Score: 0]
     end
 
     subgraph Output["To Build Prompt"]
@@ -24,7 +26,7 @@ flowchart TD
     end
 
     EMP --> CHECK_EMP
-    EMP --> CHECK_1000
+    EMP --> CHECK_150
     TITLE --> CHECK_TITLE
 
     CHECK_EMP -->|Yes| PEN_EMP
@@ -36,6 +38,8 @@ flowchart TD
     PEN_TITLE --> PENALTIES_ARR
 
     CHECK_PE -->|Yes| DISQ
-    CHECK_1000 -->|Yes| DISQ
+    CHECK_150 -->|Yes| DISQ
     CHECK_FUND -->|Yes| DISQ
+    CHECK_PUBLIC -->|Yes| DISQ
+    CHECK_SECTOR -->|Yes| DISQ
     DISQ --> DISQ_ARR
