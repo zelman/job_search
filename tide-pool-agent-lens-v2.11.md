@@ -3,9 +3,9 @@
 # Automation tools: parse this block for quick state checks
 # Full doc: https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md
 
-version: "2.10"
+version: "2.11"
 schema_version: 1
-last_updated: "2026-03-05"
+last_updated: "2026-03-06"
 
 # Identity
 name: Eric Zelman
@@ -45,6 +45,8 @@ disqualify:
   role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
   domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government]
   stalled_company: { founded_years_ago_min: 10, employee_count_max: 200 }
+  jd_scale_signals: [">500M users", ">500 enterprise clients", "Fortune 500 partners"]
+  nrr_first_language: [NRR, "Net Revenue Retention", "Gross Retention", GRR, "Renewal forecasting"] # in first 2 bullets
 
 # Scoring Penalties (non-disqualifying)
 penalties:
@@ -356,6 +358,23 @@ Companies where I have a direct relationship with a founder warrant manual evalu
 - **"Growth Stage" PE Rounds**: Often mislabeled as late-stage optimization plays
 - **Heavy Management Layers**: Multiple VP/Director levels between role and C-suite
 - **Calcified Processes**: "Maintain and optimize" language, established playbooks, process documentation focus over building
+- **Scale Signals in JD**: When a job description reads like a press release about global scale, disqualify without research:
+  - "550M users", "800+ enterprise clients", "global footprint"
+  - Named Fortune 500 partners (AT&T, Samsung, British Telecom, etc.)
+  - Comp bands $140K+ for non-Director roles often indicate enterprise scale
+
+### Role Mandate Red Flags (Auto-Disqualify)
+
+**NRR-First Language**: When retention/expansion metrics lead the role description, the build mandate is gone — someone already built the thing this role optimizes.
+
+**Auto-disqualify if ANY of these appear in the first two bullets of "What You'll Do":**
+- "Own NRR" or "Net Revenue Retention"
+- "Gross Retention" or "GRR"
+- "Renewal forecasting" or "renewal rate"
+- "Expansion revenue" as primary metric
+- "Reduce churn" as top-line responsibility
+
+**Why this matters**: Role mandate fails before stage validation. These signals give it away in seconds — faster than researching funding or employee count. Recognize the MAINTAINER pattern from language alone.
 
 **Exception: Network Opportunities**
 
@@ -585,8 +604,8 @@ Before spending time on any application, verify:
 
 ---
 
-*Last Updated: March 5, 2026*
-*Version: 2.10*
+*Last Updated: March 6, 2026*
+*Version: 2.11*
 
 ---
 
