@@ -44,7 +44,7 @@ disqualify:
   company_type: [Fortune 500, Public]
   business_model: [B2C, Consumer, Hardware, Industrial, Cleantech Hardware, Robotics Hardware]  # Must be B2B SaaS
   role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
-  domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi, Biotech, Life Sciences, Drug Discovery]
+  domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi, Biotech, Life Sciences, Drug Discovery, HR Tech, DEI, Workforce Analytics]
   stalled_company: { founded_years_ago_min: 10, employee_count_max: 200 }
   jd_scale_signals: [">500M users", ">500 enterprise clients", "Fortune 500 partners"]
   nrr_first_language: [NRR, "Net Revenue Retention", "Gross Retention", GRR, "Renewal forecasting"] # in first 2 bullets
@@ -246,6 +246,7 @@ Jobs requiring X years of domain expertise in these industries should be SKIPPED
 - **Government / Public Sector** - no gov contracting experience
 - **Web3 / Crypto / Blockchain / DeFi** - specialized ecosystem gap, not standard developer tools. Web3 companies at seed stage want first customer-facing hires who speak the language: smart contracts, on-chain data, DeFi protocols, crypto developer community. No thread from enterprise B2B SaaS that credibly bridges here.
 - **Biotech / Life Sciences / Drug Discovery** - computational biology, cell signaling, pharma R&D infrastructure. These companies need domain expertise in scientific research workflows, regulatory (FDA), and researcher personas. "AI startup" pattern-matching misses the specialized domain.
+- **HR Tech / DEI / Workforce Analytics** - different buyer persona (CHROs, People teams), different domain expertise (talent, compliance, organizational development). Not a transferable motion from B2B SaaS product support.
 
 ### Clarifications for Scoring
 - **Healthcare experience**: Alliance HealthCare was medical imaging equipment field marketing + account management (provider operations), NOT pharma marketing or healthcare agency work
@@ -370,6 +371,16 @@ Before sector alignment (healthcare, dev tools, climate) does ANY scoring work, 
 - **Cleantech Hardware** - Climate sector keyword match, but selling equipment ≠ SaaS customer success.
 - **Payer-side Healthcare** - Selling to health plans via Strategic Partnerships isn't traditional B2B SaaS with CS to build. (e.g., Pluto Health)
 - **Pre-CS Stage Dev Tools** - Seed-stage developer infrastructure (<20 employees, <$5M funding) typically has no CS function yet. Too early.
+- **B2C Telehealth** - Patients are the customers, not businesses. Piction Health (virtual dermatology) is B2C even though it's "healthcare AI."
+- **HR Tech / DEI / Workforce Analytics** - Different buyer persona, different domain expertise. (e.g., Diversio)
+- **Consulting Firm Acquisitions** - Company that acquired a consulting practice signals services-heavy model, not product-led SaaS.
+- **Fortune 100 Customer Base** - "Enterprise AI for Fortune 100" = horizontal platform, established sales motion, no CS build signal.
+
+**Pre-CS Inflection Threshold:**
+At <25 employees, support/success is typically founder-and-community-led. No structured CS function exists to build. Worth monitoring as they scale, but not actionable until:
+- 30-50+ employees, OR
+- Series A+ with clear "founder relationships breaking down" signal, OR
+- Explicit CS/Support hire in the job posting
 
 **The pattern**: Sector keywords (healthcare, climate, dev tools) were surfacing companies on alignment without validating the fundamental requirement. A 17-company batch with 0 fits is the signal that business model validation must happen FIRST.
 
