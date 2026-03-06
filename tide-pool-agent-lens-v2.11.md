@@ -43,7 +43,7 @@ disqualify:
   total_funding_max: 500000000
   company_type: [Fortune 500, Public]
   role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
-  domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi]
+  domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi, Biotech, Life Sciences, Drug Discovery]
   stalled_company: { founded_years_ago_min: 10, employee_count_max: 200 }
   jd_scale_signals: [">500M users", ">500 enterprise clients", "Fortune 500 partners"]
   nrr_first_language: [NRR, "Net Revenue Retention", "Gross Retention", GRR, "Renewal forecasting"] # in first 2 bullets
@@ -239,6 +239,7 @@ Jobs requiring X years of domain expertise in these industries should be SKIPPED
 - **AdTech / Digital Marketing Agencies** - never worked at an agency
 - **Government / Public Sector** - no gov contracting experience
 - **Web3 / Crypto / Blockchain / DeFi** - specialized ecosystem gap, not standard developer tools. Web3 companies at seed stage want first customer-facing hires who speak the language: smart contracts, on-chain data, DeFi protocols, crypto developer community. No thread from enterprise B2B SaaS that credibly bridges here.
+- **Biotech / Life Sciences / Drug Discovery** - computational biology, cell signaling, pharma R&D infrastructure. These companies need domain expertise in scientific research workflows, regulatory (FDA), and researcher personas. "AI startup" pattern-matching misses the specialized domain.
 
 ### Clarifications for Scoring
 - **Healthcare experience**: Alliance HealthCare was medical imaging equipment field marketing + account management (provider operations), NOT pharma marketing or healthcare agency work
@@ -595,7 +596,7 @@ Before spending time on any application, verify:
 | B-Corp | Strong positive signal |
 | Role Type | Builder (create from scratch) - scope over title |
 | Exclude | IT Support, Technical Support, Help Desk, Quota-carrying CSM/Account Mgmt |
-| Domain Gaps | Pharma marketing, agency work, FinServ, Legal, AdTech, Gov, Web3/Crypto/DeFi |
+| Domain Gaps | Pharma marketing, agency work, FinServ, Legal, AdTech, Gov, Web3/Crypto/DeFi, Biotech/Life Sciences |
 | Field Marketing | YES (HP/Palm, Alliance) - but NOT agency/pharma/digital marketing |
 | Auto-Disqualify | PE-backed, 1,000+ employees, $500M+ funding, Fortune 500, stalled companies (>10yr/<200 emp), domain expertise gaps |
 | Scoring Penalties | 500-999 employees (-15), Support without Dir/VP/Head (-15), $200M-$500M funding (-15), Series C+ (-10) |
