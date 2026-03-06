@@ -42,11 +42,17 @@ disqualify:
   employee_count_min: 1000
   total_funding_max: 500000000
   company_type: [Fortune 500, Public]
+  business_model: [B2C, Consumer, Hardware, Industrial, Cleantech Hardware, Robotics Hardware]  # Must be B2B SaaS
   role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
   domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi, Biotech, Life Sciences, Drug Discovery]
   stalled_company: { founded_years_ago_min: 10, employee_count_max: 200 }
   jd_scale_signals: [">500M users", ">500 enterprise clients", "Fortune 500 partners"]
   nrr_first_language: [NRR, "Net Revenue Retention", "Gross Retention", GRR, "Renewal forecasting"] # in first 2 bullets
+
+# Pre-Filter Gate (validate BEFORE sector scoring)
+prerequisite: "B2B SaaS with recurring customer relationships to manage"
+# Ask: Does this company have B2B customers who renew and expand?
+# Hardware, cleantech equipment, consumer apps, and payer-side healthcare do NOT qualify
 
 # Scoring Penalties (non-disqualifying)
 penalties:
@@ -349,6 +355,24 @@ Companies where I have a direct relationship with a founder warrant manual evalu
 
 **Action**: Flag for manual research and direct outreach. These bypass the automated scoring pipeline. A 30-minute conversation with the founder is worth more than any enrichment data.
 
+### Business Model Gate (Validate BEFORE Sector Scoring)
+
+**Core requirement**: B2B SaaS with recurring customer relationships to manage.
+
+Before sector alignment (healthcare, dev tools, climate) does ANY scoring work, validate:
+- Does this company have **B2B customers who renew and expand**?
+- Is there a **CS/Support function** to build or is this pre-product?
+- Is the revenue model **recurring SaaS**, not hardware sales, services, or strategic partnerships?
+
+**Auto-Disqualify These Business Models:**
+- **Hardware / Industrial / Robotics** - No recurring customer relationships. Flocean (subsea desalination), Aclarity (water purification), Groundlight (computer vision hardware) are interesting companies but don't have CS functions.
+- **B2C / Consumer** - Wrong motion entirely. Variant AI (consumer social gaming) shouldn't score at all.
+- **Cleantech Hardware** - Climate sector keyword match, but selling equipment ≠ SaaS customer success.
+- **Payer-side Healthcare** - Selling to health plans via Strategic Partnerships isn't traditional B2B SaaS with CS to build. (e.g., Pluto Health)
+- **Pre-CS Stage Dev Tools** - Seed-stage developer infrastructure (<20 employees, <$5M funding) typically has no CS function yet. Too early.
+
+**The pattern**: Sector keywords (healthcare, climate, dev tools) were surfacing companies on alignment without validating the fundamental requirement. A 17-company batch with 0 fits is the signal that business model validation must happen FIRST.
+
 ### Company Stage Red Flags (Auto-Disqualify)
 - **PE-Backed**: Private equity investors indicate late-stage optimization focus, NOT builder roles
   - Examples: Nordic Capital, TA Associates, KKR, Blackstone, Vista Equity Partners, Vector Capital, Silver Lake, Thoma Bravo, Francisco Partners, Bain Capital, TPG, Carlyle Group, Apollo Global, Warburg Pincus
@@ -598,7 +622,7 @@ Before spending time on any application, verify:
 | Exclude | IT Support, Technical Support, Help Desk, Quota-carrying CSM/Account Mgmt |
 | Domain Gaps | Pharma marketing, agency work, FinServ, Legal, AdTech, Gov, Web3/Crypto/DeFi, Biotech/Life Sciences |
 | Field Marketing | YES (HP/Palm, Alliance) - but NOT agency/pharma/digital marketing |
-| Auto-Disqualify | PE-backed, 1,000+ employees, $500M+ funding, Fortune 500, stalled companies (>10yr/<200 emp), domain expertise gaps |
+| Auto-Disqualify | PE-backed, 1,000+ employees, $500M+ funding, Fortune 500, stalled companies, domain gaps, **non-B2B-SaaS (hardware, B2C, cleantech equipment)** |
 | Scoring Penalties | 500-999 employees (-15), Support without Dir/VP/Head (-15), $200M-$500M funding (-15), Series C+ (-10) |
 | Research Time | ~11 min verification before applying |
 | Investor Check | VCs good, PE firms = red flag |
