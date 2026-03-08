@@ -24,9 +24,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -50,13 +48,7 @@
         200
       ],
       "id": "health-fetch-flare",
-      "name": "Browserless Flare Capital",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Flare Capital"
     },
     {
       "parameters": {
@@ -74,9 +66,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -100,13 +90,7 @@
         350
       ],
       "id": "health-fetch-7wire",
-      "name": "Browserless 7wireVentures",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless 7wireVentures"
     },
     {
       "parameters": {
@@ -124,9 +108,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -150,13 +132,7 @@
         500
       ],
       "id": "health-fetch-oak",
-      "name": "Browserless Oak HC/FT",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Oak HC/FT"
     },
     {
       "parameters": {
@@ -174,9 +150,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -200,13 +174,7 @@
         650
       ],
       "id": "health-fetch-digitalis",
-      "name": "Browserless Digitalis",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Digitalis"
     },
     {
       "parameters": {
@@ -224,9 +192,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -250,13 +216,7 @@
         800
       ],
       "id": "health-fetch-a16z",
-      "name": "Browserless a16z Bio+Health",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless a16z Bio+Health"
     },
     {
       "parameters": {
@@ -274,9 +234,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -300,13 +258,7 @@
         950
       ],
       "id": "health-fetch-healthworx",
-      "name": "Browserless Healthworx",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Healthworx"
     },
     {
       "parameters": {
@@ -389,9 +341,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -433,9 +383,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -524,9 +472,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -550,13 +496,7 @@
         1400
       ],
       "id": "health-fetch-martin",
-      "name": "Browserless Martin Ventures",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Martin Ventures"
     },
     {
       "parameters": {
@@ -574,9 +514,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -600,13 +538,7 @@
         1550
       ],
       "id": "health-fetch-townhall",
-      "name": "Browserless Town Hall Ventures",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Town Hall Ventures"
     },
     {
       "parameters": {
@@ -624,9 +556,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -650,13 +580,7 @@
         1700
       ],
       "id": "health-fetch-optum",
-      "name": "Browserless Optum Ventures",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Optum Ventures"
     },
     {
       "parameters": {
@@ -674,9 +598,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -700,13 +622,7 @@
         1850
       ],
       "id": "health-fetch-transformation",
-      "name": "Browserless Transformation Capital",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Transformation Capital"
     },
     {
       "parameters": {
@@ -724,9 +640,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -750,13 +664,7 @@
         2000
       ],
       "id": "health-fetch-brewerlane",
-      "name": "Browserless Brewer Lane",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Brewer Lane"
     },
     {
       "parameters": {
@@ -774,9 +682,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -800,13 +706,7 @@
         2150
       ],
       "id": "health-fetch-mainsail",
-      "name": "Browserless Mainsail Partners",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Mainsail Partners"
     },
     {
       "parameters": {
@@ -824,9 +724,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpQueryAuth",
+        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -850,13 +748,7 @@
         2300
       ],
       "id": "health-fetch-fiveelms",
-      "name": "Browserless Five Elms",
-      "credentials": {
-        "httpQueryAuth": {
-          "id": "browserless-token",
-          "name": "Browserless API"
-        }
-      }
+      "name": "Browserless Five Elms"
     },
     {
       "parameters": {
