@@ -137,7 +137,7 @@ Current versions (as of Mar 2026):
 - `Work at a Startup Scraper v12.json`
 - `Indeed Job Scraper v4.json`
 - `First Round Jobs Scraper v1.json` - v1: API-based scraper for First Round Capital talent network. Fetches from `jobs.firstround.com/api-boards/search-jobs` with session cookie auth. Filters for CX-relevant roles, includes salary data. Runs Tue/Fri 7am. **Note:** Session cookies expire; refresh from Chrome DevTools when 401 errors occur.
-- `VC Scraper - Healthcare.json` (v25)
+- `VC Scraper - Healthcare.json` (v27) - 14 VC portfolios: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms. v27: Added Tier 2 healthcare VCs (Transformation Capital, Brewer Lane) and vertical SaaS VCs (Mainsail, Five Elms). Removed Optum Ventures (timeout). Uses token in URL - find/replace `YOUR_BROWSERLESS_TOKEN` before importing.
 - `vc-portfolio-scraper-v26-enriched.json` (v26 - Enterprise/Generalist)
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
