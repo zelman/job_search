@@ -1,0 +1,106 @@
+{
+  "name": "Funding Alerts Rescore v3",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "minutes", "minutesInterval": 15}]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 400],
+      "id": "rescore-trigger",
+      "name": "Every 15 Min (Catch-up)"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {"__rl": true, "value": "appFEzXvPWvRtXgRY", "mode": "id"},
+        "table": {"__rl": true, "value": "Funding Alerts", "mode": "list"},
+        "filterByFormula": "AND({Company Name}!='',{Customer Persona}=BLANK())",
+        "returnAll": false,
+        "limit": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [400, 400],
+      "id": "rescore-fetch",
+      "name": "Fetch Records to Rescore",
+      "credentials": {"airtableTokenApi": {"id": "airtable-token", "name": "Airtable Token"}}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+          "conditions": [{"id": "has-record", "leftValue": "={{ $json.id }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [600, 400],
+      "id": "rescore-has-record",
+      "name": "Has Records?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// v3: Format existing Airtable record for Enrich & Evaluate Pipeline\n// Key insight: Pass _updateRecordId so the pipeline UPDATES instead of CREATES\n\nconst record = $json;\n\n// Extract fields from Airtable record format\nconst companyName = record['Company Name'] || '';\nconst companyUrl = record['Company URL'] || '';\nconst description = record['Company Description'] || '';\nconst source = record['VC Firm'] || record['Source'] || 'Rescore';\n\nreturn {\n  json: {\n    // Standard fields expected by the pipeline\n    company_name: companyName,\n    'Company Name': companyName,\n    company_url: companyUrl,\n    'Company URL': companyUrl,\n    description: description,\n    'Company Description': description,\n    source: source,\n    'VC Firm': source,\n    \n    // CRITICAL: This tells the pipeline to UPDATE this record, not create new\n    _updateRecordId: record.id,\n    \n    // Mark as existing record for dedup logic\n    _isRescore: true\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400],
+      "id": "rescore-format",
+      "name": "Format for Pipeline"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "rcMNDrfZR6csHRsYKFn0W",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1000, 400],
+      "id": "rescore-execute-pipeline",
+      "name": "Execute Enrich & Evaluate Pipeline v8.4"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Log results for monitoring\nconst result = $json;\nreturn {\n  json: {\n    _rescoreComplete: true,\n    company_name: result.company_name || 'Unknown',\n    status: result.status || 'Processed',\n    score: result.total_score || 0,\n    disqualified: result.isAutoDisqualified || false,\n    disqualify_reasons: result.disqualify_reasons || ''\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400],
+      "id": "rescore-log",
+      "name": "Log Results"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [800, 550],
+      "id": "rescore-no-records",
+      "name": "No Records - Done"
+    }
+  ],
+  "connections": {
+    "Every 15 Min (Catch-up)": {"main": [[{"node": "Fetch Records to Rescore", "type": "main", "index": 0}]]},
+    "Fetch Records to Rescore": {"main": [[{"node": "Has Records?", "type": "main", "index": 0}]]},
+    "Has Records?": {"main": [[{"node": "Format for Pipeline", "type": "main", "index": 0}], [{"node": "No Records - Done", "type": "main", "index": 0}]]},
+    "Format for Pipeline": {"main": [[{"node": "Execute Enrich & Evaluate Pipeline v8.4", "type": "main", "index": 0}]]},
+    "Execute Enrich & Evaluate Pipeline v8.4": {"main": [[{"node": "Log Results", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}

@@ -18,7 +18,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │ Enrich & Evaluate Pipeline v8.1│◄── rcMNDrfZR6csHRsYKFn0W
+│                    │ Enrich & Evaluate Pipeline v8.4.15│◄── rcMNDrfZR6csHRsYKFn0W
 │                    │   (100-point company scoring) │    (UPDATE after import)
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -65,15 +65,22 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │  Funding Alerts Rescore v2.1  │ (standalone)           │
-│                    │  (re-evaluates existing)      │                        │
+│                    │  Funding Alerts Rescore v4    │ (standalone)           │
+│                    │  HTTP Request → Airtable API  │ (every 1 min)          │
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
-│                                    ▼                                         │
-│                         ┌─────────────────┐                                 │
-│                         │ Funding Alerts  │                                 │
-│                         │ (Airtable)      │                                 │
-│                         └─────────────────┘                                 │
+│              ┌─────────────────────┼─────────────────────┐                  │
+│              ▼                     ▼                     ▼                  │
+│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐          │
+│   │ Brave Search    │   │ Claude API      │   │ HTTP Request    │          │
+│   │ (enrichment)    │   │ (evaluation)    │   │ (Airtable PATCH)│          │
+│   └─────────────────┘   └─────────────────┘   └─────────────────┘          │
+│                                                         │                   │
+│                                                         ▼                   │
+│                                               ┌─────────────────┐          │
+│                                               │ Funding Alerts  │          │
+│                                               │ (Airtable)      │          │
+│                                               └─────────────────┘          │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -135,7 +142,9 @@ Current versions (as of Mar 2026):
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
-- `Enrich & Evaluate Pipeline v8.1.json` (shared subworkflow - companies). v8.1: Fixed funding extraction - $5B sanity cap to ignore PE fund sizes, contextual matching (prioritizes "raised $X", "funding of $X" patterns), min $100K threshold. v8: aligned with 100-point model (>150 employees, >$75M funding), 5-category scoring, auto-disqualified records get score 0, public company and not-B2B-SaaS gates.
+- `Enrich & Evaluate Pipeline v8.4.15.json` (shared subworkflow - companies). v8.4.15: **PARSE EVALUATION RESCORE FIX** - Root cause: index-based lookup in Parse Evaluation caused data scrambling when items arrived out of order. Fix: Added `company_ref` field to Claude prompt that gets echoed back in response. Parse Evaluation now uses ref-based Map lookup (O(1)) to match Claude responses to correct company data. Falls back to index-based only if ref not found. Includes `_refMatch` debug field. v8.4.14: Added `__RID__` encoding in Build Search Query for Brave. Changed Parse Enrichment to `runOnceForEachItem` mode. v8.4: **Customer Persona Gate** - Classifies companies as business-user-customer vs developer-as-customer using Claude. v8.3: Two-tier disqualification (hard gates before scoring), Fortune 500 subsidiary detection, employee hard cap 200, $500M funding/valuation caps.
+- `Enrich & Evaluate Pipeline v8.4.14.json` (previous version) - __RID__ encoding for Brave Search, didn't fix Parse Evaluation index issue
+- `Enrich & Evaluate Pipeline v8.3.json` (previous version) - see v8.4 for March 2026 Audit fixes
 - `Enrich & Evaluate Pipeline v7.json` (previous version). v7: aligned pre-filter with Funding Alerts Rescore v2 - expanded PE list (29 firms), acquisition detection, tightened thresholds (>100 employees, >$500M funding), removed founded-year disqualifier.
 - `Enrich & Evaluate Pipeline v6.json` (previous version). v6: consumer/DTC exclusion, defense/govt penalty (cap 35), hardware vs SaaS distinction, maturity detection (cap 40), biotech/pharma drug development exclusion (cap 35, distinct from healthcare SaaS).
 - `Enrich & Evaluate Pipeline v5.json` (previous version - adds LinkedIn Connections cross-reference for Network Match Alerts)
@@ -148,13 +157,15 @@ Current versions (as of Mar 2026):
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
 - `Feedback Loop - Applied.json` (weekly calibration analysis)
-- `Funding Alerts Rescore v2.1.json` (v2.1 - fixed funding extraction with $5B cap, aligned thresholds >150 emp/>$75M, score 0 for disqualified)
-- `Funding Alerts Rescore v1.json` (v1 - original, no pre-filter)
+- `Funding Alerts Rescore v4-standalone.json` (v4 - **ACTIVE** - Standalone workflow that bypasses Execute Workflow entirely. Uses HTTP Request for Airtable updates to avoid n8n Airtable node data scrambling bug. Runs every 1 min, 1 record per execution. See "n8n Airtable Node Bug" section below.)
+- `Funding Alerts Rescore v3.json` (DEPRECATED - v3 used Execute Workflow which caused data scrambling; `_updateRecordId` was ignored due to state leakage. Deactivate this workflow.)
+- `Funding Alerts Rescore v2.1.json` (DEPRECATED - v2.1 had its own scoring logic that diverged from pipeline)
+- `Funding Alerts Rescore v1.json` (DEPRECATED - v1 - original, no pre-filter)
 
 ## Workflow Architecture
 
 **Company evaluation (VC scrapers):**
-All VC scrapers use the shared `Enrich & Evaluate Pipeline v8.1.json` subworkflow via Execute Workflow node.
+All VC scrapers use the shared `Enrich & Evaluate Pipeline v8.4.15.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
 All job workflows use the shared `Job Evaluation Pipeline v6.json` subworkflow:
@@ -203,18 +214,61 @@ The Enrich & Evaluate Pipeline v5 cross-references companies against your Linked
 - Priority alerts sent when company has network connection OR active CX job posting
 - Email includes connection name and LinkedIn URL for easy outreach
 
-## Pre-Filter Disqualification (v8 gates)
+## Pre-Filter Disqualification (v8.4 gates)
 
-Both the Enrich & Evaluate Pipeline v8 and Funding Alerts Rescore v2 use pre-scoring gates that auto-disqualify companies before the Claude API call.
+The Enrich & Evaluate Pipeline v8.4 implements a **multi-tier disqualification architecture** that evaluates hard gates and customer persona before any weighted scoring begins.
 
-**Disqualification criteria** (any triggers score = 0, status = Auto-Disqualified):
+### Tier 1: HARD GATES (binary pass/fail, score = 0, no Claude call)
+- Acquired, merged, shut down, or defunct
 - PE/Growth Equity backed
-- Total funding > $75M
-- Employee count > 150
-- Acquired or shuttered
+- Fortune 500 subsidiary
+- Employee count > 200 (CS function already exists)
+- Total funding > $500M
+- Valuation > $500M (unicorn scale)
 - Public company
-- Not B2B SaaS (biotech, hardware, crypto, consumer)
 - Series D+ stage
+
+### Tier 2: SECTOR GATES (also hard DQ)
+- Biotech/pharma (drug development, clinical trials)
+- Hardware/Physical product (sensors, devices, manufacturing)
+- AgTech/Aquaculture (farming, fishery, livestock)
+- Climate tech hardware (solar panels, EV infrastructure, carbon capture)
+- Crypto/Web3 (blockchain, DeFi, NFT)
+- HR Tech/DEI (workforce analytics, recruiting platforms)
+- Consumer/B2C/Telehealth (DTC, patient apps, e-commerce)
+
+### Tier 3: SOFT GATES (flag but still evaluate)
+- Employee count < 15 (too early, pre-CS inflection)
+
+### Tier 4: WARNING FLAGS (don't disqualify, flag for human review)
+- Employee count 150-200 (penalty zone - CS function may exist)
+- Data inconsistencies:
+  - Seed stage with > $20M funding
+  - Series C/D with < 10 employees
+  - Series D with < $20M funding
+
+### Tier 5: CUSTOMER PERSONA GATE (v8.4)
+After passing Tiers 1-4, companies are classified by customer persona:
+- **business-user**: End users are non-technical (sales, marketing, HR, finance, healthcare providers, legal)
+- **developer**: End users are developers, engineers, DevOps, SRE, data engineers
+- **mixed**: Both personas are equally important
+
+**Developer-as-customer auto-pass logic:**
+- Developer persona + <50 employees → Auto-pass (not at enterprise scale)
+- Developer persona + 50+ employees + <2 enterprise signals → Auto-pass
+- Developer persona + 50+ employees + 2+ enterprise signals → **Proceed** (enterprise exception)
+- Business-user or mixed → **Proceed** to weighted scoring
+
+**Enterprise signals that grant exception:**
+- SOC 2, HIPAA, compliance mentions
+- Fortune 500/1000 customers
+- Enterprise sales team, account executives
+- SSO, SAML, multi-tenant
+- Self-hosted, on-premise options
+- Contract value, ACV, ARR mentions
+- Procurement, vendor management
+
+**New Airtable field:** `Customer Persona` (single-select: business-user, developer, mixed)
 
 **Expanded PE/Growth Equity firm list** (v2):
 Vista Equity, Thoma Bravo, KKR, Blackstone, Bain Capital, Silver Lake, Apollo, Insight Partners, Clearlake, TA Associates, Brighton Park Capital, General Atlantic, Warburg Pincus, Francisco Partners, Summit Partners, Providence Equity, Welsh Carson, TPG Capital, Hellman & Friedman, Advent International, Permira, EQT Partners, Carlyle, SoftBank Vision Fund
@@ -228,11 +282,13 @@ Vista Equity, Thoma Bravo, KKR, Blackstone, Bain Capital, Silver Lake, Apollo, I
 **Workflow flow**:
 ```
 Enrich → Pre-Filter → Check DQ?
-  ├── Yes (disqualified) → Skip Parse → Update (no Claude call)
-  └── No (evaluate) → Prompt → Claude → Parse → Update
+  ├── Yes (disqualified) → Update (score=0, no evaluation)
+  └── No → Classify Persona → Check Developer Auto-Pass?
+           ├── Yes (developer, no enterprise exception) → Update (score=0, developer-as-customer)
+           └── No → Prompt → Claude → Parse → Update (scored)
 ```
 
-**Expected savings**: ~30-40% reduction in Claude API calls
+**Expected savings**: ~50-60% reduction in Claude API calls (hard gates + persona gate)
 
 ---
 
@@ -254,3 +310,44 @@ The dedup system prevents duplicate evaluations across all sources using a centr
 ## Claude Model
 
 Use `claude-haiku-4-5` for all evaluation nodes (cost-effective for high-volume scoring).
+
+---
+
+## n8n Airtable Node Bug (Mar 2026)
+
+**Problem:** The n8n Airtable node exhibits data scrambling when updating records in batch or via Execute Workflow. The `_updateRecordId` field is cached or evaluated incorrectly, causing the wrong record to be updated.
+
+**Symptoms:**
+- Input shows Record A, but Record B gets updated
+- All records update the same (first) row
+- Set nodes and `first()` accessors don't fix the issue
+- Execute Workflow subworkflows make it worse due to state leakage
+
+**Root Cause:** n8n's Airtable node expression evaluation appears to cache record IDs or evaluate them incorrectly when processing multiple items. This is exacerbated by Execute Workflow state leakage.
+
+**Solution: HTTP Request Bypass**
+
+Instead of using the Airtable node for updates, use HTTP Request with the record ID embedded directly in the URL:
+
+```javascript
+// URL pattern (RECORD_ID in path, not body)
+https://api.airtable.com/v0/{baseId}/{tableName}/{RECORD_ID}
+
+// Example expression
+https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_ID }}
+```
+
+**HTTP Request Configuration:**
+- Method: PATCH
+- Authentication: Header Auth
+  - Name: `Authorization`
+  - Value: `Bearer {your_pat_token}`
+- Body Content Type: JSON
+- Body: `{ "fields": { ... } }` (no `id` field needed - it's in the URL)
+
+**Workflow Status (Mar 2026):**
+| Workflow | Status | Notes |
+|----------|--------|-------|
+| Funding Alerts Rescore v4 | **ACTIVE** | Uses HTTP Request, works correctly |
+| Funding Alerts Rescore v3 | **DEACTIVATE** | Uses Execute Workflow, causes scrambling |
+| Enrich & Evaluate Pipeline v8.4.15 | **ACTIVE** | Still used by VC scrapers for new records |
