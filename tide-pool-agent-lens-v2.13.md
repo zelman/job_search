@@ -3,7 +3,7 @@
 # Automation tools: parse this block for quick state checks
 # Full doc: https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md
 
-version: "2.11"
+version: "2.13"
 schema_version: 1
 last_updated: "2026-03-06"
 
@@ -37,36 +37,86 @@ projects:
     end_date: "2026-03"
 
 # Auto-Disqualifiers (for automated job filtering)
+# v2.12: March 2026 Audit - Two-tier architecture with hard gates evaluated BEFORE scoring
 disqualify:
-  investor_type: [PE]
-  employee_count_max: 1000        # Too large - enterprise operations
-  employee_count_min: 15          # Too early - pre-CS inflection, founder-led support
-  total_funding_max: 500000000    # $500M+
+  # TIER 1: HARD GATES (binary pass/fail, score = 0, no evaluation)
+  investor_type: [PE, Growth Equity]
+  company_status: [Acquired, Shut Down, Merged, Defunct]  # No longer independent
+  company_type: [Fortune 500, Fortune 500 Subsidiary, Public]
+  employee_count_max: 200         # >200 = CS function already exists (hard DQ)
+  employee_count_min: 15          # <15 = pre-CS inflection, founder-led support
+  total_funding_max: 500000000    # $500M+ total funding = late stage
   valuation_max: 500000000        # $500M+ valuation = unicorn territory
-  company_status: [Acquired, Shut Down, Merged]  # No longer independent
-  company_type: [Fortune 500, Public]
-  business_model: [B2C, Consumer, Hardware, Industrial, Cleantech Hardware, Robotics Hardware]  # Must be B2B SaaS
-  role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
+  funding_stage: [Series D, Series E, Growth]  # Late stage
+
+  # TIER 2: SECTOR GATES (also hard DQ - must be B2B SaaS)
+  business_model: [B2C, Consumer, Hardware, Industrial, Cleantech Hardware, Robotics Hardware, AgTech, Aquaculture]
   domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi, Biotech, Life Sciences, Drug Discovery, HR Tech, DEI, Workforce Analytics]
-  stalled_company: { founded_years_ago_min: 10, employee_count_max: 200 }
+
+  # TIER 3: ROLE GATES
+  role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
   jd_scale_signals: [">500M users", ">500 enterprise clients", "Fortune 500 partners"]
   nrr_first_language: [NRR, "Net Revenue Retention", "Gross Retention", GRR, "Renewal forecasting"] # in first 2 bullets
+
+  # Stalled company detection
+  stalled_company: { founded_years_ago_min: 10, employee_count_max: 200 }
 
 # Pre-Filter Gate (validate BEFORE sector scoring)
 prerequisite: "B2B SaaS with recurring customer relationships to manage"
 # Ask: Does this company have B2B customers who renew and expand?
 # Hardware, cleantech equipment, consumer apps, and payer-side healthcare do NOT qualify
 
+# Customer Persona Gate (v2.13 - evaluated AFTER hard gates, BEFORE scoring)
+# ~60% of "Apply Now" companies were developer-as-customer tools that don't match Eric's background
+customer_persona:
+  # Classification
+  business_user:
+    description: "End users are non-technical business professionals"
+    examples: [sales, marketing, HR, finance, operations, healthcare providers, legal, executives]
+    action: proceed_to_scoring
+  developer:
+    description: "End users are primarily developers, engineers, DevOps, SRE, data engineers"
+    examples: [API tools, SDKs, CLI tools, infrastructure, observability, data pipelines, CI/CD]
+    action: auto_pass_unless_enterprise_exception
+  mixed:
+    description: "Both personas are equally important primary users"
+    action: proceed_to_scoring
+
+  # Enterprise Exception for Developer Tools (allows them to proceed to scoring)
+  enterprise_exception:
+    min_employees: 50
+    min_enterprise_signals: 2
+    signals:
+      - "SOC 2, HIPAA, compliance"
+      - "Fortune 500/1000 customers"
+      - "Enterprise sales team, account executives"
+      - "SSO, SAML, multi-tenant"
+      - "Self-hosted, on-premise options"
+      - "Contract value, ACV, ARR mentions"
+      - "Procurement, vendor management"
+    note: "Developer tools at enterprise scale often need traditional CS org structures"
+
+# Data Validation Flags (impossible combinations that indicate bad data)
+data_validation:
+  - { stage: Seed, funding_min: 20000000, flag: "Seed with >$20M funding - verify data" }
+  - { stage: [Series C, Series D], employee_max: 10, flag: "Late stage with <10 employees - verify data" }
+  - { stage: Series D, funding_max: 20000000, flag: "Series D with <$20M funding - verify data" }
+
 # Scoring Penalties (non-disqualifying)
+# v2.12: 150-200 employees is now a penalty zone, not a hard DQ
 penalties:
-  - rule: "500-999 employees"
-    points: -15
+  - rule: "150-200 employees"
+    points: -20
+    note: "Penalty zone - CS function may already exist"
   - rule: "Support title without Director/VP/Head"
     points: -15
-  - rule: "Total funding $200M-$500M"
+  - rule: "Total funding $100M-$500M"
     points: -15
-  - rule: "Series C or later"
+  - rule: "Series C"
     points: -10
+  - rule: "Sector match alone (no CS hire readiness signals)"
+    points: -10
+    note: "Sector alignment is a tiebreaker, not a primary driver"
 
 # Scoring Threshold
 min_score: 60
@@ -133,44 +183,8 @@ Three questions for evaluating any opportunity, decision, or commitment:
 ---
 
 ## Current State
-<!-- ⚡ VOLATILE SECTION - Update frequently. Everything else in this doc is stable. -->
-<!-- Last updated: 2026-02-13 -->
 
-### Status
-**Actively job searching** - Director/VP/Head of Customer Support/Success Operations roles, $125K+ base compensation target. Pipeline urgency is **high**.
-
-### Pipeline
-<!-- Update these as things move -->
-- **Active applications:** [update count/names as needed]
-- **Warm leads:** [update as needed]
-- **Recent interviews:** [update as needed]
-- **Networking:** Pavilion, Rands Leadership active memberships
-
-### This Week's Priorities
-<!-- Replace these each week -->
-1. [Priority 1]
-2. [Priority 2]
-3. [Priority 3]
-
-### Active Projects
-- **tide-pool.org** - Personal archive site (Airtable-based curation system), active
-- **UT Austin Cloud Computing PGP** - In progress through March 2026
-- **n8n Job Search Automation** - 7 production workflows (VC scraping, job parsing, Claude API scoring)
-- **Tidepool agent lens** - This document; maintained in GitHub
-
-### Recent Context for Agents
-<!-- 2-3 things that would help an agent be immediately useful right now -->
-<!-- Examples: "Just had a second interview with X", "Refining resume for Y sector" -->
-- [Context item]
-- [Context item]
-
-### Toolchain
-| Task | Where |
-|------|-------|
-| Git/code changes, lens updates | Claude Code (terminal, `tidepool` alias) |
-| n8n workflows, Google Drive, Gmail | Claude.ai |
-| Web research, job search (Indeed) | Claude.ai |
-| File creation (docs, slides, spreadsheets) | Claude.ai |
+Live pipeline data in Airtable base `appFEzXvPWvRtXgRY`. See YAML frontmatter for current status, target roles, and active projects.
 
 ---
 
@@ -190,12 +204,6 @@ Three questions for evaluating any opportunity, decision, or commitment:
 ---
 
 ## Professional Identity
-
-### Current Focus
-- **Job Search**: Targeting VP/Head of Customer Support / Customer Success roles at mission-driven early-stage startups
-- **Education**: Post Graduate Program in Cloud Computing (UT Austin) through March 2026
-- **Active Projects**: Tide pool personal archive (Airtable-based curation system)
-- **Networks**: Pavilion, Rands Leadership
 
 ### Background
 - **18+ years** in Customer Success and Support leadership
@@ -401,42 +409,18 @@ Check Crunchbase/PitchBook for acquisition status before scoring.
 **The pattern**: Sector keywords (healthcare, climate, dev tools) were surfacing companies on alignment without validating the fundamental requirement. A 17-company batch with 0 fits is the signal that business model validation must happen FIRST.
 
 ### Company Stage Red Flags (Auto-Disqualify)
-- **PE-Backed**: Private equity investors indicate late-stage optimization focus, NOT builder roles
-  - Examples: Nordic Capital, TA Associates, KKR, Blackstone, Vista Equity Partners, Vector Capital, Silver Lake, Thoma Bravo, Francisco Partners, Bain Capital, TPG, Carlyle Group, Apollo Global, Warburg Pincus
-- **Total Funding >$500M**: Indicates enterprise scale regardless of stated "growth" phase
-- **Employee Count 1,000+**: Enterprise operations, not startup building
-- **Founded Pre-2015 + Heavily Funded**: Likely past builder phase unless explicitly Series A/B
-- **Stalled Company**: Founded >10 years ago with <200 employees suggests growth issues or lifestyle business, not a builder opportunity
-- **M&A Strategy**: 5+ acquisitions = consolidator/rollup, not ground-up builder
-- **Public/Fortune 500**: Established enterprise (even subsidiaries)
-- **"Growth Stage" PE Rounds**: Often mislabeled as late-stage optimization plays
+
+Core disqualifiers in YAML frontmatter. Additional signals:
+- **M&A Strategy**: 5+ acquisitions = consolidator/rollup, not builder
 - **Heavy Management Layers**: Multiple VP/Director levels between role and C-suite
-- **Calcified Processes**: "Maintain and optimize" language, established playbooks, process documentation focus over building
-- **Scale Signals in JD**: When a job description reads like a press release about global scale, disqualify without research:
-  - "550M users", "800+ enterprise clients", "global footprint"
-  - Named Fortune 500 partners (AT&T, Samsung, British Telecom, etc.)
-  - Comp bands $140K+ for non-Director roles often indicate enterprise scale
+- **Calcified Processes**: "Maintain and optimize" language, established playbooks
+- **Scale Signals in JD**: "550M users", "800+ enterprise clients", Fortune 500 partners, $140K+ comp for non-Director roles
 
 ### Role Mandate Red Flags (Auto-Disqualify)
 
-**NRR-First Language**: When retention/expansion metrics lead the role description, the build mandate is gone — someone already built the thing this role optimizes.
+**NRR-First Language**: When retention/expansion metrics lead the JD (see YAML `nrr_first_language`), the build mandate is gone — someone already built the thing this role optimizes. Recognize the MAINTAINER pattern from language alone, faster than researching funding or employee count.
 
-**Auto-disqualify if ANY of these appear in the first two bullets of "What You'll Do":**
-- "Own NRR" or "Net Revenue Retention"
-- "Gross Retention" or "GRR"
-- "Renewal forecasting" or "renewal rate"
-- "Expansion revenue" as primary metric
-- "Reduce churn" as top-line responsibility
-
-**Why this matters**: Role mandate fails before stage validation. These signals give it away in seconds — faster than researching funding or employee count. Recognize the MAINTAINER pattern from language alone.
-
-**Exception: Network Opportunities**
-
-Auto-disqualifiers may be waived for direct founder relationships where:
-- Founder explicitly seeks early CS leadership input
-- Product is clearly high-touch enterprise
-- I can shape the role before formal job posting exists
-- Unfunded/pre-seed status is temporary (actively raising or bootstrapping intentionally)
+**Exception**: Network opportunities with direct founder relationships may be waived if founder seeks early CS leadership input and product is clearly high-touch enterprise.
 
 ### Research Required Before Applying
 1. **Funding Check**: Crunchbase/PitchBook for total funding amount
@@ -493,21 +477,11 @@ Auto-disqualifiers may be waived for direct founder relationships where:
 
 ## Opportunity Scoring Framework (100 Point Scale)
 
-### Auto-Disqualifiers (SKIP immediately)
-- PE-backed company = **STOP**
-- 1,000+ employees = **STOP**
-- Total funding >$500M = **STOP**
-- Fortune 500/Public company = **STOP**
-- IT internal support role = **STOP**
-- Technical Support / Help Desk role = **STOP**
-- Stalled company (founded >10 years ago, <200 employees) = **STOP**
-- Requires domain expertise I don't have = **STOP** (see Experience Boundaries section)
-  - "X years pharmaceutical/healthcare marketing"
-  - "Agency experience required"
-  - "Financial services background required"
-  - "Legal/LegalTech domain expertise"
+### Auto-Disqualifiers
 
-**Exception**: Network opportunities with direct founder relationship may bypass auto-disqualifiers if product is high-touch enterprise and role is clearly builder-focused.
+See YAML frontmatter `disqualify` section for complete list. Key gates: PE-backed, >200 employees, >$500M funding, Fortune 500/Public, non-B2B-SaaS sectors, domain expertise gaps.
+
+**Exception**: Network opportunities with direct founder relationship may bypass if product is high-touch enterprise and role is builder-focused.
 
 ### If not disqualified, score:
 
@@ -630,36 +604,20 @@ Before spending time on any application, verify:
 
 ## Quick Reference
 
+*See YAML frontmatter for machine-readable disqualifiers, penalties, and target roles.*
+
 | Attribute | Value |
 |-----------|-------|
-| Current Location | Providence, RI |
-| Target Role | VP/Head/Director of Customer Support/Success Operations |
-| Title Flexibility | At <50 person companies, title irrelevant - focus on builder scope |
-| Compensation Target | $125K+ base |
-| Location | Remote preferred; on-site OK in Providence, Boston, NYC, LA, SF, EU/UK |
-| Education (Current) | Cloud Computing PGP, UT Austin |
 | Key Differentiator | Built 25-person global team from scratch over 13 years |
-| Compliance Experience | ISO 27001, SOC-2 |
-| Ideal Company Stage | Pre-Series A to Series B (0-100 people, $0-1M revenue) |
-| Ideal Sectors | Healthcare, environmental, life sciences, education, audio/music tech, **enterprise AI** |
+| Title Flexibility | At <50 person companies, title irrelevant - focus on builder scope |
 | Enterprise AI | High-touch B2B AI (governance, compliance, analytics) needs CS from day one |
 | Network Opportunities | Founder relationships bypass automated scoring; evaluate manually |
-| B-Corp | Strong positive signal |
-| Role Type | Builder (create from scratch) - scope over title |
-| Exclude | IT Support, Technical Support, Help Desk, Quota-carrying CSM/Account Mgmt |
-| Domain Gaps | Pharma marketing, agency work, FinServ, Legal, AdTech, Gov, Web3/Crypto/DeFi, Biotech/Life Sciences |
-| Field Marketing | YES (HP/Palm, Alliance) - but NOT agency/pharma/digital marketing |
-| Auto-Disqualify | PE-backed, 1,000+ employees, $500M+ funding, Fortune 500, stalled companies, domain gaps, **non-B2B-SaaS (hardware, B2C, cleantech equipment)** |
-| Scoring Penalties | 500-999 employees (-15), Support without Dir/VP/Head (-15), $200M-$500M funding (-15), Series C+ (-10) |
-| Research Time | ~11 min verification before applying |
-| Investor Check | VCs good, PE firms = red flag |
-| Scoring Threshold | 60+ points to proceed with application |
 | Evaluation Lens | Fill or empty? Sincere or perform? Flourish or process? |
 
 ---
 
 *Last Updated: March 6, 2026*
-*Version: 2.11*
+*Version: 2.13*
 
 ---
 
@@ -668,6 +626,8 @@ Before spending time on any application, verify:
 This document serves as a "lens" for AI agents. Import or paste into system prompts to create agents that understand my context, values, and working style. The essence, pathway, and evaluation questions are not abstract philosophy; they are active decision-making tools for career search and daily life. Update periodically as circumstances change.
 
 ### Changelog
+- **v2.13** (Mar 2026): Added Customer Persona Gate - classifies companies as business-user-customer vs developer-as-customer. ~60% of "Apply Now" companies were developer tools (Coiled, Inngest, Datafold, etc.) that don't match Eric's enterprise B2B support background. Developer-as-customer companies auto-pass unless they meet enterprise exception: 50+ employees AND 2+ enterprise signals (SOC 2, Fortune 500 customers, enterprise sales, SSO/SAML, compliance, procurement). New Airtable field: Customer Persona.
+- **v2.12** (Mar 2026): March 2026 Audit - Two-tier disqualification architecture. Employee hard cap reduced to 200 (CS function exists at this scale). $500M funding/valuation caps. Fortune 500 subsidiary detection. Enhanced acquisition detection (merged, shut down, defunct). Data validation flags for impossible combinations. AgTech/Aquaculture and Climate Hardware exclusions. 150-200 employees moved to penalty zone instead of hard DQ.
 - **v2.10** (Mar 2026): Merged v2.9 additions from tidepool repo - added scoring penalties from feedback loop pattern analysis: 500-999 employees (-15 pts), Support title without Director/VP/Head (-15 pts). Added penalties section to YAML frontmatter for machine-readable access. Consolidated all scoring penalties under single "Scoring Penalties" heading. Added Scoring Penalties row to Quick Reference table.
 - **v2.8** (Feb 2026): Added feedback loop insights: (1) Stalled company disqualifier - founded >10 years ago with <200 employees indicates growth issues; (2) Expanded IT Support disqualifier to include "Technical Support" and "Help Desk" variants; (3) Added funding stage penalties: -15 pts for $200M-$500M total funding, -10 pts for Series C+. Updated YAML frontmatter, Quick Reference, Role Type Exclusions, Auto-Disqualifiers, and Pre-Application Checklist.
 - **v2.7** (Feb 2026): Added "Experience Boundaries" section for gap detection - distinguishes field marketing experience (HP/Palm, Alliance) from pharma/agency/digital marketing I don't have. Added HP/Palm to Career Arc. Added domain expertise gaps as auto-disqualifiers (pharma marketing, agency experience, FinServ, Legal, AdTech, Gov). Updated Quick Reference table.

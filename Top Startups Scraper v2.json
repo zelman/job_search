@@ -1,0 +1,190 @@
+{
+  "name": "Top Startups Scraper v2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "weeks", "triggerAtDay": [2, 5], "triggerAtHour": 7}]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "id": "schedule-trigger",
+      "name": "Schedule: Tue/Fri 7am"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/unblock?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"url\": \"https://topstartups.io/?page=1&hq_location=Remote&company_size=1-10+employees&company_size=11-50+employees&funding_round=Pre-Seed&funding_round=Seed&funding_round=Series+A\", \"content\": true, \"cookies\": false, \"screenshot\": false, \"browserWSEndpoint\": false, \"waitForTimeout\": 5000}",
+        "options": {"timeout": 180000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 200],
+      "id": "fetch-page-1",
+      "name": "Fetch Page 1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/unblock?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"url\": \"https://topstartups.io/?page=2&hq_location=Remote&company_size=1-10+employees&company_size=11-50+employees&funding_round=Pre-Seed&funding_round=Seed&funding_round=Series+A\", \"content\": true, \"cookies\": false, \"screenshot\": false, \"browserWSEndpoint\": false, \"waitForTimeout\": 5000}",
+        "options": {"timeout": 180000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 350],
+      "id": "fetch-page-2",
+      "name": "Fetch Page 2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/unblock?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"url\": \"https://topstartups.io/?page=3&hq_location=Remote&company_size=1-10+employees&company_size=11-50+employees&funding_round=Pre-Seed&funding_round=Seed&funding_round=Series+A\", \"content\": true, \"cookies\": false, \"screenshot\": false, \"browserWSEndpoint\": false, \"waitForTimeout\": 5000}",
+        "options": {"timeout": 180000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [450, 500],
+      "id": "fetch-page-3",
+      "name": "Fetch Page 3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse page 1 and tag with page number\nconst html = $input.first().json.content || '';\nconst companies = [];\n\nconst cards = html.split('id=\"item-card-filter\"');\nfor (let i = 1; i < cards.length; i++) {\n  const card = cards[i];\n  const nameMatch = card.match(/id=\"startup-website-link\">([^<]+)<\\/a><\\/h3>/i);\n  const urlMatch = card.match(/href=\"(https:\\/\\/[^\"]+)\"[^>]*id=\"startup-website-link\"/i);\n  const descMatch = card.match(/What they do:[^<]*<\\/b>\\s*<br>([^<]+)<br>/i);\n  const empMatch = card.match(/(\\d+)-(\\d+)\\s*employees/i);\n  const foundedMatch = card.match(/Founded:\\s*(\\d{4})/i);\n  const fundingMatch = card.match(/\\$(\\d+)M\\s*(Series [A-C]|Seed|Pre-Seed)[^<]*in\\s*(\\d{4})/i);\n  \n  if (nameMatch && urlMatch) {\n    companies.push({\n      json: {\n        company_name: nameMatch[1].trim(),\n        company_url: urlMatch[1].replace('?utm_source=topstartups.io', ''),\n        description: descMatch ? descMatch[1].trim().replace(/&amp;/g, '&') : '',\n        employee_count: empMatch ? Math.round((parseInt(empMatch[1]) + parseInt(empMatch[2])) / 2) : null,\n        founded_year: foundedMatch ? parseInt(foundedMatch[1]) : null,\n        total_funding: fundingMatch ? `$${fundingMatch[1]}M` : '',\n        funding_stage: fundingMatch ? fundingMatch[2] : '',\n        source: 'topstartups.io',\n        _page: 1\n      }\n    });\n  }\n}\nconsole.log('Page 1:', companies.length, 'companies');\nreturn companies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 200],
+      "id": "parse-page-1",
+      "name": "Parse Page 1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse page 2 and tag with page number\nconst html = $input.first().json.content || '';\nconst companies = [];\n\nconst cards = html.split('id=\"item-card-filter\"');\nfor (let i = 1; i < cards.length; i++) {\n  const card = cards[i];\n  const nameMatch = card.match(/id=\"startup-website-link\">([^<]+)<\\/a><\\/h3>/i);\n  const urlMatch = card.match(/href=\"(https:\\/\\/[^\"]+)\"[^>]*id=\"startup-website-link\"/i);\n  const descMatch = card.match(/What they do:[^<]*<\\/b>\\s*<br>([^<]+)<br>/i);\n  const empMatch = card.match(/(\\d+)-(\\d+)\\s*employees/i);\n  const foundedMatch = card.match(/Founded:\\s*(\\d{4})/i);\n  const fundingMatch = card.match(/\\$(\\d+)M\\s*(Series [A-C]|Seed|Pre-Seed)[^<]*in\\s*(\\d{4})/i);\n  \n  if (nameMatch && urlMatch) {\n    companies.push({\n      json: {\n        company_name: nameMatch[1].trim(),\n        company_url: urlMatch[1].replace('?utm_source=topstartups.io', ''),\n        description: descMatch ? descMatch[1].trim().replace(/&amp;/g, '&') : '',\n        employee_count: empMatch ? Math.round((parseInt(empMatch[1]) + parseInt(empMatch[2])) / 2) : null,\n        founded_year: foundedMatch ? parseInt(foundedMatch[1]) : null,\n        total_funding: fundingMatch ? `$${fundingMatch[1]}M` : '',\n        funding_stage: fundingMatch ? fundingMatch[2] : '',\n        source: 'topstartups.io',\n        _page: 2\n      }\n    });\n  }\n}\nconsole.log('Page 2:', companies.length, 'companies');\nreturn companies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 350],
+      "id": "parse-page-2",
+      "name": "Parse Page 2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse page 3 and tag with page number\nconst html = $input.first().json.content || '';\nconst companies = [];\n\nconst cards = html.split('id=\"item-card-filter\"');\nfor (let i = 1; i < cards.length; i++) {\n  const card = cards[i];\n  const nameMatch = card.match(/id=\"startup-website-link\">([^<]+)<\\/a><\\/h3>/i);\n  const urlMatch = card.match(/href=\"(https:\\/\\/[^\"]+)\"[^>]*id=\"startup-website-link\"/i);\n  const descMatch = card.match(/What they do:[^<]*<\\/b>\\s*<br>([^<]+)<br>/i);\n  const empMatch = card.match(/(\\d+)-(\\d+)\\s*employees/i);\n  const foundedMatch = card.match(/Founded:\\s*(\\d{4})/i);\n  const fundingMatch = card.match(/\\$(\\d+)M\\s*(Series [A-C]|Seed|Pre-Seed)[^<]*in\\s*(\\d{4})/i);\n  \n  if (nameMatch && urlMatch) {\n    companies.push({\n      json: {\n        company_name: nameMatch[1].trim(),\n        company_url: urlMatch[1].replace('?utm_source=topstartups.io', ''),\n        description: descMatch ? descMatch[1].trim().replace(/&amp;/g, '&') : '',\n        employee_count: empMatch ? Math.round((parseInt(empMatch[1]) + parseInt(empMatch[2])) / 2) : null,\n        founded_year: foundedMatch ? parseInt(foundedMatch[1]) : null,\n        total_funding: fundingMatch ? `$${fundingMatch[1]}M` : '',\n        funding_stage: fundingMatch ? fundingMatch[2] : '',\n        source: 'topstartups.io',\n        _page: 3\n      }\n    });\n  }\n}\nconsole.log('Page 3:', companies.length, 'companies');\nreturn companies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 500],
+      "id": "parse-page-3",
+      "name": "Parse Page 3"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [950, 275],
+      "id": "merge-1-2",
+      "name": "Merge 1+2"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1150, 375],
+      "id": "merge-all",
+      "name": "Merge All"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Summary and cleanup\nconst items = $input.all();\nconst byPage = {};\n\nitems.forEach(item => {\n  const p = item.json._page || '?';\n  if (!byPage[p]) byPage[p] = [];\n  byPage[p].push(item.json.company_name);\n});\n\nconsole.log('=== PAGINATION SUMMARY ===');\nconsole.log('Total companies:', items.length);\nObject.keys(byPage).sort().forEach(p => {\n  console.log(`Page ${p}: ${byPage[p].length} companies - ${byPage[p].slice(0,3).join(', ')}...`);\n});\n\n// Check for duplicates\nconst names = items.map(i => i.json.company_name);\nconst unique = [...new Set(names)];\nif (names.length !== unique.length) {\n  console.log('WARNING: ' + (names.length - unique.length) + ' duplicate companies!');\n}\n\n// Remove _page field before pipeline\nreturn items.map(item => {\n  const { _page, ...rest } = item.json;\n  return { json: rest };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 375],
+      "id": "summarize",
+      "name": "Summary & Cleanup"
+    },
+    {
+      "parameters": {
+        "workflowId": "rcMNDrfZR6csHRsYKFn0W",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1550, 375],
+      "id": "run-pipeline",
+      "name": "Enrich & Evaluate Pipeline"
+    }
+  ],
+  "connections": {
+    "Schedule: Tue/Fri 7am": {
+      "main": [[
+        {"node": "Fetch Page 1", "type": "main", "index": 0},
+        {"node": "Fetch Page 2", "type": "main", "index": 0},
+        {"node": "Fetch Page 3", "type": "main", "index": 0}
+      ]]
+    },
+    "Fetch Page 1": {
+      "main": [[{"node": "Parse Page 1", "type": "main", "index": 0}]]
+    },
+    "Fetch Page 2": {
+      "main": [[{"node": "Parse Page 2", "type": "main", "index": 0}]]
+    },
+    "Fetch Page 3": {
+      "main": [[{"node": "Parse Page 3", "type": "main", "index": 0}]]
+    },
+    "Parse Page 1": {
+      "main": [[{"node": "Merge 1+2", "type": "main", "index": 0}]]
+    },
+    "Parse Page 2": {
+      "main": [[{"node": "Merge 1+2", "type": "main", "index": 1}]]
+    },
+    "Merge 1+2": {
+      "main": [[{"node": "Merge All", "type": "main", "index": 0}]]
+    },
+    "Parse Page 3": {
+      "main": [[{"node": "Merge All", "type": "main", "index": 1}]]
+    },
+    "Merge All": {
+      "main": [[{"node": "Summary & Cleanup", "type": "main", "index": 0}]]
+    },
+    "Summary & Cleanup": {
+      "main": [[{"node": "Enrich & Evaluate Pipeline", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"}
+}

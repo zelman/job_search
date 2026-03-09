@@ -18,7 +18,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │ Enrich & Evaluate Pipeline v8.4.15│◄── rcMNDrfZR6csHRsYKFn0W
+│                    │ Enrich & Evaluate Pipeline v8.5   │◄── rcMNDrfZR6csHRsYKFn0W
 │                    │   (100-point company scoring) │    (UPDATE after import)
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -42,7 +42,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │  Job Evaluation Pipeline v6   │◄── v24qHkIsp8GVCwFkscHP8
+│                    │  Job Evaluation Pipeline v6.1   │◄── v24qHkIsp8GVCwFkscHP8
 │                    │    (100-point job scoring)    │                        │
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -128,7 +128,7 @@ When editing any n8n workflow JSON file:
 3. Keep the previous version file if the user wants to preserve it
 
 Current versions (as of Mar 2026):
-- `Job Alert Email Parser v3-43.json` - v3-43: Rewrote Browserless scraper title extraction using `isTitleLine()` keyword matching. Added `isRemoteLocation()` to detect "Remote - Location" patterns. Added "IF: Has Email ID?" node to skip Gmail labeling for OmniJobs jobs (fixes "'id' required" error). Updated Job Evaluation Pipeline v6 to use Upsert for Review Status (fixes "Could not get parameter" error).
+- `Job Alert Email Parser v3-43.json` - v3-43: Rewrote Browserless scraper title extraction using `isTitleLine()` keyword matching. Added `isRemoteLocation()` to detect "Remote - Location" patterns. Added "IF: Has Email ID?" node to skip Gmail labeling for OmniJobs jobs (fixes "'id' required" error). Updated Job Evaluation Pipeline v6.1 to use Upsert for Review Status (fixes "Could not get parameter" error).
 - `Job Alert Email Parser v3-42.json` (previous version) - v3-42: Fixed OmniJobs company extraction - added comprehensive location detection (US state names, "City, State" patterns) to Browserless scraper. Parse OmniJobs node now uses Browserless extracted fields directly with location validation. Marks location strings as "Unknown (check listing)".
 - `Job Alert Email Parser v3-41.json` (previous version) - v3-41: Improved OmniJobs company extraction - scraper now skips location words (Remote, USA, etc.) and tags when looking for company. Added dedup debug logging to show why jobs are filtered. Marks unknown companies as "Unknown (check listing)" instead of garbage values.
 - `Job Alert Email Parser v3-40.json` (previous version) - v3-40: CRITICAL FIX - dedup was treating existing Airtable records as new jobs (400+ jobs re-evaluated). Fixed by using `id.startsWith('rec')` to identify Airtable records.
@@ -142,14 +142,15 @@ Current versions (as of Mar 2026):
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
-- `Enrich & Evaluate Pipeline v8.4.15.json` (shared subworkflow - companies). v8.4.15: **PARSE EVALUATION RESCORE FIX** - Root cause: index-based lookup in Parse Evaluation caused data scrambling when items arrived out of order. Fix: Added `company_ref` field to Claude prompt that gets echoed back in response. Parse Evaluation now uses ref-based Map lookup (O(1)) to match Claude responses to correct company data. Falls back to index-based only if ref not found. Includes `_refMatch` debug field. v8.4.14: Added `__RID__` encoding in Build Search Query for Brave. Changed Parse Enrichment to `runOnceForEachItem` mode. v8.4: **Customer Persona Gate** - Classifies companies as business-user-customer vs developer-as-customer using Claude. v8.3: Two-tier disqualification (hard gates before scoring), Fortune 500 subsidiary detection, employee hard cap 200, $500M funding/valuation caps.
+- `Enrich & Evaluate Pipeline v8.5.json` (shared subworkflow - companies). v8.5: **8 SCORING FIXES** - (1) Added "employee-user" persona for B2B2C patterns like Oshi Health, Koa Health. (2) Stricter SaaS gate: catches marketplace, IoT, materials sectors. (3) Stricter funding cap: $75M soft cap with uncertainty handling. (4) Geography gate: US-HQ detection, non-US flagged. (5) Stricter developer persona: requires 3+ enterprise signals (was 2+). (6) Age gate: founded pre-2016 flagged as warning. (7) Stale funding penalty: 2+ years since funding reduces CS Hire Readiness score. (8) Build vs Maintain distinction: clearer MAINTAINER signals cap role_mandate at 5 max.
+- `Enrich & Evaluate Pipeline v8.4.15.json` (previous version). v8.4.15: PARSE EVALUATION RESCORE FIX - ref-based lookup in Parse Evaluation. v8.4: Customer Persona Gate. v8.3: Two-tier disqualification, Fortune 500 detection, employee 200 cap.
 - `Enrich & Evaluate Pipeline v8.4.14.json` (previous version) - __RID__ encoding for Brave Search, didn't fix Parse Evaluation index issue
 - `Enrich & Evaluate Pipeline v8.3.json` (previous version) - see v8.4 for March 2026 Audit fixes
 - `Enrich & Evaluate Pipeline v7.json` (previous version). v7: aligned pre-filter with Funding Alerts Rescore v2 - expanded PE list (29 firms), acquisition detection, tightened thresholds (>100 employees, >$500M funding), removed founded-year disqualifier.
 - `Enrich & Evaluate Pipeline v6.json` (previous version). v6: consumer/DTC exclusion, defense/govt penalty (cap 35), hardware vs SaaS distinction, maturity detection (cap 40), biotech/pharma drug development exclusion (cap 35, distinct from healthcare SaaS).
 - `Enrich & Evaluate Pipeline v5.json` (previous version - adds LinkedIn Connections cross-reference for Network Match Alerts)
 - `Enrich & Evaluate Pipeline v4.json` (older version - with cross-source dedup + Job Listings cross-reference, optimized Check Job Matches with Map lookup)
-- `Job Evaluation Pipeline v6.json` (shared subworkflow - jobs). v6: **CRITICAL FIX** - upsert no longer overwrites Review Status; only sets "New" for genuinely new records. Preserves "Applied" and other user-set statuses. (Mar 4, 2026: Restored 157 records that had statuses overwritten by v5 bug.) Fixed "Set Review Status New" to use Upsert matching by Job URL instead of Update (prevents "Could not get parameter" error). Fixed IF condition to handle Airtable single-select object format (`$json['Review Status']?.name`). Removed "Network Connection" field (not in Job Listings table).
+- `Job Evaluation Pipeline v6.1.json` (shared subworkflow - jobs). v6.1: **Source field fix** - Added explicit Source preservation with fallback lookups in Parse Response node. Fixes CS Insider jobs having empty Source field. v6: upsert no longer overwrites Review Status; only sets "New" for genuinely new records. Preserves "Applied" and other user-set statuses.
 - `Job Evaluation Pipeline v5.json` (previous version). v5: tighter scoring thresholds - 200-499 emp penalty, $50M+ funding penalty, >5yr at Series B+ penalty, stronger MAINTAINER detection (scale existing org, multi-tier, global teams 30+)
 - `Job Evaluation Pipeline v4.json` (older version - with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty, network connection override)
 - `Job Evaluation Pipeline v3.json` (older version, retained for rollback)
@@ -165,10 +166,10 @@ Current versions (as of Mar 2026):
 ## Workflow Architecture
 
 **Company evaluation (VC scrapers):**
-All VC scrapers use the shared `Enrich & Evaluate Pipeline v8.4.15.json` subworkflow via Execute Workflow node.
+All VC scrapers use the shared `Enrich & Evaluate Pipeline v8.5.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
-All job workflows use the shared `Job Evaluation Pipeline v6.json` subworkflow:
+All job workflows use the shared `Job Evaluation Pipeline v6.1.json` subworkflow:
 - Work at a Startup Scraper v12
 - Job Alert Email Parser v3-43 (includes OmniJobs scraping, Gmail limit: 2)
 - First Round Jobs Scraper v1 (API-based, session cookie auth, CX roles only)
@@ -350,4 +351,4 @@ https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_I
 |----------|--------|-------|
 | Funding Alerts Rescore v4 | **ACTIVE** | Uses HTTP Request, works correctly |
 | Funding Alerts Rescore v3 | **DEACTIVATE** | Uses Execute Workflow, causes scrambling |
-| Enrich & Evaluate Pipeline v8.4.15 | **ACTIVE** | Still used by VC scrapers for new records |
+| Enrich & Evaluate Pipeline v8.5 | **ACTIVE** | Still used by VC scrapers for new records |
