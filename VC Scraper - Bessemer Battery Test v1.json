@@ -66,7 +66,7 @@
       "name": "Parse Battery"
     },
     {
-      "parameters": {"mode": "combine", "combinationMode": "multiplex"},
+      "parameters": {"mode": "append"},
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [660, 300],
