@@ -25,7 +25,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"url\": \"https://csinsider.notion.site/6ea1b344d26042fbb78aa390429800f6\",\n  \"content\": true,\n  \"cookies\": false,\n  \"screenshot\": false,\n  \"waitForSelector\": {\n    \"selector\": \"[data-block-id]\",\n    \"timeout\": 30000\n  }\n}",
+        "jsonBody": "{\n  \"url\": \"https://csinsider.notion.site/6ea1b344d26042fbb78aa390429800f6\",\n  \"content\": true,\n  \"cookies\": false,\n  \"screenshot\": false,\n  \"waitForSelector\": {\n    \"selector\": \".notion-collection-item\",\n    \"timeout\": 45000\n  }\n}",
         "options": {"timeout": 120000}
       },
       "type": "n8n-nodes-base.httpRequest",
