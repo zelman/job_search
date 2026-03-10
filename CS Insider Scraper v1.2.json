@@ -27,7 +27,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"url\": \"https://www.csinsider.co/job-board\",\n  \"waitFor\": 5000,\n  \"gotoOptions\": {\n    \"timeout\": 30000,\n    \"waitUntil\": \"networkidle2\"\n  }\n}",
+        "jsonBody": "{\n  \"url\": \"https://www.csinsider.co/job-board\",\n  \"gotoOptions\": {\n    \"timeout\": 30000,\n    \"waitUntil\": \"networkidle2\"\n  }\n}",
         "options": {"timeout": 60000}
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -66,7 +66,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"url\": \"{{ $json.notionUrl }}\",\n  \"waitFor\": 15000,\n  \"gotoOptions\": {\n    \"timeout\": 60000,\n    \"waitUntil\": \"networkidle0\"\n  }\n}",
+        "jsonBody": "={\n  \"url\": \"{{ $json.notionUrl }}\",\n  \"gotoOptions\": {\n    \"timeout\": 60000,\n    \"waitUntil\": \"networkidle0\"\n  }\n}",
         "options": {"timeout": 180000}
       },
       "type": "n8n-nodes-base.httpRequest",
