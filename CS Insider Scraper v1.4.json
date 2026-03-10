@@ -1,0 +1,84 @@
+{
+  "name": "CS Insider Scraper v1.4",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "weeks", "triggerAtDay": [2, 5], "triggerAtHour": 7}]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 300],
+      "id": "schedule-trigger",
+      "name": "Schedule: Tue/Fri 7am"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/unblock?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"url\": \"https://csinsider.notion.site/6ea1b344d26042fbb78aa390429800f6\",\n  \"content\": true,\n  \"cookies\": false,\n  \"screenshot\": false,\n  \"waitForSelector\": {\n    \"selector\": \"[data-block-id]\",\n    \"timeout\": 30000\n  }\n}",
+        "options": {"timeout": 120000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "id": "fetch-notion",
+      "name": "Fetch Notion Job Board"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse CS Insider Notion job board - v1.4\nconst response = $input.first().json;\n\n// /unblock returns { content: '...' }\nlet html = response.content || '';\nif (!html && typeof response === 'string') html = response;\nif (!html) html = JSON.stringify(response);\n\nconst jobs = [];\nconst today = new Date().toISOString().split('T')[0];\n\nconsole.log('HTML length:', html.length);\n\n// Company patterns\nconst companyMatches = [];\nconst companyRegex = /Company<\\/span>:?\\s*([^<]+)/gi;\nlet match;\nwhile ((match = companyRegex.exec(html)) !== null) {\n  const company = match[1].trim();\n  if (company.length > 1 && company.length < 100 && !companyMatches.includes(company)) {\n    companyMatches.push(company);\n  }\n}\n\n// Location patterns\nconst locationMatches = [];\nconst locationRegex = /Location<\\/span>:?\\s*([^<]+)/gi;\nwhile ((match = locationRegex.exec(html)) !== null) {\n  const loc = match[1].trim();\n  if (loc.length > 1 && loc.length < 100 && !locationMatches.includes(loc)) {\n    locationMatches.push(loc);\n  }\n}\n\n// Apply links\nconst applyMatches = [];\nconst applyRegex = /href=\"(https:\\/\\/[^\"]*(?:greenhouse|lever|workday|ashby|jobs\\.|careers|apply|hiring)[^\"]*)\"/gi;\nwhile ((match = applyRegex.exec(html)) !== null) {\n  const url = match[1];\n  if (!url.includes('notion.') && !url.includes('google.com') && !applyMatches.includes(url)) {\n    applyMatches.push(url);\n  }\n}\n\n// Job titles\nconst cleanTitles = [];\nconst titleRegex = />([^<]*(?:Customer Success|CSM|Client Success|Account Manager|Success Manager|Engagement Manager|Implementation|Onboarding)[^<]*)</gi;\nwhile ((match = titleRegex.exec(html)) !== null) {\n  const title = match[1].trim();\n  if (title.length > 5 && title.length < 100 && !cleanTitles.includes(title)) {\n    cleanTitles.push(title);\n  }\n}\n\n// Job ID helper\nfunction extractJobId(url) {\n  const patterns = [/\\/jobs?\\/([a-f0-9-]+)/i, /\\/postings?\\/([a-f0-9-]+)/i, /\\/([0-9]+)(?:\\?|$)/];\n  for (const p of patterns) {\n    const m = url.match(p);\n    if (m) return m[1];\n  }\n  let hash = 0;\n  for (let i = 0; i < url.length; i++) { hash = ((hash << 5) - hash) + url.charCodeAt(i); hash = hash & hash; }\n  return 'csi-' + Math.abs(hash).toString(36);\n}\n\n// Build jobs\nfor (let i = 0; i < applyMatches.length; i++) {\n  const company = companyMatches[i];\n  const jobUrl = applyMatches[i];\n  if (jobUrl && company) {\n    jobs.push({\n      json: {\n        'Job Title': cleanTitles[i] || 'Customer Success Manager',\n        'Company': company,\n        'Location': locationMatches[i] || 'Remote',\n        'Job URL': jobUrl,\n        'Source': 'CS Insider',\n        'Date Found': today,\n        'Job ID': extractJobId(jobUrl)\n      }\n    });\n  }\n}\n\nconsole.log('Jobs:', jobs.length, 'Companies:', companyMatches.length, 'URLs:', applyMatches.length);\n\nif (jobs.length === 0) {\n  return [{ json: { error: 'No jobs parsed', debug: { htmlLength: html.length, companies: companyMatches.slice(0,5), urls: applyMatches.slice(0,5), titles: cleanTitles.slice(0,5), htmlSample: html.substring(0, 2000) } } }];\n}\n\nreturn jobs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "id": "parse-jobs",
+      "name": "Parse Jobs"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "has-company", "leftValue": "={{ $json.Company }}", "rightValue": "", "operator": { "type": "string", "operation": "notEquals" } },
+            { "id": "not-error", "leftValue": "={{ $json.error }}", "rightValue": "", "operator": { "type": "string", "operation": "equals" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [800, 300],
+      "id": "filter-valid",
+      "name": "Filter Valid Jobs"
+    },
+    {
+      "parameters": {
+        "workflowId": "v24qHkIsp8GVCwFkscHP8",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1000, 300],
+      "id": "run-pipeline",
+      "name": "Job Evaluation Pipeline"
+    }
+  ],
+  "connections": {
+    "Schedule: Tue/Fri 7am": { "main": [[{"node": "Fetch Notion Job Board", "type": "main", "index": 0}]] },
+    "Fetch Notion Job Board": { "main": [[{"node": "Parse Jobs", "type": "main", "index": 0}]] },
+    "Parse Jobs": { "main": [[{"node": "Filter Valid Jobs", "type": "main", "index": 0}]] },
+    "Filter Valid Jobs": { "main": [[{"node": "Job Evaluation Pipeline", "type": "main", "index": 0}]] }
+  },
+  "settings": {"executionOrder": "v1"}
+}
