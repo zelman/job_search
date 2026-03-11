@@ -86,6 +86,18 @@ All workflow JSON files are stored in:
 
 ---
 
+## FigJam Diagrams
+
+Interactive diagrams for the Job Search system architecture (generated Mar 2026):
+
+| Diagram | Purpose | Link |
+|---------|---------|------|
+| **System Architecture v9** | Overview of all scrapers, pipelines, and Airtable tables | [View in FigJam](https://www.figma.com/online-whiteboard/create-diagram/f1065a98-f078-44b9-9ba6-b088601f526b) |
+| **v9 Pipeline Gate Flow** | 5-phase gate architecture with decision points | [View in FigJam](https://www.figma.com/online-whiteboard/create-diagram/6d2f6511-9e89-4635-8585-238feae95221) |
+| **v9 Scoring Architecture** | 100-point scoring breakdown with domain distance modifiers | [View in FigJam](https://www.figma.com/online-whiteboard/create-diagram/d16d9d48-12af-4d27-9fa1-99566ea42a1d) |
+
+---
+
 ## n8n Workflow IDs
 
 These IDs are assigned by n8n on import. Update Execute Workflow nodes when replacing subworkflows.
