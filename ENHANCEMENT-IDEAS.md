@@ -1,11 +1,11 @@
 # Job Search Automation Enhancement Ideas
 
 *Created: February 24, 2026*
-*Updated: March 3, 2026*
+*Updated: March 11, 2026*
 
 ## Overview
 
-Potential enhancements to the n8n job search automation system, organized by category. The system currently has a modular architecture with shared pipelines (Job Evaluation Pipeline v4, Enrich & Evaluate Pipeline v4) called by multiple scrapers and parsers.
+Potential enhancements to the n8n job search automation system, organized by category. The system currently has a modular architecture with shared pipelines (Job Evaluation Pipeline v6.1, Enrich & Evaluate Pipeline v9) called by multiple scrapers and parsers.
 
 ---
 
@@ -107,7 +107,7 @@ Potential enhancements to the n8n job search automation system, organized by cat
 - Jobs >30 days old with no action → archive
 - Recheck job URLs for 404s (position filled)
 
-### 23. Tide-Pool Scoring Pipeline Improvements [NEW - March 2026]
+### 23. Tide-Pool Scoring Pipeline Improvements [IMPLEMENTED - v9]
 
 **Context**: Analysis of 20 companies scored 68-72 revealed only 5% yield (1 strong fit). Many companies should have been auto-disqualified before expensive Claude evaluation.
 
@@ -186,16 +186,57 @@ Improve prompt to distinguish:
 | `Business Model` | singleSelect | B2B SaaS / Hardware / B2C / Marketplace |
 | `Auto-Disqualified` | checkbox | True if pre-filter skipped Claude |
 
-**Implementation Priority**:
-1. **Immediate**: Add pre-filter node to `Funding Alerts Rescore v1`
-2. **Short-term**: Expand PE investor list in Enrich node
-3. **Medium-term**: Add HQ/acquisition extraction to Brave Search queries
-4. **Deferred**: Crunchbase API integration (too expensive ~$500/mo)
+**Implementation Status** (as of v9):
+1. ✅ **Pre-filter node**: Multi-tier gate architecture (Tiers 1-5) before Claude evaluation
+2. ✅ **PE investor list**: Expanded to 25+ firms including growth equity
+3. ✅ **HQ/acquisition extraction**: Geography detection, enhanced acquisition patterns
+4. ✅ **CS Hire Readiness threshold**: Quick Claude call to check CS need before full evaluation
+5. ✅ **Domain distance scoring**: Penalty/bonus based on sector fit
+6. ❌ **Crunchbase API**: Deferred (too expensive ~$500/mo)
 
-**Expected Impact**:
-- Reduce Claude API costs by ~30-40% (skip obvious disqualifications)
-- Improve signal quality in 68-72 score range
-- Faster pipeline throughput (fewer records to evaluate)
+**Observed Impact**:
+- ~50-60% of companies auto-disqualified before full Claude evaluation
+- Better signal quality (Hint Health scored 65 with target domain)
+- CS Readiness threshold (>= 10) catches companies without clear CS hiring need
+
+---
+
+## New Job Sources [NEW - March 2026]
+
+### 24. High-Priority Job Aggregators
+
+| Source | URL | Why |
+|--------|-----|-----|
+| **Getro / Jobs in VC** | jobsinvc.getro.com | Powers 700+ VC fund job boards aggregated - biggest coverage gap |
+| **TrueUp** | trueup.io | 15,000+ early-stage startup roles, pre-unicorn filters, salary data |
+| **GTMfund Job Board** | jobs.gtmfund.com | B2B SaaS-focused VC, frequently has CS/CX leadership roles |
+| **TopStartups.io** | topstartups.io | Aggregates Sequoia, a16z, Benchmark, Accel, Bessemer portfolios |
+
+### 25. CX/CS-Specific Boards
+
+| Source | URL | Notes |
+|--------|-----|-------|
+| **CS Insider** | csinsider.co | Dedicated Customer Success job board and community |
+| **TalentWay** | talentway.com | AI-powered daily CSM job matches, scans 10+ boards |
+| **Aspireship** | aspireship.com | SaaS CS training + placement, companies hire directly |
+| **CXPA Career Center** | cxpaglobal.org | Customer Experience Professionals Association board |
+
+### 26. Additional VC Portfolio Boards
+
+Not yet scraped:
+- a16z talent network
+- General Catalyst jobs
+- Sequoia portfolio jobs
+- Lightspeed portfolio jobs
+- Bessemer portfolio jobs
+- Battery Ventures portfolio jobs
+- Primary Venture Partners (jobs.primary.vc)
+- Backed VC (talent.backed.vc)
+
+**Recommended Priority:**
+1. Add Getro/Jobs in VC (single source covering biggest blind spot)
+2. Add TrueUp (best startup aggregator not currently used)
+3. Add CS Insider or TalentWay (CX-specific coverage)
 
 ---
 
@@ -219,12 +260,15 @@ Improve prompt to distinguish:
 - Automated follow-up reminders (7 days post-application)
 - **Status**: Manual tracking in Job Applications table (86 records)
 
-### 16. Network Match Alerts [IMPLEMENTED]
+### 16. Network Match Alerts [DISABLED - NEEDS FIX]
 - Cross-reference new companies against LinkedIn connections
 - "You know someone at this company" flag
-- **Status**: Implemented in Enrich & Evaluate Pipeline v5
 - **Fields**: `Has Network Connection`, `Connection Name`, `Connection LinkedIn URL`
-- **File**: `Enrich & Evaluate Pipeline v5.json`
+- **Status**: Implemented in v5, but **disabled in v9** to fix duplicate record bug
+- **Issue**: Two parallel merge paths (Job Check + LinkedIn Check) both fed into downstream node, causing duplicate Airtable records
+- **Fix needed**: Re-architect with single merge path that combines both job and LinkedIn data before proceeding
+- **Priority**: Low (user reports limited startup contacts in LinkedIn, not providing much value currently)
+- **File**: `Enrich & Evaluate Pipeline v9.json` (LinkedIn search still runs, but output disconnected)
 
 ---
 
@@ -278,10 +322,15 @@ Improve prompt to distinguish:
 | Scoring refinements | Low | Medium - better signal quality | ✅ Done |
 | Pipeline optimization | Low | Medium - performance gains | ✅ Done |
 | Founder research pipeline | High | High - better outreach | Manual |
-| Network match alerts | Medium | High - warm intros | ✅ Done |
-| Scoring pre-filters | Low | High - API cost savings, better signal | |
-| PE investor list expansion | Low | Medium - catch growth equity | |
-| HQ/acquisition extraction | Medium | Medium - catch non-US, acquired | |
+| Network match alerts | Medium | High - warm intros | ⚠️ Disabled (dupe fix) |
+| Scoring pre-filters | Low | High - API cost savings, better signal | ✅ Done (v9) |
+| PE investor list expansion | Low | Medium - catch growth equity | ✅ Done (v9) |
+| HQ/acquisition extraction | Medium | Medium - catch non-US, acquired | ✅ Done (v9) |
+| CS Hire Readiness threshold | Medium | High - timing alignment | ✅ Done (v9) |
+| Domain distance scoring | Medium | Medium - sector fit penalty/bonus | ✅ Done (v9) |
+| Getro/Jobs in VC scraper | Medium | High - 700+ VC boards in one | |
+| TrueUp scraper | Medium | High - best startup aggregator | |
+| CS Insider scraper | Low | Medium - CX-specific roles | |
 | Weekly digest email | Low | Medium - stay on top of pipeline | |
 | Cover letter drafting | Medium | High - time savings | |
 
@@ -299,17 +348,19 @@ Improve prompt to distinguish:
 | Scoring Refinements | **Implemented** | 2026-02-27 | Job Evaluation Pipeline v4 |
 | Pipeline Optimization | **Implemented** | 2026-02-27 | Map lookup, field limiting |
 | Founder Research | **Manual** | 2026-03-01 | `FOUNDER-OUTREACH-TOP-20.md` |
-| Network Match Alerts | **Implemented** | 2026-03-01 | `Enrich & Evaluate Pipeline v5.json` + `LinkedIn Connections` table |
+| Network Match Alerts | **Disabled** | 2026-03-11 | Disabled in v9 to fix dupe bug; needs re-architecture |
+| v9 Full Redesign | **Implemented** | 2026-03-11 | Entity validation, acquisition detection, GTM gates, CS Readiness, domain distance |
 
 ### Current Pipeline Versions
 
 | Pipeline | Version | Key Features |
 |----------|---------|--------------|
-| Job Evaluation Pipeline | v4 | JD fetching, dedup, 500-999 penalty, Support penalty, network override |
-| Enrich & Evaluate Pipeline | v5 | Dedup, Job Listings cross-ref, LinkedIn Connections cross-ref, Network Match Alerts |
-| Job Alert Email Parser | v3-35 | Uses Job Evaluation Pipeline v4 |
-| Work at a Startup Scraper | v12 | Uses Job Evaluation Pipeline v4 |
-| VC Scraper - Micro-VC | v14 | Includes Y Combinator, uses Enrich & Evaluate Pipeline v5 |
+| Job Evaluation Pipeline | v6.1 | JD fetching, dedup, scoring refinements, source field preservation |
+| Enrich & Evaluate Pipeline | v9 | Full redesign: Entity validation, enhanced acquisition detection, GTM motion gates, CS Hire Readiness threshold, domain distance scoring, dupe fix |
+| Job Alert Email Parser | v3-43 | Uses Job Evaluation Pipeline v6.1 |
+| Work at a Startup Scraper | v12 | Uses Job Evaluation Pipeline v6.1 |
+| VC Scraper - Micro-VC | v14 | Includes Y Combinator, uses Enrich & Evaluate Pipeline v9 |
+| VC Scraper - Healthcare | v27 | 14 VC portfolios, uses Enrich & Evaluate Pipeline v9 |
 
 ### Feedback Loop Architecture
 
@@ -356,11 +407,14 @@ Both feedback loops form a **closed-loop learning system**:
 
 ## Next Priority Items
 
-Based on current job search status (~90 applications, ~5% response rate) and pipeline research report (March 2026):
+Based on v9 deployment (March 11, 2026):
 
-1. **Scoring Pre-Filter Node** - Quick win: skip obvious disqualifications before Claude call (saves ~30-40% API costs)
-2. **PE Investor List Expansion** - Add growth equity firms to detection list
-3. **Founder Research Automation** - Reduce manual research time for top companies
-4. **Application Funnel Tracking** - Better understand what's working
-5. **Weekly Digest Email** - Stay on top of pipeline without checking Airtable daily
-6. ~~**Network Match Alerts**~~ ✅ Implemented in v5
+1. ~~**Scoring Pre-Filter Node**~~ ✅ Implemented in v9 (multi-tier gates)
+2. ~~**PE Investor List Expansion**~~ ✅ Implemented in v9 (25+ firms)
+3. ~~**HQ/Acquisition Extraction**~~ ✅ Implemented in v9
+4. **Founder Research Automation** - Reduce manual research time for top companies
+5. **Application Funnel Tracking** - Better understand what's working
+6. **Weekly Digest Email** - Stay on top of pipeline without checking Airtable daily
+7. **Getro/Jobs in VC Scraper** - Single source covering 700+ VC fund job boards
+8. **TrueUp Scraper** - Best startup job aggregator not currently used
+9. **Re-enable LinkedIn Network Matching** - Low priority; needs single-path merge architecture to avoid dupes

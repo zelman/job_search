@@ -18,7 +18,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │ Enrich & Evaluate Pipeline v8.5   │◄── rcMNDrfZR6csHRsYKFn0W
+│                    │ Enrich & Evaluate Pipeline v9     │◄── UPDATE_AFTER_IMPORT
 │                    │   (100-point company scoring) │    (UPDATE after import)
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -92,7 +92,7 @@ These IDs are assigned by n8n on import. Update Execute Workflow nodes when repl
 
 | Workflow | ID | Used By |
 |----------|-----|---------|
-| **Enrich & Evaluate Pipeline** | `rcMNDrfZR6csHRsYKFn0W` | All VC scrapers |
+| **Enrich & Evaluate Pipeline v9** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
 | **Job Evaluation Pipeline** | `v24qHkIsp8GVCwFkscHP8` | WaaS, Job Alert Parser, Indeed, First Round |
 | **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
 | **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
@@ -110,11 +110,31 @@ These IDs are assigned by n8n on import. Update Execute Workflow nodes when repl
 
 | Table | ID | Description |
 |-------|-----|-------------|
-| **Funding Alerts** | `tblXXX` (use list mode) | Company evaluations from VC scrapers |
+| **Funding Alerts** | `tbl7yU6QYfIFSC2nD` | Company evaluations from VC scrapers |
 | **Job Listings** | `tbl6ZV2rHjWz56pP3` | Job evaluations from job scrapers |
 | **LinkedIn Connections** | `tbliKHRPEVI6SceJX` | Imported from LinkedIn CSV |
 | **Seen Opportunities** | `tbll8igHTftSqsTtQ` | Cross-source dedup registry |
 | **Indeed Searches** | `tblofzQpzGEN8igVS` | Indeed job search configs |
+
+**MCP Limitation:** The Airtable MCP does not have a delete tool. To delete records, use the Airtable API directly:
+```bash
+curl -X DELETE "https://api.airtable.com/v0/{baseId}/{tableId}/{recordId}" \
+  -H "Authorization: Bearer {pat_token}"
+```
+
+---
+
+## n8n Credential IDs
+
+Use these IDs in workflow JSON files so credentials auto-map on import:
+
+| Credential | ID | Type |
+|------------|-----|------|
+| Airtable Personal Access Token | `svcspqcZ9yGYzqGm` | airtableTokenApi |
+| Brave Search API | `AzmU2a7s7eN8MFvE` | httpHeaderAuth |
+| Anthropic API | `bR8vmR2cZDLoP5W6` | httpHeaderAuth |
+| Gmail OAuth2 | `vUMmpPTSbHvfz72M` | gmailOAuth2 |
+| Browserless | `iatzkTu30nb6GVd9` | httpHeaderAuth |
 
 ---
 
@@ -142,7 +162,8 @@ Current versions (as of Mar 2026):
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
-- `Enrich & Evaluate Pipeline v8.5.json` (shared subworkflow - companies). v8.5: **8 SCORING FIXES** - (1) Added "employee-user" persona for B2B2C patterns like Oshi Health, Koa Health. (2) Stricter SaaS gate: catches marketplace, IoT, materials sectors. (3) Stricter funding cap: $75M soft cap with uncertainty handling. (4) Geography gate: US-HQ detection, non-US flagged. (5) Stricter developer persona: requires 3+ enterprise signals (was 2+). (6) Age gate: founded pre-2016 flagged as warning. (7) Stale funding penalty: 2+ years since funding reduces CS Hire Readiness score. (8) Build vs Maintain distinction: clearer MAINTAINER signals cap role_mandate at 5 max.
+- `Enrich & Evaluate Pipeline v9.json` (**CURRENT** shared subworkflow - companies). v9: **FULL REDESIGN** addressing 4% signal rate. New features: (1) **Phase 0: Entity Validation** - catches non-companies (podcasts, media, nonprofits) before enrichment. (2) **Enhanced Acquisition Detection** - PE portfolio company patterns, Jonas/Constellation detection. (3) **GTM Motion Gates** - PLG-dominant auto-DQ, pre-sales function company detection. (4) **Stale Company Gates** - 3+ years since funding, shrinking headcount signals. (5) **Software-First Check** - services businesses and hardware-masquerading-as-SaaS detection. (6) **CS Hire Readiness Threshold** - Claude call to check CS need before full evaluation, must score >= 10. (7) **Domain Distance Scoring** - penalty for high-distance domains (ITSM, Legal Tech, Real Estate), bonus for target domains (Healthcare B2B SaaS).
+- `Enrich & Evaluate Pipeline v8.5.json` (previous version). v8.5: **8 SCORING FIXES** - (1) Added "employee-user" persona for B2B2C patterns like Oshi Health, Koa Health. (2) Stricter SaaS gate: catches marketplace, IoT, materials sectors. (3) Stricter funding cap: $75M soft cap with uncertainty handling. (4) Geography gate: US-HQ detection, non-US flagged. (5) Stricter developer persona: requires 3+ enterprise signals (was 2+). (6) Age gate: founded pre-2016 flagged as warning. (7) Stale funding penalty: 2+ years since funding reduces CS Hire Readiness score. (8) Build vs Maintain distinction: clearer MAINTAINER signals cap role_mandate at 5 max.
 - `Enrich & Evaluate Pipeline v8.4.15.json` (previous version). v8.4.15: PARSE EVALUATION RESCORE FIX - ref-based lookup in Parse Evaluation. v8.4: Customer Persona Gate. v8.3: Two-tier disqualification, Fortune 500 detection, employee 200 cap.
 - `Enrich & Evaluate Pipeline v8.4.14.json` (previous version) - __RID__ encoding for Brave Search, didn't fix Parse Evaluation index issue
 - `Enrich & Evaluate Pipeline v8.3.json` (previous version) - see v8.4 for March 2026 Audit fixes
@@ -166,7 +187,7 @@ Current versions (as of Mar 2026):
 ## Workflow Architecture
 
 **Company evaluation (VC scrapers):**
-All VC scrapers use the shared `Enrich & Evaluate Pipeline v8.5.json` subworkflow via Execute Workflow node.
+All VC scrapers use the shared `Enrich & Evaluate Pipeline v9.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
 All job workflows use the shared `Job Evaluation Pipeline v6.1.json` subworkflow:
@@ -195,9 +216,11 @@ The Enrich & Evaluate Pipeline v3 adds a cross-reference step that checks if a c
 - If `hasCxJobPosting = true`, sends urgent email alert with matching job titles
 - Uses Gmail OAuth2 credentials (same as existing)
 
-## Network Match Alerts (v5 feature)
+## Network Match Alerts (v5 feature) - DISABLED IN v9
 
-The Enrich & Evaluate Pipeline v5 cross-references companies against your LinkedIn Connections table.
+**Status:** This feature is currently **disabled in v9** to fix a duplicate record bug. The two parallel merge paths (Job Check + LinkedIn Check) both fed into the downstream node, causing duplicate Airtable records. A re-architecture with a single merge path is needed to re-enable this feature.
+
+The Enrich & Evaluate Pipeline v5 introduced cross-referencing companies against your LinkedIn Connections table.
 
 **Airtable table:** `LinkedIn Connections` (tbliKHRPEVI6SceJX)
 - Imported from LinkedIn export CSV
@@ -293,6 +316,80 @@ Enrich → Pre-Filter → Check DQ?
 
 ---
 
+## v9 Full Redesign (Mar 2026)
+
+The v9 pipeline addresses a 4% signal rate (1/25 companies worth pursuing) by adding multiple new gates and enhanced detection patterns.
+
+### v9 Architecture Overview
+
+```
+INPUT (company from scraper)
+    ↓
+PHASE 0: ENTITY VALIDATION (NEW)
+    • Catches non-companies (podcasts, media, nonprofits)
+    ↓
+PHASE 1: ENRICHMENT (Brave Search)
+    • Enhanced acquisition detection (PE portfolio patterns)
+    • GTM motion extraction (PLG vs enterprise signals)
+    • Software-first check (not services/hardware)
+    • Stale company detection (shrinking headcount)
+    ↓
+PHASE 2: PRE-EVALUATION GATES
+    • Tier 1: Hard gates (acquired, PE, >200 emp, >$500M, public, Series D+, non-US)
+    • Tier 2: Sector gates (biotech, hardware, crypto, consumer, HR, not software-first)
+    • Tier 3: GTM motion gates (PLG-dominant, pre-sales function)
+    • Tier 4: Stale company gate (3+ years since funding, shrinking signals)
+    • Tier 5: Soft gates (too early <15 employees)
+    ↓
+PHASE 3: PERSONA CLASSIFICATION
+    • business-user, employee-user, developer, mixed
+    • Developer/employee-user auto-pass (unless enterprise exception)
+    ↓
+PHASE 4: CS HIRE READINESS THRESHOLD (NEW)
+    • Quick Claude call to check CS hire need
+    • Must score >= 10 to proceed
+    ↓
+PHASE 5: FULL EVALUATION
+    • 100-point scoring with domain distance modifier (-10 to +5)
+    • APPLY/WATCH/PASS bucketing
+    ↓
+OUTPUT (Airtable record with score + status)
+```
+
+### v9 New Disqualification Reasons
+
+- `Invalid entity (media/podcast/nonprofit)`
+- `Non-US primary market`
+- `Not software-first (services business)`
+- `Not software-first (hardware with software)`
+- `PLG-dominant (no enterprise CS need)`
+- `Pre-sales function company`
+- `Stale company (3+ years since funding)`
+- `Shrinking headcount signals`
+- `CS Hire Readiness below threshold`
+
+### v9 Domain Distance Scoring
+
+Applied as a modifier after base scoring:
+
+**High-distance domains** (subtract 5-10 points):
+- IT Operations/ITSM: -8
+- Physical Security: -10
+- Vertical Retail POS: -8
+- Financial Compliance/RegTech: -6
+- Legal Tech: -6
+- Real Estate Tech: -7
+- Construction Tech: -7
+
+**Target domains** (add 0-5 points):
+- Healthcare B2B SaaS (provider-side): +5
+- Patient Engagement (B2B2C): +3
+- Clinical Operations: +5
+- Care Coordination: +4
+- Developer Tools/DevOps: +2
+
+---
+
 ## Cross-Source Deduplication
 
 The dedup system prevents duplicate evaluations across all sources using a central `Seen Opportunities` table in Airtable.
@@ -351,4 +448,5 @@ https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_I
 |----------|--------|-------|
 | Funding Alerts Rescore v4 | **ACTIVE** | Uses HTTP Request, works correctly |
 | Funding Alerts Rescore v3 | **DEACTIVATE** | Uses Execute Workflow, causes scrambling |
-| Enrich & Evaluate Pipeline v8.5 | **ACTIVE** | Still used by VC scrapers for new records |
+| Enrich & Evaluate Pipeline v9 | **ACTIVE** | Full redesign with enhanced gates, CS readiness threshold, domain distance |
+| Enrich & Evaluate Pipeline v8.5 | **PREVIOUS** | Keep for rollback if needed |

@@ -1,5 +1,5 @@
 {
-  "name": "VC Scraper - Bessemer Battery Test v1.3",
+  "name": "VC Scraper - Bessemer Battery v2.2",
   "nodes": [
     {
       "parameters": {
@@ -14,7 +14,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
         "sendHeaders": true,
         "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
         "sendBody": true,
@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse Bessemer Venture Partners portfolio\n// Structure: Links use full URLs like https://www.bvp.com/companies/[slug]\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Bessemer Venture Partners';\nconst seen = new Set();\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  console.log('Bessemer HTML length:', html.length);\n  \n  // Look for company links - full URLs: https://www.bvp.com/companies/[slug]\n  const companyPattern = /href=[\"']https?:\\/\\/(?:www\\.)?bvp\\.com\\/companies\\/([a-z0-9-]+)[\"'][^>]*>([^<]*)</gi;\n  let match;\n  \n  while ((match = companyPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    let name = match[2].trim();\n    \n    if (!slug || slug.length < 2) continue;\n    if (slug === 'companies' || slug === 'all') continue;\n    \n    // If no name in the link text, derive from slug\n    if (!name || name.length < 2) {\n      name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    }\n    \n    // Clean up name\n    name = name.replace(/^\\s*[\\-•]\\s*/, '').trim();\n    if (!name || name.length < 2 || name.length > 60) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        company_name: name,\n        company_url: 'https://www.bvp.com/companies/' + slug,\n        description: name + ' - Bessemer Venture Partners portfolio company',\n        source: vcName\n      }\n    });\n  }\n  \n  // Fallback: look for any bvp.com/companies/ pattern and extract slug\n  if (results.length === 0) {\n    const slugPattern = /bvp\\.com\\/companies\\/([a-z0-9-]+)/gi;\n    while ((match = slugPattern.exec(html)) !== null) {\n      const slug = match[1].trim();\n      if (!slug || slug.length < 2 || slug === 'companies') continue;\n      \n      const name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (key.length < 2 || seen.has(key)) continue;\n      seen.add(key);\n      \n      results.push({\n        json: {\n          company_name: name,\n          company_url: 'https://www.bvp.com/companies/' + slug,\n          description: name + ' - Bessemer Venture Partners portfolio company',\n          source: vcName\n        }\n      });\n    }\n  }\n}\n\nconsole.log('Bessemer companies found:', results.length);\nreturn results.length ? results : [{ json: { _empty: true, _source: 'Bessemer' } }];"
+        "jsCode": "// Parse Bessemer Venture Partners portfolio\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Bessemer Venture Partners';\nconst seen = new Set();\n\nfor (const item of items) {\n  let html = item.json.content || item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  const companyPattern = /href=[\"']https?:\\/\\/(?:www\\.)?bvp\\.com\\/companies\\/([a-z0-9-]+)[\"'][^>]*>([^<]*)</gi;\n  let match;\n  \n  while ((match = companyPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    let name = match[2].trim();\n    \n    if (!slug || slug.length < 2 || slug === 'companies' || slug === 'all') continue;\n    \n    if (!name || name.length < 2) {\n      name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    }\n    \n    name = name.replace(/^\\s*[\\-\u2022]\\s*/, '').trim();\n    if (!name || name.length < 2 || name.length > 60) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        company_name: name,\n        company_url: 'https://www.bvp.com/companies/' + slug,\n        description: name + ' - Bessemer Venture Partners portfolio company',\n        source: vcName\n      }\n    });\n  }\n}\n\nconsole.log('Bessemer companies found:', results.length);\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -41,7 +41,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://chrome.browserless.io/content?token=YOUR_BROWSERLESS_TOKEN",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
         "sendHeaders": true,
         "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
         "sendBody": true,
@@ -57,7 +57,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parse Battery Ventures portfolio\n// Structure: Logo carousel with links to /company/[slug]/\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Battery Ventures';\nconst seen = new Set();\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  console.log('Battery HTML length:', html.length);\n  \n  // Look for company links: /company/[slug]/\n  const companyPattern = /href=[\"']\\/company\\/([a-z0-9-]+)\\/?[\"'][^>]*>/gi;\n  let match;\n  \n  while ((match = companyPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    \n    if (!slug || slug.length < 2) continue;\n    if (slug === 'company' || slug === 'all') continue;\n    \n    // Derive name from slug\n    let name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    \n    // Clean up common patterns\n    name = name.replace(/\\s+Inc$/i, '').replace(/\\s+Ltd$/i, '').trim();\n    name = name.replace(/ai$/i, 'AI').replace(/^ai\\s/i, 'AI ');\n    \n    if (!name || name.length < 2 || name.length > 60) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    \n    // Look for company website in nearby context\n    const contextStart = Math.max(0, match.index - 500);\n    const contextEnd = Math.min(html.length, match.index + 1000);\n    const context = html.substring(contextStart, contextEnd);\n    \n    let companyUrl = '';\n    const websiteMatch = context.match(/href=[\"'](https?:\\/\\/(?!battery\\.com|linkedin|twitter|facebook)[^\"']+)[\"']/i);\n    if (websiteMatch) companyUrl = websiteMatch[1];\n    \n    results.push({\n      json: {\n        company_name: name,\n        company_url: companyUrl || 'https://www.battery.com/company/' + slug + '/',\n        description: name + ' - Battery Ventures portfolio company',\n        source: vcName\n      }\n    });\n  }\n  \n  // Alternative pattern: look for alt text on images within company links\n  if (results.length === 0) {\n    const imgAltPattern = /<a[^>]*href=[\"']\\/company\\/[^\"']+[\"'][^>]*>.*?<img[^>]*alt=[\"']([^\"']+)[\"']/gi;\n    while ((match = imgAltPattern.exec(html)) !== null) {\n      const name = match[1].trim();\n      if (!name || name.length < 2 || name.length > 60) continue;\n      \n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (key.length < 2 || seen.has(key)) continue;\n      seen.add(key);\n      \n      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');\n      \n      results.push({\n        json: {\n          company_name: name,\n          company_url: 'https://www.battery.com/company/' + slug + '/',\n          description: name + ' - Battery Ventures portfolio company',\n          source: vcName\n        }\n      });\n    }\n  }\n}\n\nconsole.log('Battery companies found:', results.length);\nreturn results.length ? results : [{ json: { _empty: true, _source: 'Battery' } }];"
+        "jsCode": "// Parse Battery Ventures portfolio\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Battery Ventures';\nconst seen = new Set();\n\nfor (const item of items) {\n  let html = item.json.content || item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  const companyPattern = /href=[\"']\\/company\\/([a-z0-9-]+)\\/?[\"'][^>]*>/gi;\n  let match;\n  \n  while ((match = companyPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    \n    if (!slug || slug.length < 2 || slug === 'company' || slug === 'all') continue;\n    \n    let name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    name = name.replace(/\\s+Inc$/i, '').replace(/\\s+Ltd$/i, '').trim();\n    name = name.replace(/ai$/i, 'AI').replace(/^ai\\s/i, 'AI ');\n    \n    if (!name || name.length < 2 || name.length > 60) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        company_name: name,\n        company_url: 'https://www.battery.com/company/' + slug + '/',\n        description: name + ' - Battery Ventures portfolio company',\n        source: vcName\n      }\n    });\n  }\n}\n\nconsole.log('Battery companies found:', results.length);\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -67,36 +67,29 @@
     },
     {
       "parameters": {
-        "jsCode": "// Combine from both VC sources using input indices\n// Input 0 = Bessemer, Input 1 = Battery\nconst allItems = $input.all();\n\nconst results = [];\nconst seen = new Set();\n\nconsole.log('Total input items:', allItems.length);\n\nfor (const item of allItems) {\n  // Skip empty markers\n  if (item.json._empty) continue;\n  \n  const name = item.json.company_name;\n  if (!name) continue;\n  \n  // Deduplicate by company name\n  const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (seen.has(key)) continue;\n  seen.add(key);\n  \n  results.push(item);\n}\n\nconsole.log('Total unique companies after dedup:', results.length);\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found across all VCs' } }];"
+        "source": "database",
+        "workflowId": {"__rl": true, "value": "rcMNDrfZR6csHRsYKFn0W", "mode": "id"},
+        "mode": "each",
+        "options": {}
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [880, 300],
-      "id": "combine-dedup",
-      "name": "Combine & Dedupe"
-    },
-    {
-      "parameters": {
-        "conditions": {"boolean": [{"value1": "={{ $json._empty }}", "operation": "notEqual", "value2": true}]}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [1100, 300],
-      "id": "filter-valid",
-      "name": "Filter Valid"
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [660, 200],
+      "id": "pipeline-bessemer",
+      "name": "Pipeline (Bessemer)"
     },
     {
       "parameters": {
         "source": "database",
         "workflowId": {"__rl": true, "value": "rcMNDrfZR6csHRsYKFn0W", "mode": "id"},
-        "options": {"waitForSubWorkflow": true}
+        "mode": "each",
+        "options": {}
       },
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
-      "position": [1320, 280],
-      "id": "pipeline",
-      "name": "Execute Enrich & Evaluate Pipeline",
-      "notes": "Uses Enrich & Evaluate Pipeline v8.5"
+      "position": [660, 400],
+      "id": "pipeline-battery",
+      "name": "Pipeline (Battery)"
     }
   ],
   "connections": {
@@ -106,10 +99,8 @@
     ]]},
     "Browserless Bessemer": {"main": [[{"node": "Parse Bessemer", "type": "main", "index": 0}]]},
     "Browserless Battery": {"main": [[{"node": "Parse Battery", "type": "main", "index": 0}]]},
-    "Parse Bessemer": {"main": [[{"node": "Combine & Dedupe", "type": "main", "index": 0}]]},
-    "Parse Battery": {"main": [[{"node": "Combine & Dedupe", "type": "main", "index": 1}]]},
-    "Combine & Dedupe": {"main": [[{"node": "Filter Valid", "type": "main", "index": 0}]]},
-    "Filter Valid": {"main": [[{"node": "Execute Enrich & Evaluate Pipeline", "type": "main", "index": 0}], []]}
+    "Parse Bessemer": {"main": [[{"node": "Pipeline (Bessemer)", "type": "main", "index": 0}]]},
+    "Parse Battery": {"main": [[{"node": "Pipeline (Battery)", "type": "main", "index": 0}]]}
   },
   "settings": {"executionOrder": "v1"},
   "meta": {"templateCredsSetupCompleted": true},

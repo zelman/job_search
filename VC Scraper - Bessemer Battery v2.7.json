@@ -1,0 +1,271 @@
+{
+  "name": "VC Scraper - Bessemer Battery v2.7",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {"interval": [{"field": "hours", "hoursInterval": 2}]}
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300],
+      "id": "trigger",
+      "name": "Schedule (Every 2hrs)"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tblofzQpzGEN8igVS?filterByFormula={Key}=\"BESSEMER_OFFSET\"",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 300],
+      "id": "get-bessemer-offset",
+      "name": "Get Bessemer Offset",
+      "credentials": {"airtableTokenApi": {"id": "irpwnoI6bYh9Mrmz", "name": "Airtable: Job Search"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.bvp.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
+        "options": {"timeout": 120000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 300],
+      "id": "bessemer-fetch",
+      "name": "Browserless Bessemer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Bessemer + slice batch based on offset (v2.7)\nconst html = $('Browserless Bessemer').first().json.data || $('Browserless Bessemer').first().json.content || '';\nconst offsetData = $('Get Bessemer Offset').first().json;\nconst currentOffset = parseInt(offsetData.records?.[0]?.fields?.Value || '0', 10);\nconst BATCH_SIZE = 25;\n\nconst allCompanies = [];\nconst vcName = 'Bessemer Venture Partners';\nconst seenSlugs = new Set();\nconst seenNames = new Set();\n\nconst companyPattern = /href=[\"']https?:\\/\\/(?:www\\.)?bvp\\.com\\/companies\\/([a-z0-9-]+)[\"'][^>]*>([^<]*)</gi;\nlet match;\n\nwhile ((match = companyPattern.exec(html)) !== null) {\n  const slug = match[1].trim().toLowerCase();\n  let name = match[2].trim();\n  \n  if (!slug || slug.length < 2 || slug === 'companies' || slug === 'all') continue;\n  if (seenSlugs.has(slug)) continue;\n  seenSlugs.add(slug);\n  \n  if (!name || name.length < 2) {\n    name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n  }\n  \n  name = name.replace(/^\\s*[-\\u2022]\\s*/, '').trim();\n  if (!name || name.length < 2 || name.length > 60) continue;\n  \n  const normalizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (seenNames.has(normalizedName)) continue;\n  seenNames.add(normalizedName);\n  \n  allCompanies.push({\n    company_name: name,\n    company_url: 'https://www.bvp.com/companies/' + slug,\n    description: name + ' - Bessemer Venture Partners portfolio company',\n    source: vcName\n  });\n}\n\nconst totalCompanies = allCompanies.length;\nconst batch = allCompanies.slice(currentOffset, currentOffset + BATCH_SIZE);\nconst newOffset = (currentOffset + BATCH_SIZE >= totalCompanies) ? 0 : currentOffset + BATCH_SIZE;\nconst isComplete = newOffset === 0 && currentOffset > 0;\n\nconsole.log(`Bessemer: ${totalCompanies} total, offset ${currentOffset}, batch size ${batch.length}, new offset ${newOffset}`);\n\nreturn batch.map(company => ({\n  json: {\n    ...company,\n    _meta: {\n      totalCompanies,\n      currentOffset,\n      newOffset,\n      isComplete,\n      source: 'bessemer'\n    }\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300],
+      "id": "bessemer-parse",
+      "name": "Parse Bessemer Batch"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [{"id": "has-items", "leftValue": "={{ $input.all().length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [880, 300],
+      "id": "bessemer-has-items",
+      "name": "Bessemer Has Items?"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {"__rl": true, "value": "rcMNDrfZR6csHRsYKFn0W", "mode": "id"},
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1100, 200],
+      "id": "pipeline-bessemer",
+      "name": "Pipeline (Bessemer)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the new offset from the first item's metadata\nconst items = $('Parse Bessemer Batch').all();\nconst meta = items[0]?.json?._meta || {};\nreturn [{ json: { newOffset: meta.newOffset || 0, recordId: 'recOSBqsKAUMSHS1k' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 200],
+      "id": "bessemer-prep-offset",
+      "name": "Prep Bessemer Offset"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tblofzQpzGEN8igVS/{{ $json.recordId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"Value\": \"{{ $json.newOffset }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1540, 200],
+      "id": "update-bessemer-offset",
+      "name": "Update Bessemer Offset",
+      "credentials": {"airtableTokenApi": {"id": "irpwnoI6bYh9Mrmz", "name": "Airtable: Job Search"}}
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tblofzQpzGEN8igVS?filterByFormula={Key}=\"BATTERY_OFFSET\"",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1760, 300],
+      "id": "get-battery-offset",
+      "name": "Get Battery Offset",
+      "credentials": {"airtableTokenApi": {"id": "irpwnoI6bYh9Mrmz", "name": "Airtable: Job Search"}}
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.battery.com/our-companies/\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
+        "options": {"timeout": 120000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1980, 300],
+      "id": "battery-fetch",
+      "name": "Browserless Battery"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Battery + slice batch based on offset (v2.7)\nconst html = $('Browserless Battery').first().json.data || $('Browserless Battery').first().json.content || '';\nconst offsetData = $('Get Battery Offset').first().json;\nconst currentOffset = parseInt(offsetData.records?.[0]?.fields?.Value || '0', 10);\nconst BATCH_SIZE = 25;\n\nconst allCompanies = [];\nconst vcName = 'Battery Ventures';\nconst seenSlugs = new Set();\nconst seenNames = new Set();\n\nconst companyPattern = /href=[\"'](?:https?:\\/\\/(?:www\\.)?battery\\.com)?\\/company\\/([a-z0-9-]+)\\/?[\"'][^>]*>/gi;\nlet match;\n\nwhile ((match = companyPattern.exec(html)) !== null) {\n  const slug = match[1].trim().toLowerCase();\n  \n  if (!slug || slug.length < 2 || slug === 'company' || slug === 'all') continue;\n  if (seenSlugs.has(slug)) continue;\n  seenSlugs.add(slug);\n  \n  let name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n  name = name.replace(/\\s+Inc$/i, '').replace(/\\s+Ltd$/i, '').trim();\n  name = name.replace(/ai$/i, 'AI').replace(/^ai\\s/i, 'AI ');\n  \n  if (!name || name.length < 2 || name.length > 60) continue;\n  \n  const normalizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (seenNames.has(normalizedName)) continue;\n  seenNames.add(normalizedName);\n  \n  allCompanies.push({\n    company_name: name,\n    company_url: 'https://www.battery.com/company/' + slug + '/',\n    description: name + ' - Battery Ventures portfolio company',\n    source: vcName\n  });\n}\n\nconst totalCompanies = allCompanies.length;\nconst batch = allCompanies.slice(currentOffset, currentOffset + BATCH_SIZE);\nconst newOffset = (currentOffset + BATCH_SIZE >= totalCompanies) ? 0 : currentOffset + BATCH_SIZE;\nconst isComplete = newOffset === 0 && currentOffset > 0;\n\nconsole.log(`Battery: ${totalCompanies} total, offset ${currentOffset}, batch size ${batch.length}, new offset ${newOffset}`);\n\nreturn batch.map(company => ({\n  json: {\n    ...company,\n    _meta: {\n      totalCompanies,\n      currentOffset,\n      newOffset,\n      isComplete,\n      source: 'battery'\n    }\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 300],
+      "id": "battery-parse",
+      "name": "Parse Battery Batch"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [{"id": "has-items", "leftValue": "={{ $input.all().length }}", "rightValue": 0, "operator": {"type": "number", "operation": "gt"}}],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2420, 300],
+      "id": "battery-has-items",
+      "name": "Battery Has Items?"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {"__rl": true, "value": "rcMNDrfZR6csHRsYKFn0W", "mode": "id"},
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [2640, 200],
+      "id": "pipeline-battery",
+      "name": "Pipeline (Battery)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the new offset from the first item's metadata\nconst items = $('Parse Battery Batch').all();\nconst meta = items[0]?.json?._meta || {};\nreturn [{ json: { newOffset: meta.newOffset || 0, recordId: 'recLyCz0q4kwx3uE6' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 200],
+      "id": "battery-prep-offset",
+      "name": "Prep Battery Offset"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tblofzQpzGEN8igVS/{{ $json.recordId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "Content-Type", "value": "application/json"}]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"Value\": \"{{ $json.newOffset }}\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3080, 200],
+      "id": "update-battery-offset",
+      "name": "Update Battery Offset",
+      "credentials": {"airtableTokenApi": {"id": "irpwnoI6bYh9Mrmz", "name": "Airtable: Job Search"}}
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1100, 400],
+      "id": "bessemer-skip",
+      "name": "Skip Bessemer"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2640, 400],
+      "id": "battery-skip",
+      "name": "Skip Battery"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1540, 400],
+      "id": "bessemer-merge",
+      "name": "Bessemer Done"
+    }
+  ],
+  "connections": {
+    "Schedule (Every 2hrs)": {"main": [[{"node": "Get Bessemer Offset", "type": "main", "index": 0}]]},
+    "Get Bessemer Offset": {"main": [[{"node": "Browserless Bessemer", "type": "main", "index": 0}]]},
+    "Browserless Bessemer": {"main": [[{"node": "Parse Bessemer Batch", "type": "main", "index": 0}]]},
+    "Parse Bessemer Batch": {"main": [[{"node": "Bessemer Has Items?", "type": "main", "index": 0}]]},
+    "Bessemer Has Items?": {
+      "main": [
+        [{"node": "Pipeline (Bessemer)", "type": "main", "index": 0}],
+        [{"node": "Skip Bessemer", "type": "main", "index": 0}]
+      ]
+    },
+    "Pipeline (Bessemer)": {"main": [[{"node": "Prep Bessemer Offset", "type": "main", "index": 0}]]},
+    "Prep Bessemer Offset": {"main": [[{"node": "Update Bessemer Offset", "type": "main", "index": 0}]]},
+    "Update Bessemer Offset": {"main": [[{"node": "Bessemer Done", "type": "main", "index": 0}]]},
+    "Skip Bessemer": {"main": [[{"node": "Bessemer Done", "type": "main", "index": 1}]]},
+    "Bessemer Done": {"main": [[{"node": "Get Battery Offset", "type": "main", "index": 0}]]},
+    "Get Battery Offset": {"main": [[{"node": "Browserless Battery", "type": "main", "index": 0}]]},
+    "Browserless Battery": {"main": [[{"node": "Parse Battery Batch", "type": "main", "index": 0}]]},
+    "Parse Battery Batch": {"main": [[{"node": "Battery Has Items?", "type": "main", "index": 0}]]},
+    "Battery Has Items?": {
+      "main": [
+        [{"node": "Pipeline (Battery)", "type": "main", "index": 0}],
+        [{"node": "Skip Battery", "type": "main", "index": 0}]
+      ]
+    },
+    "Pipeline (Battery)": {"main": [[{"node": "Prep Battery Offset", "type": "main", "index": 0}]]},
+    "Prep Battery Offset": {"main": [[{"node": "Update Battery Offset", "type": "main", "index": 0}]]},
+    "Skip Battery": {"main": []}
+  },
+  "settings": {"executionOrder": "v1"},
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}
