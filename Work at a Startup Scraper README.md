@@ -1,8 +1,6 @@
 # Work at a Startup Scraper v12
 
-An n8n workflow that scrapes job listings from Y Combinator's Work at a Startup and Costanoa Ventures portfolio, using the standardized Tide Pool evaluation sub-routine for AI-powered job scoring.
-
-**Note:** Uses shared `Job Evaluation Pipeline v6` subworkflow for evaluation.
+An n8n workflow that scrapes job listings from Y Combinator's Work at a Startup and Costanoa Ventures portfolio, using the shared Job Evaluation Pipeline v6.1 for AI-powered job scoring.
 
 ## Overview
 
@@ -12,26 +10,11 @@ This workflow runs every 6 hours to:
 3. Filter for customer support/success leadership roles
 4. Deduplicate against existing Airtable records
 5. Prefilter using builder vs. maintainer signals
-6. **Enrich company data via Brave Search** (employee count, funding, PE/VC backing)
-7. **Score using Claude AI** with dynamic Tide Pool Agent Lens
+6. Enrich company data via Brave Search (employee count, funding, PE/VC backing)
+7. Score using Claude AI (Haiku 4.5) with Tide Pool Agent Lens
 8. Add scored jobs to Airtable
 
-## v6 Changes
-
-**Major refactor**: Replaced single "Rate Job Fit" node with the standardized 7-node evaluation sub-routine used by the Job Alert Email Parser.
-
-| v5 | v6 |
-|----|----|
-| Hard-coded evaluation criteria | Dynamic profile from GitHub |
-| Single monolithic node | 7 modular nodes |
-| No company enrichment | Brave Search enrichment |
-| Tied to "Eric's" criteria | Uses shared Tide Pool Agent Lens |
-
-### Benefits
-- **Modular**: Can swap Brave Search for another enrichment provider
-- **Consistent**: Same evaluation logic as email parser
-- **Maintainable**: Update criteria in one place (GitHub)
-- **Enriched**: Company funding/size data improves scoring accuracy
+**Note:** Uses shared `Job Evaluation Pipeline v6.1` subworkflow for evaluation.
 
 ## Data Sources
 
@@ -84,20 +67,51 @@ Parse & Filter           Parse Costanoa
                    │
     ┌──────────────┴──────────────┐
     ▼                             ▼
-Skip Filtered              EVALUATION CHAIN
-                                  │
-                    ┌─────────────┴─────────────┐
-                    │  Brave Search Company     │
-                    │  Parse Enrichment         │
-                    │  Build Prompt             │
-                    │  Wait (Rate Limit)        │
-                    │  Call Claude API          │
-                    │  Parse Response           │
-                    └─────────────┬─────────────┘
-                                  │
-                                  ▼
-                          Add to Airtable
+Skip Filtered          Execute Job Evaluation
+                       Pipeline v6.1
+                              │
+                              ▼
+                      Add to Airtable
 ```
+
+## Job Evaluation Pipeline v6.1 Features
+
+### Enrichment (Brave Search)
+- Employee count
+- Funding stage (Seed → Series D+)
+- Total funding raised
+- PE vs VC backing
+- Founded year / company age
+
+### AI Scoring (Claude Haiku 4.5)
+- Tide-Pool Score (0-100)
+- Role type (builder/maintainer/hybrid)
+- Builder evidence / Maintainer evidence
+- Recommendation (apply/research/skip)
+- Industry classification
+- Company stage detection
+
+### Auto-Disqualifiers
+- PE-backed company
+- 1,000+ employees
+- $500M+ total funding
+- Public company
+- Zombie companies (7+ years, still Seed, <100 employees)
+
+### v6.1 Improvements
+- Upsert preserves Review Status (doesn't overwrite "Applied")
+- Source field preserved with fallback lookups
+- Fixed CS Insider jobs having empty Source field
+
+## Role Filtering
+
+Jobs must contain:
+
+**At least one support/success keyword:**
+- support, success, customer, client, cx, experience
+
+**AND at least one leadership keyword:**
+- manager, director, vp, vice president, head, lead, chief, supervisor, team lead
 
 ## Configuration
 
@@ -123,45 +137,8 @@ Skip Filtered              EVALUATION CHAIN
 |---------|---------|
 | Browserless.io | Headless browser scraping |
 | Brave Search API | Company enrichment |
-| Anthropic Claude API | AI scoring |
+| Anthropic Claude API | AI scoring (Haiku 4.5) |
 | GitHub Raw | Tide Pool profile hosting |
-
-## Role Filtering
-
-Jobs must contain:
-
-**At least one support/success keyword:**
-- support, success, customer, client, cx, experience
-
-**AND at least one leadership keyword:**
-- manager, director, vp, vice president, head, lead, chief, supervisor, team lead
-
-## Evaluation Sub-Routine
-
-The 7-node evaluation chain provides:
-
-### Enrichment (Brave Search)
-- Employee count
-- Funding stage (Seed → Series D+)
-- Total funding raised
-- PE vs VC backing
-- Founded year / company age
-
-### AI Scoring (Claude)
-- Tide-Pool Score (0-100)
-- Role type (builder/maintainer/hybrid)
-- Builder evidence
-- Maintainer evidence
-- Recommendation (apply/research/skip)
-- Industry classification
-- Company stage detection
-
-### Auto-Disqualifiers
-- PE-backed company
-- 1,000+ employees
-- $500M+ total funding
-- Public company
-- Zombie companies (7+ years, still Seed, <100 employees)
 
 ## Output Fields
 
@@ -172,14 +149,8 @@ The 7-node evaluation chain provides:
 | Location | Work location |
 | Source | "Work at a Startup" or "Costanoa VC" |
 | Job URL | Link to posting |
-| Job ID | Dedup key |
-| Salary Info | If available |
-| Date Found | Scrape date |
-| Review Status | "New" |
 | Tide-Pool Score | 0-100 fit score |
 | Tide-Pool Rationale | AI explanation + enrichment data |
-| Industry | AI-detected industry |
-| Company Stage | Funding stage |
 | Role Type | builder/maintainer/hybrid |
 | Builder Evidence | Positive signals |
 | Maintainer Evidence | Negative signals |
@@ -200,22 +171,22 @@ The 7-node evaluation chain provides:
 - Verify ANTHROPIC_API_KEY in Airtable Config
 - Check for rate limiting (30s delay should prevent)
 
-### Profile not loading
-- Verify GitHub URL is accessible
-- Check `https://raw.githubusercontent.com/zelman/tidepool/refs/heads/main/tide-pool-agent-lens.md`
+## Related Documentation
+
+- `ARCHITECTURE.md` - Technical architecture
+- `Job Alert Email Parser README.md` - Similar job evaluation workflow
+- `CLAUDE.md` - Workflow IDs and credentials
 
 ## Version History
 
-- **v12**: Uses Job Evaluation Pipeline v6 with Review Status preservation fix.
-- **v11**: Uses Job Evaluation Pipeline v5 with tighter scoring thresholds.
-- **v10**: Added cross-source deduplication via shared subworkflows.
-- **v9**: Refactored to use shared Job Evaluation Pipeline subworkflow.
-- **v8**: Added JD fetching with HTTP fallback to Browserless.
-- **v7**: Added network connection override for companies with direct contacts.
-- **v6**: Refactored to use standardized evaluation sub-routine (Brave Search enrichment + dynamic Tide Pool profile).
-- **v5**: Added Costanoa Ventures scraping, prefilter for builder/maintainer.
-- **v4**: Initial YC Work at a Startup scraper with built-in Claude rating.
+- **v12**: Uses Job Evaluation Pipeline v6.1 with Review Status preservation fix
+- **v11**: Uses Job Evaluation Pipeline v5 with tighter scoring thresholds
+- **v10**: Added cross-source deduplication via shared subworkflows
+- **v9**: Refactored to use shared Job Evaluation Pipeline subworkflow
+- **v8**: Added JD fetching with HTTP fallback to Browserless
+- **v7**: Added network connection override for companies with direct contacts
+- **v6**: Refactored to use standardized evaluation sub-routine
 
 ---
 
-*See also: `ARCHITECTURE.md` for detailed evaluation sub-routine documentation*
+*Last updated: March 2026*

@@ -1,214 +1,168 @@
-# VC Portfolio Scraper v21
+# VC Portfolio Scraper
 
-An n8n workflow that automatically scrapes portfolio companies from mission-aligned venture capital firms, enriches them with company data via Brave Search, evaluates fit using the Customer Journey Leader framework via a shared subworkflow, and adds them to Airtable for job search tracking.
+An n8n workflow system that automatically scrapes portfolio companies from mission-aligned venture capital firms, enriches them with company data via Brave Search, evaluates fit using the Enrich & Evaluate Pipeline v9, and adds them to Airtable for job search tracking.
 
-## What's New in v21
+## Current Architecture
 
-- **Shared Evaluation Subworkflow**: All scrapers now call a single "Evaluate Company Subworkflow" instead of inline evaluation logic
-- **evaluation-config.json**: Single source of truth for scoring rules, disqualifiers, and the Customer Journey Leader framework
-- **Tide Pool Governance**: evaluation-config.json links to tide-pool-agent-lens.md as the "north star" for identity and values
-- **Three Questions Framework**: APPLY decisions now include Tide Pool's three questions check (fills pool, sincere, flourishing)
+**All VC scrapers now use the shared `Enrich & Evaluate Pipeline v9.json` subworkflow** which provides:
 
-## Features
+- **6-phase evaluation architecture** (entity validation → enrichment → gates → persona → CS readiness → full evaluation)
+- **100-point scoring** with domain distance modifiers (+5 healthcare to -10 physical security)
+- **5-tier gate system** (hard gates, sector gates, GTM motion gates, stale company gates, soft flags)
+- **CS Hire Readiness threshold** (must score >=10 to proceed to full evaluation)
+- **Enhanced detection** (PE portfolio patterns, PLG-dominant, services businesses, stale companies)
 
-- **Scrapes portfolio pages from 14 VC firms** using Browserless, HTTP, and API methods
-- **Deduplicates** against existing Airtable records
-- **Brave Search enrichment** for each company:
-  - Employee count
-  - Funding stage (Pre-Seed through Series F+, Public/IPO)
-  - Total funding amount
-  - PE/VC backer detection
-  - Founded year
-  - Acquisition status
-- **Auto-disqualification** based on enrichment data:
-  - PE-backed companies (checked FIRST - strongest signal)
-  - 500+ employees
-  - $200M+ funding
-  - Public/IPO companies
-  - Acquired companies
-  - Founded before 2017
-  - Series D/E/F+ (late stage)
-- **Customer Journey Leader evaluation** via shared subworkflow:
-  - Score (0-80) across 8 dimensions
-  - Sector match classification (target/adjacent/unrelated)
-  - CS hire likelihood (high/medium/low/unlikely)
-  - Product type detection
-  - Three Questions check for APPLY candidates
-- **Status derived from score**: APPLY (50+), WATCH (35-49), PASS (<35)
-- **Automated scheduling** (Mon/Thu at 8am)
+## Scraper Inventory
 
-## Supported VCs
+| Scraper | Version | VCs Covered | Schedule |
+|---------|---------|-------------|----------|
+| **Healthcare** | v27 | 14 VCs: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms | Tue/Fri 8am |
+| **Climate Tech** | v23 | 4 VCs: Khosla, Congruent, Prelude, Lowercarbon | Mon/Thu 8am |
+| **Social Justice** | v25 | 4 VCs: Kapor, Backstage, Harlem, Collab | Wed/Sat 8am |
+| **Enterprise/Generalist** | v26 | 14 VCs: Unusual, First Round, Essence, Costanoa, WXR, Golden, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead | Mon/Thu 8am |
+| **Micro-VC** | v14 | 6 sources: Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
 
-| VC Firm | Method | Focus |
-|---------|--------|-------|
-| Unusual Ventures | Browserless | Enterprise, B2B |
-| First Round Capital | Sanity CMS API | Seed stage |
-| Essence VC | HTTP + HTML parsing | Early stage |
-| Costanoa Ventures | Sitemap XML | Enterprise |
-| Khosla Ventures | Browserless | Climate, cleantech, healthcare |
-| Kapor Capital | Sitemap XML | Social impact, diversity |
-| WhatIf Ventures | Browserless | Healthcare |
-| WXR Fund | HTTP + HTML parsing | XR/spatial computing |
-| Leadout Capital | Browserless | Healthcare, femtech |
-| Golden Ventures | HTTP + URL parsing | Canadian early-stage |
-| Notable Capital | Browserless | Global, early-growth |
-| Headline | Browserless | Global fintech/enterprise |
-| Pioneer Square Labs | HTTP + URL parsing | Seattle-based |
-| Trilogy Equity Partners | HTTP + HTML parsing | Seattle enterprise/consumer |
+## Enrich & Evaluate Pipeline v9 Features
 
-## Customer Journey Leader Scoring Framework
+### 6-Phase Architecture
 
-**Scoring (80 points max, 8 dimensions x 10 pts each):**
+```
+INPUT (company from scraper)
+    │
+    ▼
+Phase 0: ENTITY VALIDATION
+    • Catches non-companies (podcasts, media, nonprofits)
+    │
+    ▼
+Phase 1: ENRICHMENT (Brave Search)
+    • Employee count, funding, stage, geography
+    • Enhanced acquisition detection (PE portfolio patterns)
+    • GTM motion signals (PLG vs enterprise)
+    • Software-first check
+    │
+    ▼
+Phase 2: PRE-EVALUATION GATES (5 Tiers)
+    • Tier 1: Hard gates (PE, >200 emp, >$500M, public, acquired, non-US)
+    • Tier 2: Sector gates (biotech, hardware, crypto, not software-first)
+    • Tier 3: GTM motion gates (PLG-dominant, pre-sales function)
+    • Tier 4: Stale company gates (3+ years since funding, shrinking)
+    • Tier 5: Soft flags (<15 emp, 150-200 emp, pre-2016)
+    │
+    ▼
+Phase 3: PERSONA CLASSIFICATION
+    • business-user, employee-user, developer, mixed
+    • Developer auto-pass unless 50+ emp + 3+ enterprise signals
+    │
+    ▼
+Phase 4: CS HIRE READINESS THRESHOLD
+    • Quick Claude call to confirm CS need
+    • Must score >= 10 to proceed
+    │
+    ▼
+Phase 5: FULL EVALUATION
+    • 100-point scoring with domain distance modifier
+    • APPLY (60+) / WATCH (40-59) / PASS (<40)
+```
 
-| Dimension | 10 pts | 7 pts | 4 pts | 0 pts |
-|-----------|--------|-------|-------|-------|
-| Build Opportunity | 0-to-1 first hire | Small team (1-3) | Scaling existing | PE optimization |
-| Company Stage | Seed/Series A | Series B | Series C | Series D+/PE |
-| Company Size | 10-30 employees | 30-50 | 50-100 | 500+ |
-| Title Level | SVP/VP/Head | Director | Sr Manager | Manager |
-| Sector Fit | Healthcare/Life Sci | Dev Tools | Tech B2B SaaS | Mismatch |
-| Compensation | $150K+ | $140-150K | $125-140K | <$110K |
-| Technical Complexity | APIs/clinical/data | Enterprise SaaS | Mid-market | Non-technical |
-| Customer Journey Scope | Full post-sale | 2-3 areas | Narrow support | Renewals-focused |
+### Scoring Categories (100 Points + Domain Distance)
 
-**Output Buckets:**
-- **APPLY** (50+): Immediate action, apply within 48 hours
-- **WATCH** (35-49): Add to watch list, review monthly
-- **PASS** (<35 or disqualified): No action needed
+| Category | Points | What It Measures |
+|----------|--------|------------------|
+| CS Hire Readiness | 0-25 | Does company need CS hire NOW? |
+| Stage & Size Fit | 0-25 | Right inflection point? |
+| Role Mandate | 0-20 | Builder vs Maintainer? |
+| Sector & Mission | 0-15 | Alignment with experience? |
+| Outreach Feasibility | 0-15 | Network access? |
+| **Domain Distance** | -10 to +5 | Healthcare +5, Physical Security -10 |
+
+### Auto-Disqualification Reasons (v9)
+
+- Acquired/merged company
+- PE-backed (with firm name detection)
+- Public company, Fortune 500 subsidiary
+- >200 employees, >$500M funding, Series D+
+- Invalid entity (media/podcast/nonprofit)
+- Non-US primary market
+- Not software-first (services, hardware+software)
+- PLG-dominant (no enterprise CS need)
+- Pre-sales function company
+- Stale company (3+ years since funding)
+- CS Hire Readiness below threshold
 
 ## Requirements
 
 - n8n (Cloud or self-hosted)
 - Browserless.io account (for JS-rendered pages)
 - Brave Search API key (for company enrichment)
-- Anthropic API key (for Claude evaluation)
+- Anthropic API key (for Claude Haiku 4.5 evaluation)
 - Airtable base with "Funding Alerts" table
+
+## Setup
+
+1. **Import the pipeline subworkflow first:**
+   - Import `Enrich & Evaluate Pipeline v9.json` into n8n
+   - Configure credentials in the pipeline:
+     - Airtable API token
+     - Brave Search API (Header Auth with `X-Subscription-Token`)
+     - Anthropic API Key (Header Auth with `x-api-key`)
+   - Note the workflow ID (you'll need this for each scraper)
+
+2. **Import the sector workflows:**
+   - `VC Scraper - Healthcare.json` (v27)
+   - `VC Scraper - Climate Tech.json` (v23)
+   - `VC Scraper - Social Justice.json` (v25)
+   - `vc-portfolio-scraper-v26-enriched.json` (Enterprise/Generalist)
+   - `VC Scraper - Micro-VC v14.json`
+
+3. **Configure each workflow:**
+   - Open the "Execute Enrich & Evaluate Pipeline" node
+   - Select the imported pipeline workflow (or set workflow ID)
+   - Configure Browserless credentials for workflows that use them
+
+4. **Test and enable the schedule triggers**
 
 ## Airtable Schema
 
-Required fields:
+Required fields in Funding Alerts table:
+
 | Field | Type | Description |
 |-------|------|-------------|
-| Company Name | Single line text | Primary field |
+| Company Name | Text | Primary field |
 | Company URL | URL | Company website |
 | Company Description | Long text | From VC portfolio |
 | VC Firm | Single line text | Source VC |
-| Status | Single select | Apply, Monitor, Research, Skip, Auto-Disqualified |
-| Next Steps | Single select | Apply Now, Watch for Jobs, Research More, Skip |
-| Tide-Pool Score | Number | 0-80 evaluation score |
-| Sector Match | Single select | target, adjacent, unrelated, unknown |
-| CS Hire Likelihood | Single line text | high, medium, low, unlikely |
-| Product Type | Single line text | high-touch enterprise, mid-market, etc. |
-| Summary | Long text | AI-generated evaluation summary |
+| Status | Single select | Apply, Watch, Pass, Auto-Disqualified |
+| Tide-Pool Score | Number | 0-100 evaluation score |
+| Customer Persona | Single select | business-user, employee-user, developer, mixed |
+| CS Hire Readiness | Number | 0-30 (threshold: 10) |
+| Domain Distance | Text | target, adjacent, high-distance |
+| Summary | Long text | AI-generated evaluation |
 | Stage | Single line text | Funding stage |
 | Total Funding | Single line text | e.g., "$50M" |
 | Employee Count | Number | From Brave Search |
 | PE Backed | Checkbox | Private equity backed |
-| Founded Year | Number | Year founded |
 | Disqualify Reasons | Long text | Auto-disqualification reasons |
-| Source | Single line text | VC Firm name |
 
-## Workflow Architecture (v21)
+## Related Documentation
 
-```
-Schedule Trigger (Mon/Thu 8am)
-    |
-[14 VC Scrapers in parallel] --> Merge --> Dedup Against Existing
-    |
-Build Search Query --> Brave Search Company --> Parse Enrichment
-    |
-IF: Auto-Disqualify
-    | (true)                         | (false)
-Airtable: Auto-Disqualified     Execute Evaluate Subworkflow
-                                     |
-                                Airtable: Create Evaluated Record
-```
+- `CLAUDE.md` - Project instructions and workflow IDs
+- `ARCHITECTURE.md` - Detailed technical architecture
+- `SCORING-ARCHITECTURE.md` - 6-phase scoring system
+- `SYSTEM-OVERVIEW.md` - Executive summary
 
-**Evaluate Company Subworkflow (called by all scrapers):**
-```
-Execute Workflow Trigger (receives company data)
-    |
-Parse Input --> Check Disqualifiers
-    |
-IF: Disqualified
-    | (yes)              | (no)
-Format PASS         Fetch Tide Pool Profile
-                         |
-                    Build Evaluation Prompt
-                         |
-                    Evaluate via Anthropic API
-                         |
-                    Parse Evaluation (scores, three questions, summary)
-                         |
-                    Return to parent workflow
-```
+## FigJam Diagrams
 
-## Setup
-
-### Option 1: v21 Workflows (Recommended)
-
-1. Import `Evaluate Company Subworkflow.json` into n8n first
-2. Note the workflow ID of the imported subworkflow
-3. Import the v21 scraper workflows:
-   - `VC Scraper - Healthcare v21.json`
-   - `VC Scraper - Climate Tech v21.json`
-   - `VC Scraper - Social Justice v21.json`
-4. In each v21 workflow, configure the "Execute Evaluate Subworkflow" node:
-   - Set the workflow ID to match your imported subworkflow
-5. Configure credentials:
-   - Browserless API token (Header Auth)
-   - Brave Search API key (Header Auth with `X-Subscription-Token`)
-   - Anthropic API key (Header Auth with `x-api-key`)
-   - Airtable API token
-6. Test run the workflow
-7. Enable the schedule trigger
-
-### Option 2: v20 Workflows (Legacy)
-
-1. Import `vc-portfolio-scraper-v20-enriched.json` into n8n
-2. Configure credentials (same as above)
-3. Note: v20 has inline evaluation logic, not using shared subworkflow
-
-## Files
-
-### Configuration
-- `evaluation-config.json` - Single source of truth for evaluation logic (Customer Journey Leader framework)
-
-### Subworkflow
-- `Evaluate Company Subworkflow.json` - Shared evaluation logic called by all v21 scrapers
-
-### v21 Workflows (Current - use shared subworkflow)
-- `VC Scraper - Healthcare v21.json`
-- `VC Scraper - Climate Tech v21.json`
-- `VC Scraper - Social Justice v21.json`
-
-### v20 Workflows (Legacy - inline evaluation)
-- `vc-portfolio-scraper-v20-enriched.json`
-- `VC Scraper - Healthcare.json`
-- `VC Scraper - Climate Tech.json`
-- `VC Scraper - Social Justice.json`
+- [System Architecture v9](https://www.figma.com/online-whiteboard/create-diagram/f1065a98-f078-44b9-9ba6-b088601f526b)
+- [v9 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/6d2f6511-9e89-4635-8585-238feae95221)
+- [v9 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/d16d9d48-12af-4d27-9fa1-99566ea42a1d)
 
 ## Version History
 
-- **v21**: Refactored to use shared "Evaluate Company Subworkflow". Added evaluation-config.json as single source of truth. Added Three Questions framework from Tide Pool. Updated scoring to Customer Journey Leader framework (80 pts max).
-- **v20**: Major upgrade - Added Brave Search enrichment, auto-disqualification logic, Tide Pool scoring framework (0-100), sector match detection, score-based status derivation.
-- **v19**: Added Brave Search enrichment (employee count, funding stage, PE detection)
-- **v18**: Added 8 new VCs from career coach recommendations
-- **v17**: Added Khosla Ventures and Kapor Capital
-- **v16**: Initial version with 4 VCs
+- **Mar 2026 (v9)**: Full pipeline redesign - 6-phase architecture, entity validation, GTM motion gates, CS readiness threshold, domain distance scoring
+- **Mar 2026 (v27)**: Healthcare scraper - Added Tier 2 VCs (Transformation Capital, Brewer Lane) and vertical SaaS VCs (Mainsail, Five Elms)
+- **Feb 2026 (v14)**: Micro-VC - Added Y Combinator (sorted by launch date, extracts batch codes)
+- **Feb 2026 (v26)**: Enterprise - Added K9, Precursor, M25, GoAhead
 
-## Related Workflows
+---
 
-- **VC Scraper - Healthcare v21**: Flare Capital, 7wireVentures, Oak HC/FT
-- **VC Scraper - Climate Tech v21**: Congruent Ventures, Prelude Ventures, Lowercarbon Capital
-- **VC Scraper - Social Justice v21**: Backstage Capital, Harlem Capital, Collab Capital
-
-## Governance
-
-The evaluation logic follows a governance hierarchy:
-
-1. **tide-pool-agent-lens.md** (North Star) - Identity, values, essence, "why"
-2. **evaluation-config.json** (Derived) - Tactical evaluation logic, "how"
-3. **n8n workflows** (Execution) - Implementation
-
-When in conflict, the north star governs. See `evaluation-config.json` for the full `_governance` section.
+*Last updated: March 2026*

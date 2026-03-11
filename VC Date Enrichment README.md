@@ -1,6 +1,8 @@
-# VC Date Enrichment
+# VC Date Enrichment v5
 
-An n8n workflow that enriches VC portfolio companies with their investment dates by searching Brave and updating Airtable.
+A utility n8n workflow that enriches VC portfolio companies with their investment dates by searching Brave and updating Airtable.
+
+**Note:** This is a standalone utility workflow, not part of the main evaluation pipeline.
 
 ## Overview
 
