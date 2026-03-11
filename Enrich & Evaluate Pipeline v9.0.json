@@ -1,0 +1,2271 @@
+{
+  "name": "Enrich & Evaluate Pipeline v9",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "pipeline-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mark incoming companies as new and prepare for dedup\n// v8.3: Support for rescore mode - bypass dedup if _isRescore or _updateRecordId is set\nconst companies = $('Execute Workflow Trigger').all();\nreturn companies.map(item => {\n  const company = item.json;\n  const name = company.company_name || company['Company Name'] || '';\n  const source = company.source || company['VC Firm'] || 'Unknown';\n  \n  // Check if this is a rescore request (has existing record ID)\n  const isRescore = company._isRescore === true || !!company._updateRecordId;\n  \n  return { \n    json: { \n      ...company, \n      _isNewCompany: !isRescore,\n      _isRescore: isRescore,\n      // Prepare dedup check data\n      _dedupInput: {\n        company: name,\n        title: '',\n        source: source,\n        recordType: 'company'\n      }\n    } \n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300],
+      "id": "pipeline-mark-new",
+      "name": "Mark as New & Prep Dedup"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v9 Phase 0: Entity Validation\n// Catch non-companies before enrichment wastes API calls\n\nconst items = $input.all();\n\n// Entity validation patterns - signals this is NOT a company\nconst INVALID_ENTITY_SIGNALS = [\n  /podcast/i, /blog/i, /newsletter/i, /media company/i,\n  /student.*team/i, /university.*lab/i, /research.*group/i,\n  /nonprofit/i, /non-profit/i, /foundation/i,\n  /association/i, /coalition/i, /consortium/i,\n  /accelerator program/i, /incubator program/i,\n  /venture studio/i, /vc firm/i, /venture capital/i,\n  /angel network/i, /investment firm/i\n];\n\n// URL TLD patterns that suggest non-company\nconst INVALID_URL_PATTERNS = [\n  /\\.org(?:\\/|$)/i,\n  /\\.edu(?:\\/|$)/i,\n  /\\.gov(?:\\/|$)/i\n];\n\n// Signals this IS a valid company\nconst VALID_COMPANY_SIGNALS = [\n  /\\binc\\.?\\b/i, /\\bllc\\b/i, /\\bcorp\\.?\\b/i, /\\bltd\\.?\\b/i,\n  /founded in \\d{4}/i, /raised \\$[\\d.]+/i, /series [a-d]/i,\n  /\\d+ employees/i, /hiring/i, /careers page/i,\n  /\\bproduct\\b/i, /\\bplatform\\b/i, /\\bsaas\\b/i, /\\bsoftware\\b/i,\n  /customers include/i, /clients include/i,\n  /b2b/i, /enterprise/i\n];\n\nreturn items.map(item => {\n  const company = item.json;\n  const name = company.company_name || company['Company Name'] || '';\n  const url = company.company_url || company['Company URL'] || '';\n  const description = company.description || company['Company Description'] || '';\n  const textToCheck = `${name} ${description}`;\n  \n  // Check for invalid entity signals in name/description\n  const invalidSignals = INVALID_ENTITY_SIGNALS.filter(p => p.test(textToCheck));\n  \n  // Check URL separately for TLD patterns\n  const invalidUrlSignals = INVALID_URL_PATTERNS.filter(p => p.test(url));\n  \n  const hasInvalidSignals = invalidSignals.length > 0 || invalidUrlSignals.length > 0;\n  \n  // Check for valid company signals\n  const validSignals = VALID_COMPANY_SIGNALS.filter(p => p.test(textToCheck));\n  const hasValidSignals = validSignals.length > 0;\n  \n  // Entity is valid if:\n  // - Has no invalid signals, OR\n  // - Has invalid signals but also has valid company signals (override)\n  const isValidEntity = !hasInvalidSignals || hasValidSignals;\n  \n  let entityValidationReason = null;\n  if (!isValidEntity) {\n    const allInvalid = [...invalidSignals, ...invalidUrlSignals];\n    const matchedPatterns = allInvalid.map(p => p.toString().replace(/\\/[gi]*/g, '').replace(/\\(.*\\)/g, '')).join(', ');\n    entityValidationReason = `Invalid entity detected: ${matchedPatterns.substring(0, 100)}`;\n  }\n  \n  return {\n    json: {\n      ...company,\n      _isValidEntity: isValidEntity,\n      _entityValidationReason: entityValidationReason\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "id": "pipeline-validate-entity",
+      "name": "Validate Entity"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-valid-entity",
+              "leftValue": "={{ $json._isValidEntity }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [500, 300],
+      "id": "pipeline-if-valid-entity",
+      "name": "IF: Valid Entity?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare invalid entity for DQ\nconst item = $json;\nconst reason = item._entityValidationReason || 'Invalid entity (media/podcast/nonprofit)';\n\nreturn {\n  json: {\n    ...item,\n    company_name: item.company_name || item['Company Name'] || '',\n    company_url: item.company_url || item['Company URL'] || '',\n    source: item.source || item['VC Firm'] || 'Unknown',\n    disqualify_reasons: reason,\n    status: 'Auto-Disqualified',\n    total_score: 0\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 150],
+      "id": "pipeline-prep-invalid-entity",
+      "name": "Prep Invalid Entity"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-update-id",
+              "leftValue": "={{ $json._updateRecordId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [800, 150],
+      "id": "pipeline-if-update-invalid",
+      "name": "IF: Update Existing? (Invalid)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "id": "={{ $json._updateRecordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ $json.disqualify_reasons }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'Auto-disqualified: ' + $json.disqualify_reasons }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1000, 50],
+      "id": "pipeline-airtable-update-invalid",
+      "name": "Airtable: Update Invalid Entity",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.company_name }}",
+            "Company URL": "={{ $json.company_url || '' }}",
+            "Source": "={{ $json.source || '' }}",
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ $json.disqualify_reasons }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'Auto-disqualified: ' + $json.disqualify_reasons }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1000, 200],
+      "id": "pipeline-airtable-create-invalid",
+      "name": "Airtable: Create Invalid Entity",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare dedup registration for invalid entity records\nconst airtableRecord = $json;\nlet inputData = {};\ntry { inputData = $('Prep Invalid Entity').item?.json || {}; } catch(e) { inputData = {}; }\n\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst company = inputData.company_name || '';\nconst key = `company:${normalize(company)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: '',\n    source: inputData.source || 'Unknown',\n    recordType: 'company',\n    airtableRecordId: airtableRecord.id\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 150],
+      "id": "pipeline-prep-register-invalid",
+      "name": "Prep Register (Invalid)"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MDzcHPZMySqn1DrGh8J0-",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1400, 150],
+      "id": "pipeline-dedup-register-invalid",
+      "name": "Dedup Register (Invalid)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-rescore",
+              "leftValue": "={{ $json._isRescore }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [550, 400],
+      "id": "pipeline-if-rescore",
+      "name": "IF: Rescore Mode?"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "bBjeG_RXRI10eAA5TiN7n",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [700, 300],
+      "id": "pipeline-dedup-check",
+      "name": "Dedup Check (Cross-Source)"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-duplicate",
+              "leftValue": "={{ $json.isDuplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [800, 300],
+      "id": "pipeline-if-cross-source-dupe",
+      "name": "IF: Cross-Source Duplicate?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log skipped duplicates for monitoring\nconst items = $input.all();\nreturn items.map(item => {\n  const dedupResult = item.json;\n  return {\n    json: {\n      _skipped: true,\n      _skipReason: 'cross_source_duplicate',\n      _existingRecordId: dedupResult.existingRecordId,\n      _allSources: dedupResult.allSources,\n      _key: dedupResult.key,\n      company_name: dedupResult._originalInput?.company,\n      source: dedupResult._originalInput?.source\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 150],
+      "id": "pipeline-skip-cross-dupe",
+      "name": "Skip Cross-Source Dupe"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restore original company data for non-duplicates\nconst items = $input.all();\nlet markNewItems = [];\ntry { markNewItems = $('Mark as New & Prep Dedup').all(); } catch(e) { markNewItems = []; }\n\nreturn items.map((item, index) => {\n  const dedupResult = item.json;\n  // Find matching original item by company name\n  const companyName = dedupResult._originalInput?.company || '';\n  const original = markNewItems.find(m => \n    (m.json.company_name || m.json['Company Name'] || '') === companyName\n  );\n  \n  if (original) {\n    return {\n      json: {\n        ...original.json,\n        _dedupKey: dedupResult.key\n      }\n    };\n  }\n  \n  // Fallback if no match\n  return {\n    json: {\n      company_name: companyName,\n      source: dedupResult._originalInput?.source,\n      _dedupKey: dedupResult.key,\n      _isNewCompany: true\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 450],
+      "id": "pipeline-restore-company",
+      "name": "Restore Company Data"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": ["Company Name", "Company URL"]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1200, 600],
+      "id": "pipeline-get-existing",
+      "name": "Get Existing Companies",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [1400, 500],
+      "id": "pipeline-merge-for-dedup",
+      "name": "Merge for Table Dedup"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst newCompanies = [];\nconst existingRecords = [];\n\nfor (const item of allItems) {\n  if (item.json._isNewCompany) {\n    newCompanies.push(item);\n  } else if (item.json.fields && item.json.fields['Company Name']) {\n    existingRecords.push(item);\n  } else if (item.json.id && item.json['Company Name']) {\n    existingRecords.push({ json: { id: item.json.id, fields: item.json } });\n  }\n}\n\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\nconst existingMap = new Map();\nfor (const item of existingRecords) {\n  const fields = item.json.fields || item.json;\n  const name = fields['Company Name'] || '';\n  const url = fields['Company URL'] || '';\n  const recordId = item.json.id;\n  if (name) {\n    existingMap.set(normalize(name), { id: recordId, hasUrl: !!url && url.length > 0 });\n  }\n}\n\nconst uniqueCompanies = [];\nconst addedNames = new Set();\n\nfor (const company of newCompanies) {\n  const name = company.json.company_name || company.json['Company Name'];\n  const newUrl = company.json.company_url || company.json['Company URL'] || '';\n  if (!name) continue;\n  \n  const normalizedName = normalize(name);\n  if (!normalizedName || addedNames.has(normalizedName)) continue;\n  \n  const existing = existingMap.get(normalizedName);\n  \n  if (existing) {\n    if (!existing.hasUrl && newUrl) {\n      addedNames.add(normalizedName);\n      const cleanCompany = { ...company.json };\n      delete cleanCompany._isNewCompany;\n      cleanCompany._updateRecordId = existing.id;\n      uniqueCompanies.push({ json: cleanCompany });\n    }\n    continue;\n  }\n  \n  addedNames.add(normalizedName);\n  const cleanCompany = { ...company.json };\n  delete cleanCompany._isNewCompany;\n  uniqueCompanies.push({ json: cleanCompany });\n}\n\nif (uniqueCompanies.length === 0) {\n  return [{ json: { _empty: true, _message: 'No new companies found' } }];\n}\n\nreturn uniqueCompanies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 500],
+      "id": "pipeline-dedup",
+      "name": "Dedup Against Existing Table"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._empty }}",
+              "operation": "notEqual",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1800, 500],
+      "id": "pipeline-has-new",
+      "name": "Has New Companies?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2000, 350],
+      "id": "pipeline-no-new",
+      "name": "All Duplicates - Done"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v8.4.14: Add __RID__ encoding for bulletproof _updateRecordId preservation\nconst items = $input.all();\nreturn items.map(item => {\n  const company = item.json;\n  const name = company.company_name || company['Company Name'] || '';\n  const updateRecordId = company._updateRecordId || '';\n  // Encode record ID in query - Brave echoes this back in query.original for recovery\n  const searchQuery = '\"' + name + '\" company funding employees series startup' + (updateRecordId ? ' __RID__' + updateRecordId + '__RID__' : '');\n  return { json: { ...company, searchQuery } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 650],
+      "id": "pipeline-build-query",
+      "name": "Build Search Query"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.search.brave.com/res/v1/web/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.searchQuery }}"
+            },
+            {
+              "name": "count",
+              "value": "10"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1500
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 650],
+      "id": "pipeline-brave-search",
+      "name": "Brave Search Company",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AzmU2a7s7eN8MFvE",
+          "name": "Brave Search API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// v9: FULL REDESIGN - Enhanced enrichment with new detection patterns\n// Includes: Better acquisition detection, GTM motion, software-first check, pre-sales detection, stale signals\n\nconst braveResponse = $json;\nconst companyDataItems = $('Build Search Query').all();\n\n// Extract _updateRecordId from query.original (__RID__ encoding)\nlet extractedRecordId = null;\nconst queryOriginal = braveResponse?.query?.original || '';\nconst ridMatch = queryOriginal.match(/__RID__([^_]+)__RID__/);\nif (ridMatch) extractedRecordId = ridMatch[1];\n\nconst currentIndex = typeof $itemIndex !== 'undefined' ? $itemIndex : 0;\nconst companyDataItem = companyDataItems[currentIndex]?.json || companyDataItems[0]?.json || {};\n\n// v9: Get entity validation from Validate Entity node\nlet isValidEntity = true;\nlet entityValidationReason = null;\ntry {\n  const validateItems = $('Validate Entity').all();\n  const validateItem = validateItems[currentIndex]?.json || validateItems[0]?.json || {};\n  isValidEntity = validateItem._isValidEntity !== false;\n  entityValidationReason = validateItem._entityValidationReason || null;\n} catch(e) { /* Validate Entity may not exist in rescore mode */ }\n\n// Expanded PE/Growth Equity firm list (29+ firms)\nconst peFirms = [\n  'Vista Equity', 'Thoma Bravo', 'KKR', 'Blackstone', 'TPG', 'Carlyle',\n  'Bain Capital', 'Silver Lake', 'Francisco Partners', 'Accel-KKR',\n  'LLR Partners', 'Warburg Pincus', 'Apollo', 'Insight Partners', 'GTCR',\n  'Clearlake', 'Welsh Carson', 'Providence Equity', 'Leonard Green',\n  'Hellman & Friedman', 'Advent', 'Golden Gate Capital', 'TA Associates',\n  'Brighton Park Capital', 'General Atlantic', 'Summit Partners', 'SoftBank Vision Fund',\n  'EQT Partners', 'Permira', 'Jonas Software', 'Constellation Software', 'Volaris',\n  'Harris Computer', 'Total Specific Solutions', 'N. Harris Computer'\n];\n\n// Fortune 500 / Large Enterprise parent companies\nconst fortune500Parents = [\n  'Microsoft', 'Google', 'Amazon', 'Apple', 'Meta', 'Salesforce', 'Oracle',\n  'IBM', 'SAP', 'Adobe', 'Cisco', 'Intel', 'Dell', 'HP', 'VMware', 'ServiceNow',\n  'Workday', 'Intuit', 'Autodesk', 'Splunk', 'Atlassian', 'Zendesk', 'HubSpot',\n  'Twilio', 'Datadog', 'Snowflake', 'Crowdstrike', 'Palo Alto Networks',\n  'UnitedHealth', 'CVS', 'Cigna', 'Anthem', 'Humana', 'Kaiser', 'Optum',\n  'JPMorgan', 'Goldman Sachs', 'Morgan Stanley', 'Bank of America', 'Wells Fargo',\n  'Accenture', 'Deloitte', 'McKinsey', 'BCG', 'Bain'\n];\n\n// Helper functions\nconst parseFundingAmount = (amountStr, unitStr) => {\n  const amount = parseFloat(amountStr);\n  const unit = unitStr.toLowerCase();\n  if (unit === 'billion' || unit === 'b') return amount * 1000000000;\n  if (unit === 'million' || unit === 'm') return amount * 1000000;\n  if (unit === 'k' || unit === 'thousand') return amount * 1000;\n  return amount;\n};\n\nconst formatFunding = (numeric) => {\n  if (numeric >= 1000000000) return `$${(numeric / 1000000000).toFixed(1)}B`;\n  if (numeric >= 1000000) return `$${(numeric / 1000000).toFixed(1)}M`;\n  if (numeric >= 1000) return `$${(numeric / 1000).toFixed(0)}K`;\n  return `$${numeric}`;\n};\n\nconst currentYear = new Date().getFullYear();\n\n// v9 THRESHOLDS\nconst MAX_BELIEVABLE_FUNDING = 5000000000;\nconst HARD_FUNDING_CAP = 500000000;\nconst SOFT_FUNDING_CAP = 75000000;\nconst MAX_VALUATION = 500000000;\nconst MIN_EMPLOYEES = 15;\nconst HARD_EMPLOYEE_CAP = 200;\nconst SOFT_EMPLOYEE_CAP = 150;\nconst MIN_FOUNDED_YEAR = 2016;\nconst STALE_FUNDING_YEARS = 3; // v9: No funding in 3+ years = stale\n\nconst companyData = {\n  company_name: companyDataItem.company_name || companyDataItem['Company Name'],\n  company_url: companyDataItem.company_url || companyDataItem['Company URL'],\n  description: companyDataItem.description || companyDataItem['Company Description'],\n  source: companyDataItem.source || companyDataItem['VC Firm'] || 'Unknown',\n  _dedupKey: companyDataItem._dedupKey,\n  _updateRecordId: companyDataItem._updateRecordId\n};\n\nconst searchResults = braveResponse?.web?.results || [];\nconst allText = searchResults.map(r => `${r.title || ''} ${r.description || ''}`).join(' ');\n\n// === EXTRACT BASIC INFO ===\nlet employeeCount = null;\nconst empMatch = allText.match(/([\\d,]+)\\s*(?:to\\s*[\\d,]+)?\\s*employees?/i);\nif (empMatch) employeeCount = parseInt(empMatch[1].replace(/,/g, ''));\n\nlet fundingStage = null;\nconst stagePatterns = {\n  'Series E': /Series\\s*E/i,\n  'Series D': /Series\\s*D/i,\n  'Series C': /Series\\s*C/i,\n  'Series B': /Series\\s*B/i,\n  'Series A': /Series\\s*A/i,\n  'Seed': /\\bSeed\\b/i\n};\nfor (const [stage, pattern] of Object.entries(stagePatterns)) {\n  if (pattern.test(allText)) { fundingStage = stage; break; }\n}\n\n// Funding extraction\nlet totalFunding = null, totalFundingRaw = null;\nconst fundingCandidates = [];\nconst contextualPatterns = [\n  /(?:raised|secur(?:ed|es)|total funding of|funding of|announced)\\s*\\$([\\d.]+)\\s*(million|billion|M|B)/gi,\n  /\\$([\\d.]+)\\s*(million|billion|M|B)\\s*(?:raised|funding|round|series)/gi\n];\nfor (const pattern of contextualPatterns) {\n  let match;\n  while ((match = pattern.exec(allText)) !== null) {\n    const numeric = parseFundingAmount(match[1], match[2]);\n    if (numeric <= MAX_BELIEVABLE_FUNDING && numeric >= 100000) {\n      fundingCandidates.push({ numeric, raw: formatFunding(numeric), priority: 1 });\n    }\n  }\n}\nif (fundingCandidates.length === 0) {\n  const fallbackPattern = /\\$([\\d.]+)\\s*(million|billion|M|B)/gi;\n  let match;\n  while ((match = fallbackPattern.exec(allText)) !== null) {\n    const numeric = parseFundingAmount(match[1], match[2]);\n    if (numeric <= MAX_BELIEVABLE_FUNDING && numeric >= 100000) {\n      fundingCandidates.push({ numeric, raw: formatFunding(numeric), priority: 2 });\n    }\n  }\n}\nif (fundingCandidates.length > 0) {\n  fundingCandidates.sort((a, b) => a.priority !== b.priority ? a.priority - b.priority : b.numeric - a.numeric);\n  totalFunding = fundingCandidates[0].numeric;\n  totalFundingRaw = fundingCandidates[0].raw;\n}\n\n// Valuation\nlet valuation = null, valuationRaw = null;\nif (/unicorn/i.test(allText)) {\n  valuation = 1000000000;\n  valuationRaw = '$1.0B (unicorn)';\n} else {\n  const valuationPatterns = [\n    /valued\\s+at\\s+\\$([\\d.]+)\\s*(million|billion|M|B)/gi,\n    /valuation\\s+(?:of\\s+)?\\$([\\d.]+)\\s*(million|billion|M|B)/gi\n  ];\n  for (const pattern of valuationPatterns) {\n    let match;\n    while ((match = pattern.exec(allText)) !== null) {\n      const numeric = parseFundingAmount(match[1], match[2]);\n      if (numeric > (valuation || 0)) {\n        valuation = numeric;\n        valuationRaw = formatFunding(numeric);\n      }\n    }\n  }\n}\n\n// Founded year\nlet foundedYear = null;\nconst foundMatch = allText.match(/(?:founded|established|since)\\s*(?:in)?\\s*(\\d{4})/i);\nif (foundMatch) foundedYear = parseInt(foundMatch[1]);\n\n// === v9: ENHANCED ACQUISITION DETECTION ===\nlet isAcquired = false;\nlet acquiredBy = null;\nlet acquiredByPE = false;\n\nconst acquirePatterns = [\n  /acquired\\s+by\\s+([A-Z][a-zA-Z0-9\\s&]+)/i,\n  /bought\\s+by\\s+([A-Z][a-zA-Z0-9\\s&]+)/i,\n  /merged\\s+with\\s+([A-Z][a-zA-Z0-9\\s&]+)/i,\n  /part\\s+of\\s+([A-Z][a-zA-Z0-9\\s&]+(?:Group|Holdings|Capital|Inc|Corp))/i,\n  /subsidiary\\s+of\\s+([A-Z][a-zA-Z0-9\\s&]+)/i,\n  /now\\s+owned\\s+by\\s+([A-Z][a-zA-Z0-9\\s&]+)/i,\n  /joined\\s+([A-Z][a-zA-Z0-9\\s&]+)\\s+family/i,\n  /portfolio\\s+company\\s+of\\s+([A-Z][a-zA-Z0-9\\s&]+(?:Capital|Partners|Equity)?)/i\n];\n\nfor (const pattern of acquirePatterns) {\n  const match = allText.match(pattern);\n  if (match) {\n    isAcquired = true;\n    acquiredBy = match[1]?.trim().substring(0, 50) || 'Unknown';\n    // Check if acquirer is PE firm\n    acquiredByPE = peFirms.some(pe => new RegExp(pe, 'i').test(acquiredBy));\n    break;\n  }\n}\nif (!isAcquired && /\\b(was acquired|has been acquired|acquired in \\d{4}|formerly|shut down|shuttered|defunct|no longer operating)\\b/i.test(allText)) {\n  isAcquired = true;\n}\n\n// === PE and Fortune 500 Detection ===\nconst isPEBacked = peFirms.some(f => new RegExp(f, 'i').test(allText));\nconst peBackerFound = peFirms.find(f => new RegExp(f, 'i').test(allText)) || null;\n\nconst isFortune500Subsidiary = fortune500Parents.some(parent => {\n  const patterns = [\n    new RegExp(`subsidiary of ${parent}`, 'i'),\n    new RegExp(`owned by ${parent}`, 'i'),\n    new RegExp(`part of ${parent}`, 'i'),\n    new RegExp(`a ${parent} company`, 'i')\n  ];\n  return patterns.some(p => p.test(allText));\n});\nconst fortune500Parent = fortune500Parents.find(parent => {\n  return new RegExp(`subsidiary of ${parent}|owned by ${parent}|part of ${parent}`, 'i').test(allText);\n}) || null;\n\nconst isPublic = /\\b(NYSE|NASDAQ|publicly traded|IPO|stock ticker|went public|NYSE:|NASDAQ:)\\b/i.test(allText);\n\n// === v9: GEOGRAPHY DETECTION (Enhanced) ===\nconst usHQPatterns = /\\b(headquartered in (?:the )?(?:US|USA|United States)|based in (?:San Francisco|New York|NYC|Boston|Austin|Seattle|LA|Los Angeles|Chicago|Denver|Atlanta|Miami|Palo Alto|Silicon Valley)|California|Texas|Massachusetts|New York|Washington)\\b/i;\nconst usSignals = /\\b(San Francisco|NYC|Boston|Austin|Seattle|LA|Chicago|Denver|Atlanta|Palo Alto|Mountain View|Menlo Park|Silicon Valley|US-based|USA)\\b/i;\nconst nonUSHQPatterns = /\\b(headquartered in (?!.*(?:US|USA|United States))|based in (?:London|Berlin|Paris|Tel Aviv|Singapore|Sydney|Toronto|Mumbai|Bangalore|Amsterdam|Dublin|Stockholm))\\b/i;\nconst nonUSSignals = /\\b(London|Berlin|Paris|Tel Aviv|Singapore|Toronto|Sydney|Mumbai|Bangalore|Amsterdam|Dublin|Stockholm|Zurich|Tokyo|Seoul|UK-based|EU-based|European|Israeli|EMEA|APAC)\\b/i;\n\nconst isUSBased = (usHQPatterns.test(allText) || usSignals.test(allText)) && !nonUSHQPatterns.test(allText);\nconst isNonUSBased = (nonUSHQPatterns.test(allText) || nonUSSignals.test(allText)) && !usHQPatterns.test(allText);\nconst geographyUncertain = !isUSBased && !isNonUSBased;\n\n// === v9: GTM MOTION EXTRACTION ===\nconst PLG_SIGNALS = [\n  /free (?:tier|plan|trial)/i,\n  /self[\\s-]?serve/i,\n  /product[\\s-]?led/i,\n  /no[\\s-]?touch/i,\n  /freemium/i,\n  /community[\\s-]?edition/i,\n  /open[\\s-]?source/i,\n  /viral growth/i,\n  /sign up free/i,\n  /try for free/i\n];\n\nconst ENTERPRISE_GTM_SIGNALS = [\n  /enterprise (?:sales|team|customers)/i,\n  /account (?:executive|manager)/i,\n  /sales[\\s-]?led/i,\n  /high[\\s-]?touch/i,\n  /implementation (?:team|services)/i,\n  /customer success (?:team|manager)/i,\n  /onboarding (?:team|specialist)/i,\n  /contract (?:value|ACV)/i,\n  /\\$[\\d,]+k\\s*(?:acv|arr)/i,\n  /enterprise[\\s-]?grade/i\n];\n\nconst plgSignalCount = PLG_SIGNALS.filter(p => p.test(allText)).length;\nconst enterpriseSignalCount = ENTERPRISE_GTM_SIGNALS.filter(p => p.test(allText)).length;\nconst isPLGDominant = plgSignalCount >= 3 && enterpriseSignalCount < 2;\nconst hasEnterpriseMotion = enterpriseSignalCount >= 2;\nconst gtmMotion = isPLGDominant ? 'plg-dominant' : (hasEnterpriseMotion ? 'enterprise' : 'unknown');\n\n// === v9: SOFTWARE-FIRST CHECK ===\nconst SERVICES_SIGNALS = [\n  /(?:creative|design) (?:services|studio|agency)/i,\n  /(?:managed|professional) services/i,\n  /\\bconsulting\\b/i,\n  /\\bstaffing\\b/i, /\\brecruiting agency\\b/i,\n  /(?:photo|video) (?:shoot|production)/i,\n  /virtual (?:studio|assistant)/i,\n  /on[\\s-]?demand (?:labor|workforce)/i,\n  /human[\\s-]?powered/i\n];\n\nconst HARDWARE_AS_SAAS_SIGNALS = [\n  /(?:hardware|device)\\s*(?:plus|with|and)\\s*(?:software|cloud)/i,\n  /(?:sensor|camera|scanner)\\s*(?:platform|dashboard)/i,\n  /physical (?:product|device)/i,\n  /(?:installation|deployment) (?:required|team)/i\n];\n\nconst isServicesBusiness = SERVICES_SIGNALS.some(p => p.test(allText));\nconst isHardwareMasquerading = HARDWARE_AS_SAAS_SIGNALS.some(p => p.test(allText));\nconst isSoftwareFirst = !isServicesBusiness && !isHardwareMasquerading;\n\n// === v9: PRE-SALES FUNCTION DETECTION (v9.1: expanded patterns) ===\nconst PRESALES_PRODUCT_SIGNALS = [\n  /presales?\\s*(?:platform|tool|software|solution|automation)/i,\n  /\\bpre-sales\\s*(?:platform|tool|software|solution)/i,\n  /demo\\s*(?:automation|platform|software|environment)/i,\n  /sales\\s*(?:enablement|engagement)\\s*(?:platform|software)/i,\n  /configure[\\s-]?price[\\s-]?quote/i,\n  /\\bCPQ\\b/i,\n  /proof[\\s-]?of[\\s-]?concept\\s*(?:automation|platform)/i,\n  /technical\\s*win\\s*platform/i,\n  /solution\\s*engineering\\s*platform/i,\n  /sales\\s*engineer\\s*(?:platform|tool)/i,\n  /presales?\\s*intelligence/i,\n  /buyer\\s*enablement/i,\n  /\\bpresales?\\b.*?\\bAI\\b/i,\n  /AI.*?\\bpresales?\\b/i\n];\n\nconst isPresalesCompany = PRESALES_PRODUCT_SIGNALS.some(p => p.test(allText));\n\n// === v9: STALE COMPANY DETECTION (Enhanced) ===\nconst SHRINKING_SIGNALS = [\n  /\\blayoff/i, /\\blaid off/i, /workforce reduction/i,\n  /\\bdownsiz/i, /\\brestructur/i, /right[\\s-]?siz/i,\n  /headcount (?:reduction|cut)/i,\n  /(?:reduced|cut) (?:\\d+%|\\d+ (?:employees|staff))/i,\n  /letting go of/i\n];\n\nconst CONTRACTION_SIGNALS = [\n  /\\bpivot/i, /wind[\\s-]?down/i, /acqui[\\s-]?hire/i,\n  /\\bstruggling\\b/i, /\\bchallenges\\b/i, /\\bdifficult\\b/i,\n  /runway concerns/i, /cash flow issues/i\n];\n\nconst hasShrinkingSignals = SHRINKING_SIGNALS.some(p => p.test(allText));\nconst hasContractionSignals = CONTRACTION_SIGNALS.some(p => p.test(allText));\n\n// Estimate funding age (v9.1: improved patterns)\nlet fundingAgeYears = null;\nlet lastFundingYear = null;\nconst fundingYearPatterns = [\n  /series\\s*[a-e]\\s*(?:round\\s*)?(?:in\\s*)?(20\\d{2})/i,\n  /raised.*?(20\\d{2})/i,\n  /(20\\d{2}).*?series\\s*[a-e]/i,\n  /(?:funding|round).*?(20\\d{2})/i,\n  /(?:may|june|july|aug|sep|oct|nov|dec|jan|feb|mar|apr).*?(20\\d{2}).*?(?:series|raised|funding)/i\n];\nfor (const pattern of fundingYearPatterns) {\n  const match = allText.match(pattern);\n  if (match) {\n    const year = parseInt(match[1]);\n    if (year >= 2015 && year <= currentYear && (!lastFundingYear || year > lastFundingYear)) {\n      lastFundingYear = year;\n    }\n  }\n}\nif (lastFundingYear) {\n  fundingAgeYears = currentYear - lastFundingYear;\n}\nconst isStaleFunding = fundingAgeYears !== null && fundingAgeYears >= STALE_FUNDING_YEARS;\n\n// === SECTOR DETECTION ===\nconst isBiotech = /\\b(therapeutic|biologics|drug development|clinical trial|FDA approval|cell therapy|gene therapy|pharma|pharmaceutical|biotech|oncology|immunotherapy)\\b/i.test(allText);\nconst isHardware = /\\b(hardware|sensors|devices|robotics|manufacturing|chip|semiconductor|solar|battery|EV charging|physical product|wearable)\\b/i.test(allText) && !/\\b(SaaS|software platform|cloud platform|API)\\b/i.test(allText);\nconst isCrypto = /\\b(blockchain|cryptocurrency|web3|NFT|DeFi|token|crypto|decentralized)\\b/i.test(allText);\nconst isConsumer = /\\b(consumer app|DTC|direct-to-consumer|e-commerce|retail brand|B2C|telehealth|patient app|consumer health|consumer marketplace)\\b/i.test(allText);\nconst isHRTech = /\\b(HR tech|human resources|DEI|diversity equity|workforce analytics|recruiting platform|HRIS|payroll|applicant tracking)\\b/i.test(allText);\nconst isClimateHardware = /\\b(carbon capture|solar panel|wind turbine|EV infrastructure|grid storage|climate tech hardware)\\b/i.test(allText);\nconst isAgTech = /\\b(agriculture|farming|aquaculture|fishery|livestock|agtech)\\b/i.test(allText) && !/\\b(SaaS|software|platform)\\b/i.test(allText);\nconst isMarketplace = /\\b(marketplace|two-sided market|gig economy|freelance platform|labor marketplace)\\b/i.test(allText) && !/\\b(SaaS|software platform|enterprise)\\b/i.test(allText);\nconst isIoT = /\\b(IoT|internet of things|connected devices|edge computing|embedded systems)\\b/i.test(allText) && !/\\b(SaaS|software platform|cloud)\\b/i.test(allText);\nconst isMaterials = /\\b(materials science|advanced materials|chemicals|polymers|composites|industrial materials)\\b/i.test(allText);\nconst isNotB2BSaaS = isBiotech || isHardware || isCrypto || isConsumer || isHRTech || isClimateHardware || isAgTech || isMarketplace || isIoT || isMaterials;\n\n// === BUILD DISQUALIFICATION LIST ===\nconst autoDisqualifiers = [];\n\n// TIER 1: HARD GATES\nif (!isValidEntity) autoDisqualifiers.push(entityValidationReason || 'Invalid entity (media/podcast/nonprofit)');\nif (isAcquired) autoDisqualifiers.push(`Acquired${acquiredBy ? ' by ' + acquiredBy : ''}${acquiredByPE ? ' (PE)' : ''}`);\nif (isPEBacked) autoDisqualifiers.push(`PE-backed (${peBackerFound})`);\nif (isFortune500Subsidiary) autoDisqualifiers.push(`Fortune 500 subsidiary${fortune500Parent ? ' (' + fortune500Parent + ')' : ''}`);\nif (employeeCount && employeeCount > HARD_EMPLOYEE_CAP) autoDisqualifiers.push(`Too large (>${HARD_EMPLOYEE_CAP} employees: ${employeeCount})`);\nif (totalFunding && totalFunding > HARD_FUNDING_CAP) autoDisqualifiers.push(`>$500M funding (${totalFundingRaw})`);\nif (valuation && valuation > MAX_VALUATION) autoDisqualifiers.push(`>$500M valuation (${valuationRaw})`);\nif (isPublic) autoDisqualifiers.push('Public company');\nif (['Series D', 'Series E'].includes(fundingStage)) autoDisqualifiers.push(`Late stage (${fundingStage})`);\nif (isNonUSBased) autoDisqualifiers.push('Non-US primary market');\n\n// TIER 2: SECTOR GATES\nif (isNotB2BSaaS) {\n  if (isBiotech) autoDisqualifiers.push('Biotech/pharma (not B2B SaaS)');\n  else if (isHardware || isClimateHardware) autoDisqualifiers.push('Hardware/Physical product');\n  else if (isAgTech) autoDisqualifiers.push('AgTech/Aquaculture');\n  else if (isCrypto) autoDisqualifiers.push('Crypto/Web3');\n  else if (isHRTech) autoDisqualifiers.push('HR Tech/DEI');\n  else if (isConsumer) autoDisqualifiers.push('Consumer/B2C/Telehealth');\n  else if (isMarketplace) autoDisqualifiers.push('Marketplace');\n  else if (isIoT) autoDisqualifiers.push('IoT/Connected Devices');\n  else if (isMaterials) autoDisqualifiers.push('Materials/Manufacturing');\n}\nif (!isSoftwareFirst) {\n  if (isServicesBusiness) autoDisqualifiers.push('Not software-first (services business)');\n  else if (isHardwareMasquerading) autoDisqualifiers.push('Not software-first (hardware with software)');\n}\n\n// TIER 3: GTM MOTION GATES (v9 NEW)\nif (isPLGDominant) autoDisqualifiers.push('PLG-dominant (no enterprise CS need)');\nif (isPresalesCompany) autoDisqualifiers.push('Pre-sales function company');\n\n// TIER 4: STALE COMPANY GATE (v9 NEW)\nif (isStaleFunding && !hasEnterpriseMotion) autoDisqualifiers.push(`Stale company (${fundingAgeYears}+ years since funding)`);\nif (hasShrinkingSignals) autoDisqualifiers.push('Shrinking headcount signals');\n\n// TIER 5: SOFT GATES (flag but still evaluate)\nif (employeeCount && employeeCount < MIN_EMPLOYEES) autoDisqualifiers.push(`Too early (<${MIN_EMPLOYEES} employees)`);\n\n// WARNING FLAGS\nconst warnings = [];\nif (employeeCount && employeeCount >= SOFT_EMPLOYEE_CAP && employeeCount <= HARD_EMPLOYEE_CAP) {\n  warnings.push(`Employee count ${employeeCount} in penalty zone (${SOFT_EMPLOYEE_CAP}-${HARD_EMPLOYEE_CAP})`);\n}\nif (totalFunding && totalFunding > SOFT_FUNDING_CAP && totalFunding <= HARD_FUNDING_CAP) {\n  warnings.push(`Funding ${totalFundingRaw} exceeds $75M soft cap`);\n}\nif (foundedYear && foundedYear < MIN_FOUNDED_YEAR) {\n  warnings.push(`Founded ${foundedYear} (pre-2016)`);\n}\nif (geographyUncertain) warnings.push('Geography uncertain');\nif (hasContractionSignals) warnings.push('Contraction/pivot signals detected');\nif (isStaleFunding && hasEnterpriseMotion) warnings.push(`Funding ${fundingAgeYears}+ years old but has enterprise signals`);\n\nreturn {\n  json: {\n    company_name: companyData.company_name,\n    company_url: companyData.company_url,\n    description: companyData.description,\n    source: companyData.source,\n    funding_stage: fundingStage,\n    total_funding: totalFundingRaw,\n    total_funding_numeric: totalFunding,\n    valuation: valuationRaw,\n    valuation_numeric: valuation,\n    employee_count: employeeCount,\n    founded_year: foundedYear,\n    pe_backed: isPEBacked,\n    pe_backer: peBackerFound,\n    is_fortune500_subsidiary: isFortune500Subsidiary,\n    fortune500_parent: fortune500Parent,\n    is_acquired: isAcquired,\n    acquired_by: acquiredBy,\n    acquired_by_pe: acquiredByPE,\n    is_public: isPublic,\n    // v9: Geography\n    is_us_based: isUSBased,\n    is_non_us_based: isNonUSBased,\n    geography_uncertain: geographyUncertain,\n    // v9: GTM motion\n    gtm_motion: gtmMotion,\n    plg_signal_count: plgSignalCount,\n    enterprise_signal_count: enterpriseSignalCount,\n    is_plg_dominant: isPLGDominant,\n    has_enterprise_motion: hasEnterpriseMotion,\n    // v9: Software-first\n    is_software_first: isSoftwareFirst,\n    is_services_business: isServicesBusiness,\n    // v9: Pre-sales\n    is_presales_company: isPresalesCompany,\n    // v9: Stale signals\n    funding_age_years: fundingAgeYears,\n    last_funding_year: lastFundingYear,\n    is_stale_funding: isStaleFunding,\n    has_shrinking_signals: hasShrinkingSignals,\n    has_contraction_signals: hasContractionSignals,\n    // Sector flags\n    is_biotech: isBiotech,\n    is_hardware: isHardware || isClimateHardware,\n    is_agtech: isAgTech,\n    is_crypto: isCrypto,\n    is_consumer: isConsumer,\n    is_hrtech: isHRTech,\n    is_marketplace: isMarketplace,\n    is_iot: isIoT,\n    is_materials: isMaterials,\n    // Entity validation\n    is_valid_entity: isValidEntity,\n    entity_validation_reason: entityValidationReason,\n    // Disqualification\n    autoDisqualifiers,\n    disqualify_reasons: autoDisqualifiers.join('; '),\n    isAutoDisqualified: autoDisqualifiers.length > 0,\n    disqualify_tier: autoDisqualifiers.length > 0 ? (isValidEntity ? (isPEBacked || isAcquired || isPublic ? 1 : (isNotB2BSaaS || !isSoftwareFirst ? 2 : (isPLGDominant || isPresalesCompany ? 3 : (isStaleFunding || hasShrinkingSignals ? 4 : 5)))) : 0) : 0,\n    warnings,\n    _dedupKey: companyData._dedupKey,\n    _updateRecordId: extractedRecordId || companyData._updateRecordId\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 650],
+      "id": "pipeline-parse-enrichment",
+      "name": "Parse Enrichment"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.isAutoDisqualified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2600, 650],
+      "id": "pipeline-if-disqualify",
+      "name": "IF: Auto-Disqualify"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-update-id-dq",
+              "leftValue": "={{ $json._updateRecordId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2700, 500],
+      "id": "pipeline-if-update-dq",
+      "name": "IF: Update Existing? (DQ)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "id": "={{ $json._updateRecordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company URL": "={{ $json.company_url || '' }}",
+            "Company Description": "={{ $json.description || '' }}",
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ $json.disqualify_reasons }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'Auto-disqualified: ' + $json.disqualify_reasons }}",
+            "Stage": "={{ $json.funding_stage || '' }}",
+            "Total Funding": "={{ $json.total_funding || '' }}",
+            "Employee Count": "={{ $json.employee_count || null }}",
+            "PE Backed": "={{ $json.pe_backed || false }}",
+            "Founded Year": "={{ $json.founded_year || null }}",
+            "Customer Persona": "business-user"
+          },
+          "matchingColumns": []
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [2900, 400],
+      "id": "pipeline-airtable-update-disqualified",
+      "name": "Airtable: Update Auto-Disqualified",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.company_name }}",
+            "Company URL": "={{ $json.company_url }}",
+            "Company Description": "={{ $json.description }}",
+            "VC Firm": "={{ $json.source }}",
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ $json.disqualify_reasons }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'Auto-disqualified: ' + $json.disqualify_reasons }}",
+            "Stage": "={{ $json.funding_stage || '' }}",
+            "Total Funding": "={{ $json.total_funding || '' }}",
+            "Employee Count": "={{ $json.employee_count || null }}",
+            "PE Backed": "={{ $json.pe_backed || false }}",
+            "Founded Year": "={{ $json.founded_year || null }}",
+            "Source": "={{ $json.source }}",
+            "Sector Match": "unknown"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [2900, 550],
+      "id": "pipeline-airtable-disqualified",
+      "name": "Airtable: Auto-Disqualified",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare dedup registration for auto-disqualified record\nconst airtableRecord = $json;\nlet parseData = {};\ntry { parseData = $('Parse Enrichment').item?.json || {}; } catch(e) { parseData = {}; }\n\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst company = parseData.company_name || '';\nconst key = `company:${normalize(company)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: '',\n    source: parseData.source || 'Unknown',\n    recordType: 'company',\n    airtableRecordId: airtableRecord.id\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3000, 500],
+      "id": "pipeline-prep-register-disq",
+      "name": "Prep Register (Disqualified)"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MDzcHPZMySqn1DrGh8J0-",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [3200, 500],
+      "id": "pipeline-dedup-register-disq",
+      "name": "Dedup Register (Disqualified)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v8.5: SCORING FIXES - Add employee-user persona for B2B2C patterns\nconst items = $input.all();\n\nconst systemPrompt = `You are classifying companies by their PRIMARY customer persona.\n\nClassify as ONE of:\n- \"business-user\": B2B SaaS where end users are non-technical business professionals (sales, marketing, HR, finance, operations, legal, executives). The COMPANY buys and the COMPANY's employees use.\n- \"employee-user\": B2B2C model where the COMPANY buys but CONSUMERS/PATIENTS use (healthcare apps for patients, employee wellness, benefits platforms, telehealth patient portals). Key signal: end user is a consumer/patient, not an employee doing their job.\n- \"developer\": End users are primarily developers, engineers, DevOps, SRE, data engineers, or highly technical practitioners\n- \"mixed\": Multiple personas are equally important primary users\n\nSignals for EMPLOYEE-USER (B2B2C) - these should NOT be classified as business-user:\n- Patient-facing apps (Oshi Health, Koa Health patterns)\n- Mental health/wellness platforms where employees/patients use the app\n- Healthcare apps sold to employers/providers but used by patients\n- Benefits platforms where employees are the end users\n- \"Member experience\", \"patient engagement\", \"employee wellness\"\n\nSignals for DEVELOPER-AS-CUSTOMER:\n- API-first products\n- Developer tools, SDKs, CLI tools\n- Infrastructure, observability, monitoring\n- Data engineering, ETL, data pipelines\n- DevOps, CI/CD, deployment\n- Code review, testing, debugging tools\n- Database tools, query engines\n- \"Built for engineers\" or \"by developers, for developers\"\n\nSignals for BUSINESS-USER-CUSTOMER:\n- \"No code required\", \"Self-serve\", \"Non-technical users\"\n- Sales enablement, CRM, marketing tools\n- HR admin tools (not employee-facing wellness)\n- Healthcare PROVIDER workflows (clinicians using software)\n- Business intelligence for business users\n- Customer support, success platforms\n\nRespond with ONLY one word: business-user, employee-user, developer, or mixed`;\n\nreturn items.map(item => {\n  const c = item.json;\n  // v8.4.15: Create unique ref for each company to enable ref-based lookup\n  const companyRef = c._updateRecordId || c.company_name || 'unknown';\n  const userPrompt = `Company: ${c.company_name}\\nDescription: ${c.description || 'No description available'}\\nURL: ${c.company_url || 'N/A'}`;\n  \n  return {\n    json: {\n      ...c,\n      _companyRef: companyRef,\n      _personaPrompt: { systemPrompt, userPrompt }\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2700, 900],
+      "id": "pipeline-build-persona-prompt",
+      "name": "Build Persona Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5\",\n  \"max_tokens\": 50,\n  \"system\": {{ JSON.stringify($json._personaPrompt.systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json._personaPrompt.userPrompt) }}}]\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2900, 900],
+      "id": "pipeline-classify-persona",
+      "name": "Classify Persona via Claude",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "bR8vmR2cZDLoP5W6",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// v8.5: SCORING FIXES - employee-user persona, 3+ enterprise signals\nconst response = $json;\n\n// Build Map of company data by ref for O(1) lookup\nconst promptItems = $('Build Persona Prompt').all();\nconst companyByRef = new Map();\nfor (const item of promptItems) {\n  const ref = item.json._companyRef || item.json._updateRecordId || item.json.company_name;\n  if (ref) companyByRef.set(ref, item.json);\n}\n\nconst currentIndex = $itemIndex;\nlet companyData = promptItems[currentIndex]?.json || {};\n\n// Enterprise motion signals that indicate a developer/employee-user tool might still be a fit\nconst enterpriseSignals = [\n  /\\bSOC\\s*2\\b/i,\n  /\\bHIPAA\\b/i,\n  /\\bcompliance\\b/i,\n  /\\benterprise\\s*(customers?|clients?|plan|pricing|tier|sales)/i,\n  /\\bFortune\\s*500\\b/i,\n  /\\bFortune\\s*1000\\b/i,\n  /\\bsales\\s*team\\b/i,\n  /\\baccount\\s*executives?\\b/i,\n  /\\bSSO\\b/i,\n  /\\bSAML\\b/i,\n  /\\bmulti-tenant\\b/i,\n  /\\bself-hosted\\b/i,\n  /\\bon-prem(ise)?\\b/i,\n  /\\bcontract\\s*value\\b/i,\n  /\\bACV\\b/i,\n  /\\bARR\\b/i,\n  /\\bsecurity\\s*review\\b/i,\n  /\\bprocurement\\b/i,\n  /\\bvendor\\s*management\\b/i\n];\n\n// Parse persona from Claude response\nlet persona = 'unknown';\ntry {\n  const content = response.content?.[0]?.text || '';\n  const cleanContent = content.toLowerCase().trim();\n  // v8.5: Check employee-user BEFORE business-user (it contains 'user')\n  if (cleanContent.includes('employee-user') || cleanContent === 'employee-user') {\n    persona = 'employee-user';\n  } else if (cleanContent.includes('business-user') || cleanContent === 'business-user') {\n    persona = 'business-user';\n  } else if (cleanContent.includes('developer') || cleanContent === 'developer') {\n    persona = 'developer';\n  } else if (cleanContent.includes('mixed') || cleanContent === 'mixed') {\n    persona = 'mixed';\n  }\n} catch (e) {\n  persona = 'unknown';\n}\n\n// Check enterprise signals in the description\nconst description = companyData.description || '';\nconst matchedSignals = enterpriseSignals.filter(pattern => pattern.test(description));\nconst enterpriseSignalCount = matchedSignals.length;\n\nconst employeeCount = companyData.employee_count || 0;\n\n// v8.5: Both developer AND employee-user get auto-pass treatment\n// B2B2C (employee-user) doesn't need traditional CS leadership\nconst isDeveloperTool = persona === 'developer';\nconst isEmployeeUser = persona === 'employee-user';\nconst needsAutoPassCheck = isDeveloperTool || isEmployeeUser;\n\n// v8.5 FIX: Require 3+ enterprise signals (stricter than 2+)\nconst ENTERPRISE_SIGNAL_THRESHOLD = 3;\nconst hasEnterpriseException = needsAutoPassCheck && employeeCount >= 50 && enterpriseSignalCount >= ENTERPRISE_SIGNAL_THRESHOLD;\n\n// Auto-pass decision:\n// - Developer/employee-user + <50 employees → auto-pass\n// - Developer/employee-user + 50+ employees but <3 enterprise signals → auto-pass\n// - Developer/employee-user + 50+ employees + 3+ enterprise signals → proceed (exception)\n// - Business-user or mixed → proceed\nconst shouldAutoPass = needsAutoPassCheck && !hasEnterpriseException;\n\nlet autoPassReason = null;\nif (shouldAutoPass) {\n  const personaLabel = isEmployeeUser ? 'B2B2C (employee-user)' : 'Developer-as-customer';\n  if (employeeCount < 50) {\n    autoPassReason = `${personaLabel} (${employeeCount || 'unknown'} employees) - not at enterprise scale`;\n  } else {\n    autoPassReason = `${personaLabel} with ${employeeCount} employees but only ${enterpriseSignalCount} enterprise signals (need ${ENTERPRISE_SIGNAL_THRESHOLD}+)`;\n  }\n}\n\nconst { _personaPrompt, ...cleanData } = companyData;\n\nreturn {\n  json: {\n    ...cleanData,\n    customer_persona: persona,\n    enterprise_signal_count: enterpriseSignalCount,\n    has_enterprise_exception: hasEnterpriseException,\n    developer_auto_pass: shouldAutoPass,\n    developer_auto_pass_reason: autoPassReason,\n    _personaItemIndex: currentIndex\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 900],
+      "id": "pipeline-parse-persona",
+      "name": "Parse Persona & Check Enterprise"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-developer-auto-pass",
+              "leftValue": "={{ $json.developer_auto_pass }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3300, 900],
+      "id": "pipeline-if-developer-pass",
+      "name": "IF: Developer Auto-Pass?"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.company_name }}",
+            "Company URL": "={{ $json.company_url }}",
+            "Company Description": "={{ $json.description }}",
+            "VC Firm": "={{ $json.source }}",
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ $json.developer_auto_pass_reason }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'Developer-as-customer auto-pass: ' + $json.developer_auto_pass_reason }}",
+            "Stage": "={{ $json.funding_stage || '' }}",
+            "Total Funding": "={{ $json.total_funding || '' }}",
+            "Employee Count": "={{ $json.employee_count || null }}",
+            "PE Backed": "={{ $json.pe_backed || false }}",
+            "Founded Year": "={{ $json.founded_year || null }}",
+            "Source": "={{ $json.source }}",
+            "Sector Match": "developer-tools",
+            "Customer Persona": "={{ $json.customer_persona }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [3500, 800],
+      "id": "pipeline-airtable-developer-pass",
+      "name": "Airtable: Create Developer Pass",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-update-id-dev",
+              "leftValue": "={{ $json._updateRecordId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3400, 750],
+      "id": "pipeline-if-update-dev",
+      "name": "IF: Update Existing? (Dev)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "id": "={{ $json._updateRecordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company URL": "={{ $json.company_url }}",
+            "Company Description": "={{ $json.description }}",
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ $json.developer_auto_pass_reason }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'Developer-as-customer auto-pass: ' + $json.developer_auto_pass_reason }}",
+            "Stage": "={{ $json.funding_stage || '' }}",
+            "Total Funding": "={{ $json.total_funding || '' }}",
+            "Employee Count": "={{ $json.employee_count || null }}",
+            "PE Backed": "={{ $json.pe_backed || false }}",
+            "Founded Year": "={{ $json.founded_year || null }}",
+            "Sector Match": "developer-tools",
+            "Customer Persona": "={{ $json.customer_persona }}"
+          },
+          "matchingColumns": []
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [3550, 700],
+      "id": "pipeline-airtable-update-dev-pass",
+      "name": "Airtable: Update Developer Pass",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare dedup registration for developer auto-pass record\nconst airtableRecord = $json;\nlet parseData = {};\ntry { parseData = $('Parse Persona & Check Enterprise').item?.json || {}; } catch(e) { parseData = {}; }\n\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst company = parseData.company_name || '';\nconst key = `company:${normalize(company)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: '',\n    source: parseData.source || 'Unknown',\n    recordType: 'company',\n    airtableRecordId: airtableRecord.id\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3700, 800],
+      "id": "pipeline-prep-register-dev-pass",
+      "name": "Prep Register (Developer Pass)"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MDzcHPZMySqn1DrGh8J0-",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [3900, 800],
+      "id": "pipeline-dedup-register-dev-pass",
+      "name": "Dedup Register (Developer Pass)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v9 Phase 4: Build CS Hire Readiness check prompt\nconst items = $input.all();\n\nconst systemPrompt = `You are checking if a company is actively building a post-sales Customer Success function.\n\nEvaluate CS Hire Readiness on a 0-30 scale:\n\n25-30 = Clear CS leadership hiring need:\n- Company has paying customers but no CS leader\n- Recent funding, growth mode, expanding\n- Founder-led relationships breaking down\n- First CS hire or first CS leader needed\n\n15-24 = Probable CS need, timing may vary:\n- Small CS team exists but needs senior leadership\n- Growing customer base, scaling challenges\n- Some CS infrastructure but gaps evident\n\n10-14 = Possible but uncertain:\n- Established CS team, may be hiring incremental\n- Unclear if leadership roles open\n- Company may be mature enough to have CS leader\n\n0-9 = No clear CS need:\n- Fully staffed CS organization\n- PLG/self-serve model with no CS motion\n- Pre-revenue or pre-product\n- Company too small for CS hire\n\nReturn JSON only:\n{\n  \"cs_readiness_score\": N,\n  \"has_paying_customers\": true|false,\n  \"has_postsales_motion\": true|false,\n  \"hiring_signal_strength\": \"strong|moderate|weak|none\",\n  \"reasoning\": \"brief 1-2 sentence explanation\"\n}`;\n\nreturn items.map(item => {\n  const c = item.json;\n  const userPrompt = `Company: ${c.company_name}\\nDescription: ${c.description || 'No description'}\\nEmployees: ${c.employee_count || 'Unknown'}\\nFunding: ${c.funding_stage || 'Unknown'}, ${c.total_funding || 'Unknown'}\\nCustomer Persona: ${c.customer_persona || 'Unknown'}\\nGTM Motion: ${c.gtm_motion || 'Unknown'}\\nHas Enterprise Motion: ${c.has_enterprise_motion || false}\\n\\nEvaluate CS Hire Readiness and return JSON.`;\n  \n  return { json: { ...c, _csReadinessPrompt: { systemPrompt, userPrompt } } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3350, 1050],
+      "id": "pipeline-build-cs-readiness-prompt",
+      "name": "Build CS Readiness Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5\",\n  \"max_tokens\": 200,\n  \"system\": {{ JSON.stringify($json._csReadinessPrompt.systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json._csReadinessPrompt.userPrompt) }}}]\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1000
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3550, 1050],
+      "id": "pipeline-check-cs-readiness",
+      "name": "Check CS Hire Readiness",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "bR8vmR2cZDLoP5W6",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// v9: Parse CS Hire Readiness response and check threshold\nconst CS_READINESS_THRESHOLD = 10;\n\nconst response = $json;\nconst promptItems = $('Build CS Readiness Prompt').all();\nconst currentIndex = $itemIndex;\nlet companyData = promptItems[currentIndex]?.json || {};\n\n// Remove the prompt from the output\nconst { _csReadinessPrompt, ...cleanData } = companyData;\n\nlet csReadiness = { cs_readiness_score: 0, reasoning: 'Parse error' };\ntry {\n  const content = response.content?.[0]?.text || '';\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) csReadiness = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  csReadiness = { cs_readiness_score: 0, reasoning: 'Failed to parse response' };\n}\n\nconst score = csReadiness.cs_readiness_score || 0;\nconst isBelowThreshold = score < CS_READINESS_THRESHOLD;\n\nreturn {\n  json: {\n    ...cleanData,\n    cs_readiness_score: score,\n    cs_readiness_reasoning: csReadiness.reasoning || '',\n    has_paying_customers: csReadiness.has_paying_customers || false,\n    has_postsales_motion: csReadiness.has_postsales_motion || false,\n    hiring_signal_strength: csReadiness.hiring_signal_strength || 'none',\n    cs_readiness_below_threshold: isBelowThreshold,\n    cs_readiness_threshold: CS_READINESS_THRESHOLD\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3750, 1050],
+      "id": "pipeline-parse-cs-readiness",
+      "name": "Parse CS Readiness"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cs-below-threshold",
+              "leftValue": "={{ $json.cs_readiness_below_threshold }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [3950, 1050],
+      "id": "pipeline-if-cs-threshold",
+      "name": "IF: CS Readiness Below Threshold?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-update-id-cs",
+              "leftValue": "={{ $json._updateRecordId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4050, 950],
+      "id": "pipeline-if-update-cs",
+      "name": "IF: Update Existing? (CS DQ)"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "id": "={{ $json._updateRecordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company URL": "={{ $json.company_url || '' }}",
+            "Company Description": "={{ $json.description || '' }}",
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ 'CS Hire Readiness below threshold (' + $json.cs_readiness_score + '/' + $json.cs_readiness_threshold + '): ' + $json.cs_readiness_reasoning }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'CS Hire Readiness below threshold: ' + $json.cs_readiness_reasoning }}",
+            "Stage": "={{ $json.funding_stage || '' }}",
+            "Total Funding": "={{ $json.total_funding || '' }}",
+            "Employee Count": "={{ $json.employee_count || null }}",
+            "PE Backed": "={{ $json.pe_backed || false }}",
+            "Founded Year": "={{ $json.founded_year || null }}",
+            "Customer Persona": "={{ $json.customer_persona || '' }}"
+          },
+          "matchingColumns": []
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [4250, 850],
+      "id": "pipeline-airtable-update-cs-dq",
+      "name": "Airtable: Update CS DQ",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.company_name }}",
+            "Company URL": "={{ $json.company_url }}",
+            "Company Description": "={{ $json.description }}",
+            "VC Firm": "={{ $json.source }}",
+            "Status": "Auto-Disqualified",
+            "Next Steps": "Skip",
+            "Disqualify Reasons": "={{ 'CS Hire Readiness below threshold (' + $json.cs_readiness_score + '/' + $json.cs_readiness_threshold + '): ' + $json.cs_readiness_reasoning }}",
+            "Tide-Pool Score": 0,
+            "Summary": "={{ 'CS Hire Readiness below threshold: ' + $json.cs_readiness_reasoning }}",
+            "Stage": "={{ $json.funding_stage || '' }}",
+            "Total Funding": "={{ $json.total_funding || '' }}",
+            "Employee Count": "={{ $json.employee_count || null }}",
+            "PE Backed": "={{ $json.pe_backed || false }}",
+            "Founded Year": "={{ $json.founded_year || null }}",
+            "Source": "={{ $json.source }}",
+            "Sector Match": "unknown",
+            "Customer Persona": "={{ $json.customer_persona || '' }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [4250, 1000],
+      "id": "pipeline-airtable-cs-dq",
+      "name": "Airtable: Create CS DQ",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare dedup registration for CS DQ record\nconst airtableRecord = $json;\nlet parseData = {};\ntry { parseData = $('Parse CS Readiness').item?.json || {}; } catch(e) { parseData = {}; }\n\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst company = parseData.company_name || '';\nconst key = `company:${normalize(company)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: '',\n    source: parseData.source || 'Unknown',\n    recordType: 'company',\n    airtableRecordId: airtableRecord.id\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4450, 950],
+      "id": "pipeline-prep-register-cs-dq",
+      "name": "Prep Register (CS DQ)"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MDzcHPZMySqn1DrGh8J0-",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [4650, 950],
+      "id": "pipeline-dedup-register-cs-dq",
+      "name": "Dedup Register (CS DQ)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v9: FULL REDESIGN - Enhanced evaluation with domain distance penalty\nconst companyItems = $input.all();\nconst currentYear = new Date().getFullYear();\n\nconst systemPrompt = `You are evaluating a company for job search fit using the Customer Journey Leader framework.\n\nCANDIDATE PROFILE:\n- VP/Head/Director of Customer Support/Success\n- 13+ years building support orgs from scratch (0-to-1)\n- Healthcare experience is PROVIDER-SIDE (not payer)\n- Target: Early-stage VC-backed companies at founder-led relationship breakdown\n\nPRE-SCORING GATES (already checked - if company reached this prompt, it passed all gates including CS Hire Readiness >= 10):\n- NOT PE/Growth Equity backed\n- Total funding <= $75M (soft cap)\n- Employee count <= 150\n- Not acquired, public, or Series D+\n- Is B2B SaaS with enterprise GTM motion\n- CS Hire Readiness passed threshold check\n- Founded 2016+ preferred\n- US-based or US-primary GTM\n\nSCORING (100 points total + domain distance modifier):\n\n1. CS HIRE READINESS (30 points max)\n   - 30 = First CX hire needed\n   - 25 = Very small team (<5), needs senior leadership\n   - 20 = Small team (<10), building out org\n   - 15 = Team exists but scaling challenges\n   - 10 = Established team, looking to upgrade\n   - 5 = Large team, incremental hire\n   - 0 = No CX hiring signals\n   \n   STALE FUNDING PENALTY: If last funding 2+ years ago, subtract 5-10 points\n\n2. STAGE & SIZE FIT (25 points max)\n   - 25 = Seed/Series A, 10-50 employees (sweet spot)\n   - 20 = Series B, 30-80 employees\n   - 15 = Pre-seed or Series C, appropriate size\n   - 10 = Growth stage but still building\n   - 5 = Later stage or larger company\n   - 0 = Too early or too late\n\n3. ROLE MANDATE (20 points max)\n   BUILDER signals (15-20 points):\n   - \"First CX hire\", \"build from scratch\", \"greenfield\"\n   - \"Define processes\", \"establish playbook\"\n   - Startup (<50 emp) with no/small CX team\n   \n   MAINTAINER signals (CAP AT 5 POINTS MAX):\n   - \"Scale existing org\", \"grow the team\", \"expand globally\"\n   - \"Multi-tier team\", \"global teams\", \"30+ person team\"\n   - \"Optimize processes\", \"drive efficiency\"\n   - Company >100 employees with existing CX leadership\n\n4. SECTOR & MISSION (15 points max)\n   - 15 = Healthcare B2B SaaS (providers, clinical, care coordination)\n   - 12 = Developer tools, infrastructure, DevOps\n   - 10 = Enterprise B2B SaaS (high-touch)\n   - 8 = Mid-market B2B SaaS\n   - 5 = General B2B tech\n   - 2 = Adjacent sectors\n   - 0 = Consumer, DTC, e-commerce, retail\n\n5. OUTREACH FEASIBILITY (10 points max)\n   - 10 = YC company + founder accessible\n   - 8 = Known VC portfolio + clear founder contact\n   - 6 = Good VC backing + standard application path\n   - 4 = Less accessible but possible\n   - 2 = Difficult to reach decision makers\n   - 0 = No clear path\n\n6. DOMAIN DISTANCE MODIFIER (v9 NEW: -10 to +5 points)\n   Apply AFTER calculating base score:\n   \n   HIGH-DISTANCE DOMAINS (subtract 5-10 points):\n   - IT Operations/ITSM (ServiceNow competitors): -8\n   - Physical Security (access control, surveillance): -10\n   - Vertical Retail POS (liquor stores, restaurants): -8\n   - Financial Compliance/RegTech: -6\n   - Legal Tech: -6\n   - Real Estate Tech: -7\n   - Construction Tech: -7\n   - EdTech (K-12): -5\n   \n   ADJACENT DOMAINS (subtract 0-3 points):\n   - General Enterprise SaaS: 0\n   - Sales/Marketing Tech: -2\n   - HR Tech (if passed sector gate): -3\n   - Logistics/Supply Chain: -3\n   \n   TARGET DOMAINS (add 0-5 points):\n   - Healthcare B2B SaaS (provider-side): +5\n   - Patient Engagement (B2B2C): +3\n   - Clinical Operations: +5\n   - Care Coordination: +4\n   - Developer Tools/DevOps: +2\n\nFINAL SCORE = base_score + domain_distance_modifier\n\nSCORE INTERPRETATION:\n- 85-100: APPLY immediately\n- 70-84: APPLY - Worth pursuing\n- 55-69: WATCH\n- Below 55: PASS\n\nBUCKETS: APPLY (70+), WATCH (55-69), PASS (<55)\n\nIMPORTANT: Include the company_ref exactly as provided.\n\nReturn JSON only:\n{\n  \"company_ref\": \"COPY_FROM_INPUT\",\n  \"bucket\": \"APPLY|WATCH|PASS\",\n  \"scores\": {\n    \"cs_hire_readiness\": N,\n    \"stage_size_fit\": N,\n    \"role_mandate\": N,\n    \"sector_mission\": N,\n    \"outreach_feasibility\": N,\n    \"domain_distance_modifier\": N\n  },\n  \"base_score\": N,\n  \"total_score\": N,\n  \"domain_distance\": \"target|adjacent|high-distance\",\n  \"gtm_motion\": \"enterprise|plg|hybrid\",\n  \"sector_match\": \"target|adjacent|unrelated\",\n  \"cs_hire_likelihood\": \"high|medium|low|unlikely\",\n  \"product_type\": \"high-touch enterprise|mid-market|self-serve|consumer\",\n  \"role_type\": \"builder|maintainer|mixed\",\n  \"stale_funding_flag\": true|false,\n  \"summary\": \"2-3 sentences explaining score\",\n  \"watch_triggers\": [\"trigger1\"]\n}`;\n\nreturn companyItems.map(item => {\n  const c = item.json;\n  const companyRef = c._updateRecordId || c.company_name || 'unknown';\n  \n  // v9: Use funding_age_years from enrichment if available\n  const fundingAge = c.funding_age_years || null;\n  \n  const userPrompt = `COMPANY:\\ncompany_ref: ${companyRef}\\nName: ${c.company_name}\\nURL: ${c.company_url}\\nDescription: ${c.description}\\nSource: ${c.source}\\nFunding: ${c.funding_stage || 'Unknown'}, ${c.total_funding || 'Unknown'}\\nEmployees: ${c.employee_count || 'Unknown'}\\nFounded: ${c.founded_year || 'Unknown'}\\nCustomer Persona: ${c.customer_persona || 'Unknown'}\\nGTM Motion: ${c.gtm_motion || 'Unknown'}\\nCS Readiness Score: ${c.cs_readiness_score || 'Unknown'}\\nFunding Age: ${fundingAge ? fundingAge + ' years ago' : 'Unknown'}\\n\\nEvaluate and return JSON. IMPORTANT: Include company_ref: \"${companyRef}\" in your response.`;\n  \n  return { json: { ...c, evaluationPrompt: { systemPrompt, userPrompt }, _companyRef: companyRef } };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4150, 1150],
+      "id": "pipeline-build-prompt",
+      "name": "Build Evaluation Prompt"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5\",\n  \"max_tokens\": 1500,\n  \"system\": {{ JSON.stringify($json.evaluationPrompt.systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json.evaluationPrompt.userPrompt) }}}]\n}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 5000
+            }
+          },
+          "timeout": 60000,
+          "retry": {
+            "enabled": true,
+            "maxRetries": 3,
+            "retryInterval": 5000,
+            "retryOnAllErrors": false
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3000, 800],
+      "id": "pipeline-claude-api",
+      "name": "Evaluate via Anthropic API",
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "bR8vmR2cZDLoP5W6",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// v9: Parse Evaluation with domain distance fields\nconst response = $json;\nconst companyItems = $('Build Evaluation Prompt').all();\n\nconst companyByRef = new Map();\nfor (const item of companyItems) {\n  const ref = item.json._companyRef || item.json._updateRecordId || item.json.company_name;\n  if (ref) companyByRef.set(ref, item.json);\n}\n\nlet evaluation = {};\ntry {\n  const content = response.content?.[0]?.text || '';\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) evaluation = JSON.parse(jsonMatch[0]);\n} catch (e) {\n  evaluation = { bucket: 'WATCH', total_score: 0, summary: 'Parse error - manual review needed' };\n}\n\nconst refFromClaude = evaluation.company_ref || '';\nlet companyData = companyByRef.get(refFromClaude);\nlet refMatchType = 'exact';\n\nif (!companyData) {\n  const currentIndex = $itemIndex;\n  companyData = companyItems[currentIndex]?.json || {};\n  refMatchType = 'fallback';\n}\n\nconst statusMap = { 'APPLY': 'Apply', 'WATCH': 'Monitor', 'PASS': 'Skip' };\nconst nextStepsMap = { 'APPLY': 'Apply Now', 'WATCH': 'Watch for Jobs', 'PASS': 'Skip' };\n\nreturn {\n  json: {\n    _updateRecordId: companyData._updateRecordId || null,\n    _dedupKey: companyData._dedupKey,\n    company_name: companyData.company_name,\n    company_url: companyData.company_url,\n    description: companyData.description,\n    source: companyData.source,\n    status: statusMap[evaluation.bucket] || 'Research',\n    next_steps: nextStepsMap[evaluation.bucket] || 'Research More',\n    total_score: evaluation.total_score || 0,\n    base_score: evaluation.base_score || evaluation.total_score || 0,\n    sector_match: evaluation.sector_match || 'unknown',\n    domain_distance: evaluation.domain_distance || 'unknown',\n    domain_distance_modifier: evaluation.scores?.domain_distance_modifier || 0,\n    gtm_motion: evaluation.gtm_motion || companyData.gtm_motion || 'unknown',\n    cs_hire_likelihood: evaluation.cs_hire_likelihood || '',\n    product_type: evaluation.product_type || '',\n    role_type: evaluation.role_type || 'unknown',\n    summary: evaluation.summary || '',\n    funding_stage: companyData.funding_stage,\n    total_funding: companyData.total_funding,\n    employee_count: companyData.employee_count,\n    pe_backed: companyData.pe_backed,\n    founded_year: companyData.founded_year,\n    customer_persona: companyData.customer_persona || 'unknown',\n    cs_readiness_score: companyData.cs_readiness_score || null,\n    stale_funding_flag: evaluation.stale_funding_flag || false,\n    _refMatch: refMatchType,\n    _evalItemIndex: $itemIndex\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4350, 1150],
+      "id": "pipeline-parse-eval",
+      "name": "Parse Evaluation"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": ["Job Title", "Company", "Review Status"]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [3400, 950],
+      "id": "pipeline-search-job-listings",
+      "name": "Search Job Listings",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbliKHRPEVI6SceJX",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": ["Name", "Company", "Position", "LinkedIn URL", "Company Normalized"]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [3400, 1100],
+      "id": "pipeline-search-linkedin",
+      "name": "Search LinkedIn Connections",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [3600, 850],
+      "id": "pipeline-merge-job-check",
+      "name": "Merge for Job Check"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [3600, 1050],
+      "id": "pipeline-merge-linkedin-check",
+      "name": "Merge for LinkedIn Check"
+    },
+    {
+      "parameters": {
+        "jsCode": "// OPTIMIZED: Check job matches and LinkedIn connections using Map lookups\n// v8.4.1: Added try/catch for node references to handle execution timing issues\nlet evalItems = [];\nlet jobListings = [];\nlet linkedInConnections = [];\n\ntry {\n  evalItems = $('Parse Evaluation').all();\n} catch(e) {\n  // Parse Evaluation should always exist if we got here\n  evalItems = [];\n}\n\ntry {\n  jobListings = $('Search Job Listings').all();\n} catch(e) {\n  // Job Listings search may not have completed - continue with empty array\n  jobListings = [];\n}\n\ntry {\n  linkedInConnections = $('Search LinkedIn Connections').all();\n} catch(e) {\n  // LinkedIn search may not have completed - continue with empty array\n  linkedInConnections = [];\n}\n\n// If no eval items, return empty result\nif (evalItems.length === 0) {\n  return [{ json: { _error: true, _message: 'No evaluation items available' } }];\n}\n\nconst normalize = (str) => str ? String(str).toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\n// Build a Map for O(1) job lookups\nconst jobsByCompany = new Map();\nfor (const job of jobListings) {\n  const fields = job.json.fields || job.json;\n  const company = normalize(fields['Company'] || fields['company'] || '');\n  if (!company) continue;\n  if (!jobsByCompany.has(company)) jobsByCompany.set(company, []);\n  jobsByCompany.get(company).push(job);\n}\n\n// Build a Map for O(1) LinkedIn connection lookups\nconst connectionsByCompany = new Map();\nfor (const conn of linkedInConnections) {\n  const fields = conn.json.fields || conn.json;\n  // Use pre-computed normalized field if available, otherwise normalize\n  const company = fields['Company Normalized'] || normalize(fields['Company'] || '');\n  if (!company) continue;\n  if (!connectionsByCompany.has(company)) connectionsByCompany.set(company, []);\n  connectionsByCompany.get(company).push({\n    name: fields['Name'] || '',\n    position: fields['Position'] || '',\n    linkedInUrl: fields['LinkedIn URL'] || ''\n  });\n}\n\nconst cxKeywords = ['customer', 'support', 'success', 'cx', 'experience', 'service', 'care', 'advocate', 'onboarding', 'implementation'];\nconst activeStatuses = ['new', 'reviewing', 'applied', 'interviewing', 'phone screen', 'on-site', 'offer'];\n\nreturn evalItems.map(evalItem => {\n  const companyName = evalItem.json.company_name || '';\n  const normalizedCompany = normalize(companyName);\n  \n  // Check job matches\n  const matchingJobs = jobsByCompany.get(normalizedCompany) || [];\n  const activeJobs = matchingJobs.filter(job => {\n    const fields = job.json.fields || job.json;\n    const status = (fields['Review Status'] || '').toLowerCase();\n    return activeStatuses.includes(status);\n  });\n  const cxJobs = activeJobs.filter(job => {\n    const fields = job.json.fields || job.json;\n    const title = (fields['Job Title'] || '').toLowerCase();\n    return cxKeywords.some(kw => title.includes(kw));\n  });\n  \n  // Check LinkedIn connections\n  const matchingConnections = connectionsByCompany.get(normalizedCompany) || [];\n  const hasNetworkConnection = matchingConnections.length > 0;\n  const connectionNames = matchingConnections.map(c => `${c.name} (${c.position})`).join(', ');\n  const connectionLinkedInUrl = matchingConnections.length > 0 ? matchingConnections[0].linkedInUrl : '';\n  \n  return {\n    json: {\n      ...evalItem.json,\n      // Preserve customer_persona\n      customer_persona: evalItem.json.customer_persona || 'unknown',\n      // Job matching fields\n      hasActiveJobPosting: activeJobs.length > 0,\n      hasCxJobPosting: cxJobs.length > 0,\n      matchingJobCount: activeJobs.length,\n      matchingCxJobCount: cxJobs.length,\n      matchingJobTitles: activeJobs.map(j => (j.json.fields || j.json)['Job Title'] || '').filter(Boolean).join(', '),\n      matchingJobIds: activeJobs.map(j => j.json.id).filter(Boolean),\n      // LinkedIn connection fields\n      hasNetworkConnection: hasNetworkConnection,\n      connectionName: connectionNames,\n      connectionLinkedInUrl: connectionLinkedInUrl,\n      connectionCount: matchingConnections.length\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3800, 950],
+      "id": "pipeline-check-matches",
+      "name": "Check Job & Network Matches"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-cx-job",
+              "leftValue": "={{ $json.hasCxJobPosting }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4000, 950],
+      "id": "pipeline-if-priority",
+      "name": "IF: Priority Alert?"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.NOTIFICATION_EMAIL || 'eric@example.com' }}",
+        "subject": "={{ $json.hasNetworkConnection ? '🔗 NETWORK + ' : '' }}{{ $json.hasCxJobPosting ? 'ACTIVE CX ROLE: ' : 'PRIORITY: ' }}{{ $json.company_name }} (Score: {{ $json.total_score }})",
+        "emailType": "text",
+        "message": "={{ $json.company_name }} is a HIGH-PRIORITY lead!\n\n{{ $json.hasCxJobPosting ? '✅ ACTIVE CX JOB POSTING:\\n' + $json.matchingJobTitles + '\\n\\n' : '' }}{{ $json.hasNetworkConnection ? '🔗 NETWORK CONNECTION:\\n' + $json.connectionName + '\\nLinkedIn: ' + $json.connectionLinkedInUrl + '\\n\\n' : '' }}Tide-Pool Score: {{ $json.total_score }}/100\nStatus: {{ $json.status }}\nSector: {{ $json.sector_match }}\nCS Hire Likelihood: {{ $json.cs_hire_likelihood }}\n\nSummary: {{ $json.summary }}\n\nAction: {{ $json.hasCxJobPosting ? 'Apply immediately via Job Listings, then ' : '' }}{{ $json.hasNetworkConnection ? 'Reach out to your connection for a warm intro.' : 'Follow up with founder outreach.' }}\n\nFunding Stage: {{ $json.funding_stage || 'Unknown' }}\nEmployees: {{ $json.employee_count || 'Unknown' }}\nSource: {{ $json.source }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [4200, 850],
+      "id": "pipeline-notify-priority",
+      "name": "Send Priority Alert",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vUMmpPTSbHvfz72M",
+          "name": "Gmail OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-update-id",
+              "leftValue": "={{ $json._updateRecordId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [4400, 950],
+      "id": "pipeline-if-update",
+      "name": "IF: Update Existing?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "id": "={{ $json._updateRecordId }}",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company URL": "={{ $json['Company URL'] }}",
+            "Company Description": "={{ $json['Company Description'] }}",
+            "Status": "={{ $json['Status'] }}",
+            "Next Steps": "={{ $json['Next Steps'] }}",
+            "Tide-Pool Score": "={{ $json['Tide-Pool Score'] }}",
+            "Sector Match": "={{ $json['Sector Match'] }}",
+            "CS Hire Likelihood": "={{ $json['CS Hire Likelihood'] }}",
+            "Product Type": "={{ $json['Product Type'] }}",
+            "Summary": "={{ $json['Summary'] }}",
+            "Stage": "={{ $json['Stage'] }}",
+            "Total Funding": "={{ $json['Total Funding'] }}",
+            "Employee Count": "={{ $json['Employee Count'] }}",
+            "PE Backed": "={{ $json['PE Backed'] }}",
+            "Founded Year": "={{ $json['Founded Year'] }}",
+            "Has Active Job Posting": "={{ $json['Has Active Job Posting'] }}",
+            "Has CX Job Posting": "={{ $json['Has CX Job Posting'] }}",
+            "Matching Job Titles": "={{ $json['Matching Job Titles'] }}",
+            "Has Network Connection": "={{ $json['Has Network Connection'] }}",
+            "Connection Name": "={{ $json['Connection Name'] }}",
+            "Connection LinkedIn URL": "={{ $json['Connection LinkedIn URL'] }}",
+            "Customer Persona": "={{ $json['Customer Persona'] }}",
+            "Domain Distance": "={{ $json['Domain Distance'] }}",
+            "Domain Distance Modifier": "={{ $json['Domain Distance Modifier'] }}",
+            "Role Type": "={{ $json['Role Type'] }}",
+            "GTM Motion": "={{ $json['GTM Motion'] }}",
+            "CS Readiness Score": "={{ $json['CS Readiness Score'] }}"
+          },
+          "matchingColumns": []
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [4600, 850],
+      "id": "pipeline-airtable-update",
+      "name": "Airtable: Update Record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Funding Alerts",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Company Name": "={{ $json.company_name }}",
+            "Company URL": "={{ $json.company_url }}",
+            "Company Description": "={{ $json.description }}",
+            "VC Firm": "={{ $json.source }}",
+            "Status": "={{ $json.hasCxJobPosting ? 'Immediate Action' : ($json.hasNetworkConnection ? 'Network Lead' : $json.status) }}",
+            "Next Steps": "={{ $json.hasCxJobPosting ? 'Apply Now - Active CX Role' : ($json.hasNetworkConnection ? 'Reach Out to Connection' : $json.next_steps) }}",
+            "Tide-Pool Score": "={{ $json.total_score }}",
+            "Sector Match": "={{ $json.sector_match }}",
+            "CS Hire Likelihood": "={{ $json.cs_hire_likelihood }}",
+            "Product Type": "={{ $json.product_type }}",
+            "Summary": "={{ $json.summary }}",
+            "Stage": "={{ $json.funding_stage || '' }}",
+            "Total Funding": "={{ $json.total_funding || '' }}",
+            "Employee Count": "={{ $json.employee_count || null }}",
+            "PE Backed": "={{ $json.pe_backed || false }}",
+            "Founded Year": "={{ $json.founded_year || null }}",
+            "Source": "={{ $json.source }}",
+            "Has Active Job Posting": "={{ $json.hasActiveJobPosting }}",
+            "Has CX Job Posting": "={{ $json.hasCxJobPosting }}",
+            "Matching Job Titles": "={{ $json.matchingJobTitles || '' }}",
+            "Has Network Connection": "={{ $json.hasNetworkConnection }}",
+            "Connection Name": "={{ $json.connectionName || '' }}",
+            "Connection LinkedIn URL": "={{ $json.connectionLinkedInUrl || '' }}",
+            "Customer Persona": "={{ $json.customer_persona || '' }}",
+            "Domain Distance": "={{ $json.domain_distance || '' }}",
+            "Domain Distance Modifier": "={{ $json.domain_distance_modifier || 0 }}",
+            "Role Type": "={{ $json.role_type || '' }}",
+            "GTM Motion": "={{ $json.gtm_motion || '' }}",
+            "CS Readiness Score": "={{ $json.cs_readiness_score || null }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [4600, 1050],
+      "id": "pipeline-airtable-evaluated",
+      "name": "Airtable: Create Evaluated Record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare dedup registration for evaluated records\nconst airtableRecord = $json;\nlet parseData = {};\ntry { parseData = $('Check Job & Network Matches').item?.json || {}; } catch(e) { parseData = {}; }\n\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\nconst company = parseData.company_name || '';\nconst key = `company:${normalize(company)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: '',\n    source: parseData.source || 'Unknown',\n    recordType: 'company',\n    airtableRecordId: airtableRecord.id\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4800, 950],
+      "id": "pipeline-prep-register-eval",
+      "name": "Prep Register (Evaluated)"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "MDzcHPZMySqn1DrGh8J0-",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [5000, 950],
+      "id": "pipeline-dedup-register-eval",
+      "name": "Dedup Register (Evaluated)"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// v8.4.2: Transform field names for Airtable auto-mapping\nconst item = $json;\nconst status = item.hasCxJobPosting ? 'Immediate Action' : (item.hasNetworkConnection ? 'Network Lead' : item.status);\nconst nextSteps = item.hasCxJobPosting ? 'Apply Now - Active CX Role' : (item.hasNetworkConnection ? 'Reach Out to Connection' : item.next_steps);\n\nreturn {\n  json: {\n    // Record ID for update - used by node's id parameter, not sent to Airtable\n    _updateRecordId: item._updateRecordId,\n    // Airtable column names\n    'Company URL': item.company_url || '',\n    'Company Description': item.description || '',\n    'Status': status || '',\n    'Next Steps': nextSteps || '',\n    'Tide-Pool Score': item.total_score || 0,\n    'Sector Match': item.sector_match || '',\n    'CS Hire Likelihood': item.cs_hire_likelihood || '',\n    'Product Type': item.product_type || '',\n    'Summary': item.summary || '',\n    'Stage': item.funding_stage || '',\n    'Total Funding': item.total_funding || '',\n    'Employee Count': item.employee_count || null,\n    'PE Backed': item.pe_backed || false,\n    'Founded Year': item.founded_year || null,\n    'Has Active Job Posting': item.hasActiveJobPosting || false,\n    'Has CX Job Posting': item.hasCxJobPosting || false,\n    'Matching Job Titles': item.matchingJobTitles || '',\n    'Has Network Connection': item.hasNetworkConnection || false,\n    'Connection Name': item.connectionName || '',\n    'Connection LinkedIn URL': item.connectionLinkedInUrl || '',\n    'Customer Persona': item.customer_persona || '',\n    'Domain Distance': item.domain_distance || '',\n    'Domain Distance Modifier': item.domain_distance_modifier || 0,\n    'Role Type': item.role_type || '',\n    'GTM Motion': item.gtm_motion || '',\n    'CS Readiness Score': item.cs_readiness_score || null,\n    // Preserve for downstream dedup\n    company_name: item.company_name,\n    source: item.source\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4500, 850],
+      "id": "pipeline-prep-update",
+      "name": "Prep for Airtable Update"
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Mark as New & Prep Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as New & Prep Dedup": {
+      "main": [
+        [
+          {
+            "node": "Validate Entity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Entity": {
+      "main": [
+        [
+          {
+            "node": "IF: Valid Entity?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Valid Entity?": {
+      "main": [
+        [
+          {
+            "node": "IF: Rescore Mode?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Invalid Entity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Invalid Entity": {
+      "main": [
+        [
+          {
+            "node": "IF: Update Existing? (Invalid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Update Existing? (Invalid)": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Update Invalid Entity",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Create Invalid Entity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Update Invalid Entity": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Invalid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Create Invalid Entity": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Invalid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Register (Invalid)": {
+      "main": [
+        [
+          {
+            "node": "Dedup Register (Invalid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Rescore Mode?": {
+      "main": [
+        [
+          {
+            "node": "Build Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dedup Check (Cross-Source)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check (Cross-Source)": {
+      "main": [
+        [
+          {
+            "node": "IF: Cross-Source Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Cross-Source Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Skip Cross-Source Dupe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Restore Company Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Company Data": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Companies",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge for Table Dedup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Companies": {
+      "main": [
+        [
+          {
+            "node": "Merge for Table Dedup",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge for Table Dedup": {
+      "main": [
+        [
+          {
+            "node": "Dedup Against Existing Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Against Existing Table": {
+      "main": [
+        [
+          {
+            "node": "Has New Companies?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Companies?": {
+      "main": [
+        [
+          {
+            "node": "Build Search Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "All Duplicates - Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Search Query": {
+      "main": [
+        [
+          {
+            "node": "Brave Search Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brave Search Company": {
+      "main": [
+        [
+          {
+            "node": "Parse Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Enrichment": {
+      "main": [
+        [
+          {
+            "node": "IF: Auto-Disqualify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Auto-Disqualify": {
+      "main": [
+        [
+          {
+            "node": "IF: Update Existing? (DQ)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Persona Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Update Existing? (DQ)": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Update Auto-Disqualified",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Auto-Disqualified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Update Auto-Disqualified": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Disqualified)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Persona Prompt": {
+      "main": [
+        [
+          {
+            "node": "Classify Persona via Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Persona via Claude": {
+      "main": [
+        [
+          {
+            "node": "Parse Persona & Check Enterprise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Persona & Check Enterprise": {
+      "main": [
+        [
+          {
+            "node": "IF: Developer Auto-Pass?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Developer Auto-Pass?": {
+      "main": [
+        [
+          {
+            "node": "IF: Update Existing? (Dev)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build CS Readiness Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Update Existing? (Dev)": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Update Developer Pass",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Create Developer Pass",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Update Developer Pass": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Developer Pass)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Create Developer Pass": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Developer Pass)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Register (Developer Pass)": {
+      "main": [
+        [
+          {
+            "node": "Dedup Register (Developer Pass)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Auto-Disqualified": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Disqualified)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Register (Disqualified)": {
+      "main": [
+        [
+          {
+            "node": "Dedup Register (Disqualified)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build CS Readiness Prompt": {
+      "main": [
+        [
+          {
+            "node": "Check CS Hire Readiness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check CS Hire Readiness": {
+      "main": [
+        [
+          {
+            "node": "Parse CS Readiness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CS Readiness": {
+      "main": [
+        [
+          {
+            "node": "IF: CS Readiness Below Threshold?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: CS Readiness Below Threshold?": {
+      "main": [
+        [
+          {
+            "node": "IF: Update Existing? (CS DQ)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Evaluation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Update Existing? (CS DQ)": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Update CS DQ",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Create CS DQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Update CS DQ": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (CS DQ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Create CS DQ": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (CS DQ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Register (CS DQ)": {
+      "main": [
+        [
+          {
+            "node": "Dedup Register (CS DQ)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Evaluation Prompt": {
+      "main": [
+        [
+          {
+            "node": "Evaluate via Anthropic API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate via Anthropic API": {
+      "main": [
+        [
+          {
+            "node": "Parse Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Search Job Listings",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search LinkedIn Connections",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge for Job Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge for LinkedIn Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Job Listings": {
+      "main": [
+        [
+          {
+            "node": "Merge for Job Check",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Search LinkedIn Connections": {
+      "main": [
+        [
+          {
+            "node": "Merge for LinkedIn Check",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge for Job Check": {
+      "main": [
+        [
+          {
+            "node": "Check Job & Network Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge for LinkedIn Check": {
+      "main": []
+    },
+    "Check Job & Network Matches": {
+      "main": [
+        [
+          {
+            "node": "IF: Priority Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Priority Alert?": {
+      "main": [
+        [
+          {
+            "node": "Send Priority Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF: Update Existing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Priority Alert": {
+      "main": [
+        [
+          {
+            "node": "IF: Update Existing?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Update Existing?": {
+      "main": [
+        [
+          {
+            "node": "Prep for Airtable Update",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Airtable: Create Evaluated Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep for Airtable Update": {
+      "main": [
+        [
+          {
+            "node": "Airtable: Update Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Update Record": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Evaluated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable: Create Evaluated Record": {
+      "main": [
+        [
+          {
+            "node": "Prep Register (Evaluated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Register (Evaluated)": {
+      "main": [
+        [
+          {
+            "node": "Dedup Register (Evaluated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
