@@ -18,490 +18,198 @@ This document details the technical architecture of the Tide Pool job search aut
            │                     │                         │
            ▼                     ▼                         ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                     STANDARDIZED EVALUATION SUB-ROUTINE                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
-│  │ Brave Search│→ │   Parse     │→ │   Build     │→ │   Wait      │              │
-│  │   Company   │  │ Enrichment  │  │   Prompt    │  │ (Rate Limit)│              │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └──────┬──────┘              │
-│                                                            │                     │
-│                   ┌─────────────┐  ┌─────────────┐         │                     │
-│                   │   Parse     │← │ Call Claude │←────────┘                     │
-│                   │  Response   │  │     API     │                               │
-│                   └──────┬──────┘  └─────────────┘                               │
-└──────────────────────────┼──────────────────────────────────────────────────────┘
-                           │
-                           ▼
+│                     CROSS-SOURCE DEDUPLICATION LAYER                             │
+│  ├── Dedup Check Subworkflow (before evaluation)                                │
+│  ├── Seen Opportunities Table (central registry)                                │
+│  └── Dedup Register Subworkflow (after Airtable upsert)                        │
+└──────────┬──────────────────────────────────────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                 STANDARDIZED EVALUATION SUB-ROUTINES                             │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────────────────────────────┐    │
+│  │ JOBS: Job Evaluation Pipeline v6.1                                       │    │
+│  │  JD Fetch → Parse → Build Prompt → Claude Evaluate → Parse Response     │    │
+│  └─────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                  │
+│  ┌─────────────────────────────────────────────────────────────────────────┐    │
+│  │ COMPANIES: Enrich & Evaluate Pipeline v9                                 │    │
+│  │  Phase 0: Entity Validation                                              │    │
+│  │  Phase 1: Brave Search Enrichment                                        │    │
+│  │  Phase 2: Pre-Evaluation Gates (5 Tiers)                                │    │
+│  │  Phase 3: Customer Persona Classification                                │    │
+│  │  Phase 4: CS Hire Readiness Threshold                                    │    │
+│  │  Phase 5: Full Evaluation + Domain Distance                              │    │
+│  └─────────────────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────┬──────────────────────────────────────────────┘
+                                   │
+                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              AIRTABLE STORAGE                                    │
-│  ├── Job Listings (scored opportunities)                                         │
-│  ├── Funding Alerts (VC portfolio companies)                                     │
-│  └── Config (API keys, credentials)                                              │
+│  ├── Job Listings (scored job opportunities)                                    │
+│  ├── Funding Alerts (VC portfolio company evaluations)                          │
+│  ├── LinkedIn Connections (network cross-reference)                             │
+│  ├── Seen Opportunities (cross-source dedup registry)                          │
+│  └── Indeed Searches (Indeed job search configs)                                │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │  Review Status: New → Reviewing → Applied / Not a Fit → Archived                 │
-└──────────────────────────┬──────────────────────────────────────────────────────┘
-                           │
-┌──────────────────────────┴──────────────────────────────────────────────────────┐
-│                      CROSS-SOURCE DEDUPLICATION LAYER                            │
-│  ┌─────────────────────────────┐    ┌─────────────────────────────┐             │
-│  │  Dedup Check Subworkflow    │    │  Dedup Register Subworkflow │             │
-│  │  (Before evaluation)        │    │  (After Airtable upsert)    │             │
-│  │  → Generate normalized key  │    │  → Create Seen record       │             │
-│  │  → Query Seen Opportunities │    │  → Link to job/company      │             │
-│  │  → Skip if duplicate        │    │  → Track all sources        │             │
-│  └──────────────┬──────────────┘    └──────────────┬──────────────┘             │
-│                 │                                   │                            │
-│                 └───────────────┬───────────────────┘                            │
-│                                 ▼                                                │
-│                     Seen Opportunities Table                                     │
-│                     (Central dedup registry)                                     │
-└──────────────────────────┬──────────────────────────────────────────────────────┘
-                           │
-                           ▼
+└──────────────────────────────────┬──────────────────────────────────────────────┘
+                                   │
+                                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           FEEDBACK LOOP LAYER                                    │
-│  ┌─────────────────────────────┐    ┌─────────────────────────────┐             │
-│  │  Not a Fit Analysis         │    │  Applied Analysis            │             │
-│  │  (Weekly Mon 9am)           │    │  (Weekly Mon 9:30am)         │             │
-│  │  → Pattern detection        │    │  → Calibration check         │             │
-│  │  → New disqualifier ideas   │    │  → Score distribution        │             │
-│  │  → Scoring adjustments      │    │  → Positive signal discovery │             │
-│  └──────────────┬──────────────┘    └──────────────┬──────────────┘             │
-│                 │                                   │                            │
-│                 └───────────────┬───────────────────┘                            │
-│                                 ▼                                                │
-│                     Email Reports → Manual Lens Updates                          │
+│  ├── Feedback Loop - Not a Fit (weekly pattern analysis)                        │
+│  └── Feedback Loop - Applied (weekly calibration analysis)                      │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Modular Evaluation Sub-Routine
+## Enrich & Evaluate Pipeline v9 Architecture
 
-### Design Philosophy
+The v9 pipeline represents a **full redesign** addressing a 4% signal rate (1/25 companies worth pursuing).
 
-The evaluation chain is designed for **modularity** and **maintainability**:
-
-| Node | Responsibility | Swappable? | Swap Examples |
-|------|----------------|------------|---------------|
-| **Brave Search Company** | Fetch raw company intelligence | Yes | Clearbit, Apollo, Crunchbase API, Diffbot |
-| **Parse Enrichment** | Normalize to standard schema | Adjust | Parse new API response format |
-| **Fetch Profile** | Load evaluation criteria | Yes | Local file, Airtable, different URL |
-| **Build Prompt** | Construct LLM prompt | Stable | Usually unchanged |
-| **Wait (Rate Limit)** | API throttling | Adjust | Change delay per API limits |
-| **Call Claude API** | LLM inference | Yes | OpenAI, Gemini, local LLM |
-| **Parse Response** | Extract structured output | Adjust | Handle different response formats |
-
-### Data Flow
+### Six-Phase Flow
 
 ```
-Job Data (from source)
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ BRAVE SEARCH COMPANY                                          │
-│ ─────────────────────                                         │
-│ Input:  { Company: "Acme Corp", ... }                        │
-│ Action: GET https://api.search.brave.com/res/v1/web/search   │
-│         Query: "Acme Corp" funding series employees          │
-│                site:crunchbase.com OR site:pitchbook.com     │
-│ Output: { web: { results: [...] } }                          │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ PARSE ENRICHMENT                                              │
-│ ────────────────                                              │
-│ Input:  Brave Search results                                  │
-│ Action: Extract via regex patterns:                           │
-│         - Employee count (multiple patterns)                  │
-│         - Funding stage (Series A/B/C, Seed, etc.)           │
-│         - Total funding raised                                │
-│         - PE vs VC backing (35+ PE firm names)               │
-│         - Founded year                                        │
-│ Output: {                                                     │
-│   _enrichment: {                                              │
-│     employeeCount: 150,                                       │
-│     fundingStage: "Series B",                                │
-│     totalFunding: 45,  // millions                           │
-│     isPEBacked: false,                                        │
-│     isVCBacked: true,                                         │
-│     foundedYear: 2019,                                        │
-│     companyAge: 7,                                            │
-│     autoDisqualifiers: []                                     │
-│   }                                                           │
-│ }                                                             │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ FETCH PROFILE (runs at workflow start)                        │
-│ ─────────────                                                 │
-│ Input:  None (triggered by schedule)                          │
-│ Action: GET https://raw.githubusercontent.com/zelman/         │
-│             tidepool/refs/heads/main/tide-pool-agent-lens.md │
-│ Output: Full Tide Pool Agent Lens markdown document           │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ BUILD PROMPT                                                  │
-│ ────────────                                                  │
-│ Input:  Job data + Enrichment + Profile                       │
-│ Action: Construct system prompt with:                         │
-│         - Full Tide Pool Agent Lens                           │
-│         - Scoring framework (100 points)                      │
-│         - Builder vs Maintainer criteria                      │
-│         - Auto-disqualifier rules                             │
-│         Construct user prompt with:                           │
-│         - Job title, company, location, salary                │
-│         - Enrichment data block                               │
-│         - Prefilter analysis                                  │
-│ Output: { _systemPrompt, _userPrompt, _apiKey }              │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ WAIT (RATE LIMIT)                                             │
-│ ─────────────────                                             │
-│ Input:  Prompt data                                           │
-│ Action: Wait 30 seconds                                       │
-│ Output: Passthrough                                           │
-│                                                               │
-│ Note: Prevents Anthropic API rate limiting when processing    │
-│       multiple jobs in sequence                               │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ CALL CLAUDE API                                               │
-│ ───────────────                                               │
-│ Input:  System prompt + User prompt                           │
-│ Action: POST https://api.anthropic.com/v1/messages            │
-│         Model: claude-haiku-4-5-20250314                      │
-│         Max tokens: 2000                                      │
-│ Output: {                                                     │
-│   content: [{                                                 │
-│     text: "{ \"score\": 75, \"role_type\": \"builder\", ...}"|
-│   }]                                                          │
-│ }                                                             │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ PARSE RESPONSE                                                │
-│ ──────────────                                                │
-│ Input:  Claude API response                                   │
-│ Action: Extract JSON from response text                       │
-│         - Robust parsing with regex fallback                  │
-│         - Handle malformed JSON                               │
-│         - Append enrichment summary to rationale              │
-│ Output: {                                                     │
-│   "Job Title": "...",                                        │
-│   "Company": "...",                                          │
-│   "Tide-Pool Score": 75,                                     │
-│   "Tide-Pool Rationale": "Strong builder signals...",        │
-│   "Role Type": "builder",                                     │
-│   "Builder Evidence": "first hire; build from scratch",      │
-│   "Maintainer Evidence": "",                                  │
-│   "Recommendation": "apply",                                  │
-│   "Industry": "Enterprise SaaS",                             │
-│   "Company Stage": "series_b"                                │
-│ }                                                             │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-    Airtable
+INPUT (company from scraper)
+    │
+    ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 0: ENTITY VALIDATION                                                 │
+│   • Is this an operating company? (not podcast/media/nonprofit)           │
+│   • Pattern matching: .org, .edu, podcast, blog, newsletter               │
+│   • Fail → Exit: "Invalid Entity"                                          │
+└───────────────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 1: ENRICHMENT (Brave Search)                                         │
+│   • Fetch company data via Brave Search API                                │
+│   • Extract: employees, funding, stage, geography                          │
+│   • NEW: Enhanced acquisition detection (PE portfolio patterns)           │
+│   • NEW: GTM motion signals (PLG vs enterprise)                           │
+│   • NEW: Software-first check (not services/hardware)                     │
+│   • NEW: Stale company detection (shrinking headcount)                    │
+└───────────────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│ PHASE 2: PRE-EVALUATION GATES (5 Tiers)                                    │
+│                                                                            │
+│ TIER 1 - HARD GATES (binary, immediate exit):                             │
+│   PE-backed, >200 emp, >$500M funding, public, Series D+,                 │
+│   acquired, Fortune 500, invalid entity, non-US market                    │
+│                                                                            │
+│ TIER 2 - SECTOR GATES:                                                    │
+│   Biotech, hardware, crypto, consumer, HR Tech, marketplace,              │
+│   not software-first (services, hardware+software)                        │
+│                                                                            │
+│ TIER 3 - GTM MOTION GATES:                                                │
+│   PLG-dominant (no enterprise CS need), pre-sales function company        │
+│                                                                            │
+│ TIER 4 - STALE COMPANY GATES:                                             │
+│   3+ years since funding, shrinking headcount signals                     │
+│                                                                            │
+│ TIER 5 - SOFT FLAGS (proceed but flag):                                   │
+│   <15 employees, 150-200 employees, $75M+ funding, pre-2016               │
+└───────────────────────────────────────────────────────────────────────────┘
+    │
+    ├──────────────────────┐
+    │ Disqualified         │
+    ▼                      ▼
+┌─────────────┐     ┌───────────────────────────────────────────────────────┐
+│ Exit:       │     │ PHASE 3: PERSONA CLASSIFICATION (Claude Haiku)        │
+│ Score = 0   │     │   • Classify: business-user, employee-user,           │
+│ Auto-DQ     │     │     developer, mixed                                  │
+└─────────────┘     │   • Developer + <50 emp → Auto-pass                   │
+                    │   • Developer + 50+ emp + <3 enterprise signals →     │
+                    │     Auto-pass                                          │
+                    │   • Developer + 50+ emp + 3+ signals → Proceed        │
+                    │   • Employee-user + <50 emp → Auto-pass               │
+                    │   • Business-user/mixed → Proceed to CS Readiness     │
+                    └───────────────────────────────────────────────────────┘
+                        │
+                        ├──────────────────────┐
+                        │ Auto-pass            │
+                        ▼                      ▼
+                 ┌─────────────┐     ┌───────────────────────────────────────┐
+                 │ Exit:       │     │ PHASE 4: CS HIRE READINESS (Haiku)    │
+                 │ Developer/  │     │   • Quick Claude call: "Is company    │
+                 │ Employee    │     │     actively building CS?"            │
+                 │ Auto-Pass   │     │   • Must score >= 10 to proceed       │
+                 └─────────────┘     │   • Fail → Exit: "Below Threshold"    │
+                                     └───────────────────────────────────────┘
+                                         │
+                                         ├──────────────────────┐
+                                         │ Below threshold      │
+                                         ▼                      ▼
+                                  ┌─────────────┐     ┌─────────────────────┐
+                                  │ Exit:       │     │ PHASE 5: FULL EVAL  │
+                                  │ CS Below    │     │   • 100-pt scoring  │
+                                  │ Threshold   │     │   • Domain distance │
+                                  └─────────────┘     │   • APPLY/WATCH/PASS│
+                                                      └──────────┬──────────┘
+                                                                 │
+                                                                 ▼
+                                                      ┌─────────────────────┐
+                                                      │ OUTPUT              │
+                                                      │ Airtable record     │
+                                                      │ with score + status │
+                                                      └─────────────────────┘
 ```
+
+### New Detection Patterns (v9)
+
+| Pattern Type | Implementation | Purpose |
+|--------------|----------------|---------|
+| **PE Portfolio** | Jonas Software, Constellation, Volaris, Harris Computer, TSS | Catch PE-owned via acquisition |
+| **Current Ownership** | "currently owned by", "majority stake", "portfolio of" | Distinguish from investor history |
+| **PLG Signals** | free tier, self-serve, freemium, community edition, open source | Identify PLG-dominant companies |
+| **Enterprise Signals** | enterprise sales, account executive, implementation team, ACV | Identify enterprise CS need |
+| **Services Business** | creative services, consulting, staffing, managed services | Not software-first |
+| **Hardware+Software** | sensor platform, device+cloud, physical product | Hardware masquerading as SaaS |
+| **Pre-Sales Function** | presales platform, demo automation, CPQ, sales engineering | Pre-sales tools |
+| **Stale Signals** | layoff, restructuring, downsizing, workforce reduction | Shrinking company |
+| **Geography** | headquartered in, based in, US city names, EMEA/APAC | US vs non-US market |
 
 ---
 
-## Enrichment Schema
-
-The `_enrichment` object provides a **standardized interface** between data fetching and prompt building:
-
-```javascript
-{
-  // Company size
-  employeeCount: number | null,      // Extracted from search results
-
-  // Funding information
-  fundingStage: string | null,       // Pre-Seed, Seed, Series A/B/C/D+, Public
-  totalFunding: number | null,       // In millions (e.g., 45 = $45M)
-
-  // Investor type (critical signal)
-  isPEBacked: boolean,               // Private equity - auto-disqualifier
-  isVCBacked: boolean,               // Venture capital - positive signal
-
-  // Company age
-  foundedYear: number | null,        // e.g., 2019
-  companyAge: number | null,         // Years since founding
-
-  // Source tracking
-  enrichmentSource: string | null,   // URL of primary data source
-  rawSnippets: string[],             // First 3 search result snippets
-
-  // Auto-disqualification
-  autoDisqualifiers: string[],       // Reasons for automatic rejection
-  isKnownLarge: boolean,             // Known large company flag
-  hasSkillsMismatch: boolean         // Required skills mismatch
-}
-```
-
-### Auto-Disqualifier Rules
-
-| Rule | Threshold | Rationale |
-|------|-----------|-----------|
-| PE-backed | Any PE investor | PE firms optimize for cost-cutting, not building |
-| Employee count | ≥ 1,000 | Too large for builder role |
-| Total funding | ≥ $500M | Late-stage, likely has mature operations |
-| Public company | IPO/NASDAQ/NYSE | Established, not startup |
-| Known large | Anthropic, Google, Meta, etc. | Pre-flagged companies |
-| Zombie company | 7+ years old + still Seed + <100 employees | Stalled growth |
-| Skills mismatch | HIPAA/PHI required | Healthcare compliance expertise needed |
-
-### Scoring Penalties (Non-Disqualifying)
-
-| Rule | Penalty | Rationale |
-|------|---------|-----------|
-| Employee count 500-999 | -15 pts | Gap between 500-1000 still too large for builder roles |
-| Support title without Director/VP/Head | -15 pts | Support Manager/Supervisor roles consistently rejected regardless of company |
-
----
-
-## Workflow Implementations
-
-### Job Alert Email Parser v3-32
+## Job Evaluation Pipeline v6.1 Architecture
 
 ```
-Schedule (hourly)
-       │
-       ├──→ Fetch Profile (GitHub)
-       │
-       ├──→ Get Config (Airtable: ANTHROPIC_API_KEY)
-       │
-       ├──→ Search records (Airtable: existing jobs)
-       │
-       └──→ Get many messages (Gmail)
-                   │
-                   ▼
-              Mark as Read
-                   │
-                   ▼
-             Identify Source (10 parsers)
-                   │
-                   ▼
-               Parse Jobs
-                   │
-                   ▼
-               Has Jobs? ──No──→ No Jobs Found
-                   │
-                  Yes
-                   │
-                   ▼
-            Merge + Dedup
-                   │
-                   ▼
-        Map Fields for Airtable
-                   │
-                   ▼
-    Prefilter: Builder vs Maintainer
-                   │
-                   ▼
-         IF: Should Process ──No──→ Skip Filtered Jobs
-                   │
-                  Yes
-                   │
-                   ▼
-    ┌─────────────────────────────────┐
-    │  EVALUATION SUB-ROUTINE         │
-    │  (7-node chain - see above)     │
-    └─────────────────────────────────┘
-                   │
-                   ▼
-            Filter Empty
-                   │
-                   ▼
-          Add to Airtable
-                   │
-                   ▼
-        Add label to message (Gmail)
+INPUT (job from scraper/email parser)
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ JD FETCH (Browserless)                                                       │
+│   • Fetch full job description from URL                                      │
+│   • Extract company info, requirements, responsibilities                     │
+└───────────────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ BUILD PROMPT                                                                 │
+│   • Construct evaluation prompt with Tide Pool Agent Lens                   │
+│   • Include JD content, enrichment data                                      │
+└───────────────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ CLAUDE EVALUATE (Haiku)                                                      │
+│   • 100-point scoring                                                        │
+│   • Builder vs Maintainer classification                                     │
+│   • Recommendation: apply/research/skip                                      │
+└───────────────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ AIRTABLE UPSERT                                                              │
+│   • v6.1: Upsert preserves Review Status (doesn't overwrite "Applied")     │
+│   • Source field preserved with fallback lookups                            │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
-
-### Work at a Startup Scraper v6
-
-```
-Schedule (every 6 hours)
-       │
-       ├──→ Get Config (Airtable)
-       │
-       ├──→ Search Existing Jobs (Airtable)
-       │
-       └──→ Fetch Profile (GitHub)  ← NEW in v6
-                   │
-              Parse Config
-                   │
-       ┌───────────┴───────────┐
-       ▼                       ▼
-Scrape via Browserless    Scrape Costanoa
-(YC Work at a Startup)    (Costanoa VC jobs)
-       │                       │
-       ▼                       ▼
- Parse & Filter YC       Parse Costanoa Jobs
-       │                       │
-       └───────────┬───────────┘
-                   ▼
-           Merge Job Sources
-                   │
-                   ▼
-           Merge for Dedup
-                   │
-                   ▼
-        Dedup Against Airtable
-                   │
-                   ▼
-              Has Jobs? ──No──→ No Jobs/Error
-                   │
-                  Yes
-                   │
-                   ▼
-    Prefilter: Builder vs Maintainer
-                   │
-                   ▼
-         IF: Should Process ──No──→ Skip Filtered Jobs
-                   │
-                  Yes
-                   │
-                   ▼
-    ┌─────────────────────────────────┐
-    │  EVALUATION SUB-ROUTINE         │  ← NEW in v6
-    │  (7-node chain - same as above) │
-    └─────────────────────────────────┘
-                   │
-                   ▼
-          Add to Airtable
-```
-
----
-
-## Feedback Loop Architecture
-
-### Purpose
-
-The feedback loops create a **closed-loop learning system** that continuously refines the Tide Pool Agent Lens based on actual user decisions. Instead of static scoring rules, the system learns from patterns in accepted and rejected opportunities.
-
-### Feedback Loop - Not a Fit (Rejected Jobs)
-
-**Goal**: Identify patterns in rejected jobs to suggest new auto-disqualifiers and scoring penalties.
-
-```
-Schedule (Weekly Mon 9am)
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ QUERY REJECTED JOBS                                           │
-│ ───────────────────                                           │
-│ Filter: Review Status = 'Not a Fit' OR starts with 'Passed'  │
-│         (includes Passed, Passed (PE), Passed (Location),    │
-│          Passed (Company Specific))                          │
-│         Date Found >= 7 days ago                              │
-│ Fields: Title, Company, Review Status, Score, Rationale,     │
-│         Industry, Stage, Role Type, Builder/Maintainer Evidence│
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ AGGREGATE JOBS                                                │
-│ ──────────────                                                │
-│ Combine all job records into single payload for analysis     │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ CLAUDE SONNET ANALYSIS                                        │
-│ ──────────────────────                                        │
-│ Model: claude-sonnet-4-20250514 (higher capability for        │
-│        strategic analysis vs haiku for individual scoring)    │
-│                                                               │
-│ Output JSON:                                                  │
-│ {                                                             │
-│   "patterns_identified": [...],                               │
-│   "suggested_disqualifiers": [                                │
-│     { "rule": "Requires agency experience",                   │
-│       "rationale": "7 of 12 rejections had this",            │
-│       "jobs_affected": 7 }                                    │
-│   ],                                                          │
-│   "scoring_adjustments": [...],                               │
-│   "working_well": [...]                                       │
-│ }                                                             │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ EMAIL HTML REPORT                                             │
-│ ─────────────────                                             │
-│ Styled report with:                                           │
-│ - Summary                                                     │
-│ - Suggested new disqualifiers (highlighted)                   │
-│ - Scoring adjustments                                         │
-│ - Pattern breakdown                                           │
-│ - What's working well                                         │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Feedback Loop - Applied
-
-**Goal**: Calibrate scoring by analyzing what made jobs worth applying to, ensuring good opportunities aren't scored too low.
-
-```
-Schedule (Weekly Mon 9:30am)
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ QUERY APPLIED JOBS                                            │
-│ ──────────────────                                            │
-│ Filter: Review Status = 'Applied'                             │
-│         Date Found >= 7 days ago                              │
-│ + Calculate score statistics: min, max, avg, median          │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ CLAUDE SONNET CALIBRATION ANALYSIS                            │
-│ ──────────────────────────────────                            │
-│ Output JSON:                                                  │
-│ {                                                             │
-│   "score_distribution": { min, max, average, median },        │
-│   "calibration_issues": [                                     │
-│     { "issue": "Builder roles at Series B scoring low",       │
-│       "example_jobs": ["Head of CX at Acme"],                │
-│       "suggested_fix": "Increase Series B builder bonus" }   │
-│   ],                                                          │
-│   "new_positive_signals": [                                   │
-│     { "signal": "AI-native company",                          │
-│       "suggested_points": 5 }                                 │
-│   ],                                                          │
-│   "working_well": [...]                                       │
-│ }                                                             │
-└──────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│ EMAIL HTML REPORT                                             │
-│ ─────────────────                                             │
-│ - Score distribution stats                                    │
-│ - Calibration issues (PRIORITY - highlighted red)            │
-│ - New positive signals to add (highlighted green)             │
-│ - Positive signals found                                      │
-│ - What's working well                                         │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Why Claude Sonnet vs Haiku?
-
-| Use Case | Model | Rationale |
-|----------|-------|-----------|
-| Individual job scoring | Haiku | High volume, simple eval, cost-effective |
-| Weekly pattern analysis | Sonnet | Complex reasoning across multiple jobs, strategic recommendations |
 
 ---
 
@@ -509,7 +217,7 @@ Schedule (Weekly Mon 9:30am)
 
 ### Purpose
 
-Prevent duplicate evaluations when the same job/company appears from multiple sources (e.g., LinkedIn email alert + Work at a Startup scraper + VC portfolio). This saves Claude API costs and keeps records clean.
+Prevent duplicate evaluations when the same job/company appears from multiple sources. Saves Claude API costs and keeps records clean.
 
 ### Architecture
 
@@ -517,7 +225,7 @@ Prevent duplicate evaluations when the same job/company appears from multiple so
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           DEDUP CHECK SUBWORKFLOW                                │
 │                                                                                  │
-│  Input: { company, title, source, recordType, _originalJobData }                │
+│  Input: { company, title, source, recordType }                                  │
 │         │                                                                        │
 │         ▼                                                                        │
 │  ┌──────────────────┐                                                           │
@@ -525,25 +233,13 @@ Prevent duplicate evaluations when the same job/company appears from multiple so
 │  │ (normalize)      │  Lowercase, remove non-alphanumeric, trim                 │
 │  └────────┬─────────┘                                                           │
 │           │                                                                      │
-│           ├──────────────────────┐                                               │
-│           ▼                      ▼                                               │
-│  ┌──────────────────┐   ┌──────────────────┐                                    │
-│  │ Query Airtable   │   │ Pass Through     │  (ensures data flows even if       │
-│  │ Seen Opps        │   │ (NoOp)           │   Airtable returns no results)     │
-│  └────────┬─────────┘   └────────┬─────────┘                                    │
-│           │                      │                                               │
-│           └──────────┬───────────┘                                               │
-│                      ▼                                                           │
-│           ┌──────────────────┐                                                  │
-│           │ Merge Results    │                                                  │
-│           └────────┬─────────┘                                                  │
-│                    ▼                                                            │
-│           ┌──────────────────┐                                                  │
-│           │ Check Result     │  Compare keys, determine isDuplicate             │
-│           │ (Code node)      │  Preserve _originalJobData in output             │
-│           └────────┬─────────┘                                                  │
-│                    │                                                            │
-│  Output: { isDuplicate, key, existingRecordId, _originalJobData }              │
+│           ▼                                                                      │
+│  ┌──────────────────┐                                                           │
+│  │ Query Airtable   │  Check Seen Opportunities table                           │
+│  │ Seen Opps        │                                                           │
+│  └────────┬─────────┘                                                           │
+│           │                                                                      │
+│  Output: { isDuplicate, key, existingRecordId }                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -554,41 +250,9 @@ Prevent duplicate evaluations when the same job/company appears from multiple so
 │         ▼                                                                        │
 │  ┌──────────────────┐                                                           │
 │  │ Create Seen      │  Airtable create in Seen Opportunities table              │
-│  │ Record           │  Fields: Key, Company, Title, Record Type,                │
-│  └────────┬─────────┘          First Source, All Sources, First Seen,           │
-│           │                    Job Record ID, Company Record ID                  │
-│           ▼                                                                      │
-│  ┌──────────────────┐                                                           │
-│  │ Confirm          │  Return { registered: true, seenRecordId }                │
-│  │ Registration     │                                                           │
+│  │ Record           │  Links to Job Listings or Funding Alerts record          │
 │  └──────────────────┘                                                           │
 └─────────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Integration in Pipelines
-
-**Job Evaluation Pipeline v3**:
-```
-Trigger → Fetch Profile → Prepare Dedup Check → Dedup Check →
-    IF: Is Duplicate?
-        ├─ Yes → Skip Duplicate (return early)
-        └─ No → Restore Job Data → [evaluation chain with scoring penalties] → Airtable Upsert →
-                Prepare Dedup Register → Dedup Register → Done
-
-Scoring Penalties Applied:
-- 500-999 employees: -15 pts
-- Support title without Director/VP/Head: -15 pts
-```
-
-**Enrich & Evaluate Pipeline v2**:
-```
-Trigger → Prepare Dedup Check → Dedup Check (Cross-Source) →
-    IF: Is Duplicate?
-        ├─ Yes → Skip Duplicate
-        └─ No → [enrichment & evaluation chain] → Airtable Upsert →
-                IF: Disqualified?
-                    ├─ Yes → Dedup Register (Disqualified)
-                    └─ No → Dedup Register (Evaluated)
 ```
 
 ### Key Generation
@@ -598,135 +262,135 @@ Trigger → Prepare Dedup Check → Dedup Check (Cross-Source) →
 | Job | `job:{normalized_company}:{normalized_title}` | `job:acme:headofcx` |
 | Company | `company:{normalized_company}` | `company:acme` |
 
-**Normalization**: `str.toLowerCase().replace(/[^a-z0-9]/g, '').trim()`
+---
 
-### Seen Opportunities Table Schema
+## Job Listings Cross-Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| Key | Text (Primary) | Normalized dedup key |
-| Company | Text | Original company name |
-| Title | Text | Original job title (empty for companies) |
-| Record Type | Select | `job` or `company` |
-| First Source | Text | First source to discover this |
-| All Sources | Text | Comma-separated list of all sources |
-| First Seen | DateTime | Timestamp of first discovery |
-| Job Record ID | Text | Airtable record ID in Job Listings |
-| Company Record ID | Text | Airtable record ID in Funding Alerts |
+The Enrich & Evaluate Pipeline v9 checks if a company already has active job postings.
 
-### Feedback Loop Output → Lens Updates
+**Fields in Funding Alerts:**
+- `Has Active Job Posting` (checkbox)
+- `Has CX Job Posting` (checkbox)
+- `Matching Job Titles` (text)
 
-The email reports provide **suggestions only**. Human review decides which recommendations to implement:
+**Status:**
+- `Immediate Action` - Company has both funding alert AND active CX job posting
 
-1. **Read weekly reports** (Monday morning)
-2. **Evaluate suggestions** against real-world context
-3. **Update Tide Pool Agent Lens** on GitHub if approved
-4. **Changes propagate** to all workflows (lens fetched at runtime)
+**Note:** LinkedIn network matching is currently **disabled in v9** to fix a duplicate record bug. The two parallel merge paths (Job Check + LinkedIn Check) both fed into the downstream node. Re-enabling requires single-path architecture.
+
+---
+
+## Feedback Loop Architecture
+
+### Feedback Loop - Not a Fit
+
+**Schedule:** Weekly, Monday 9:00am
 
 ```
-Feedback Report                    Tide Pool Agent Lens (GitHub)
-      │                                      │
-      │  "Add 'agency experience'            │
-      │   as auto-disqualifier"              │
-      │                                      │
-      └────── Human Review ──────────────────┤
-                                             │
-                                   ┌─────────▼─────────┐
-                                   │ ## Auto-Disqualifiers
-                                   │ - PE-backed        │
-                                   │ - 1000+ employees  │
-                                   │ + Agency experience│ ← Added
-                                   └───────────────────┘
+Query "Not a Fit" Jobs → Aggregate → Claude (Sonnet) Analysis → Email Report
+
+Output:
+- Patterns in rejected jobs
+- Suggested new disqualifiers
+- Scoring adjustments
+- What's working well
+```
+
+### Feedback Loop - Applied
+
+**Schedule:** Weekly, Monday 9:30am
+
+```
+Query "Applied" Jobs → Calculate Stats → Claude (Sonnet) Analysis → Email Report
+
+Output:
+- Score distribution (min, max, avg, median)
+- Calibration issues (good jobs scoring too low)
+- New positive signals to add
+- What's working well
 ```
 
 ---
 
-## Scoring Framework
+## Workflow Inventory
 
-### 100-Point System
+### Job Sources
 
-| Category | Points | Criteria |
-|----------|--------|----------|
-| **Company Stage & Fit** | 0-50 | Pre-A: 50, Series A: 40, Series B: 25, Series C: 10, Later: 0 |
-| **Role Type** | 0-30 | Builder: 30, Hybrid: 15, Maintainer: 0 |
-| **Mission Alignment** | 0-20 | Target sector: 20, Adjacent: 10, Neutral: 5, Misaligned: 0 |
+| Workflow | Version | Sources | Schedule |
+|----------|---------|---------|----------|
+| Job Alert Email Parser | v3-43 | 10 email job boards + OmniJobs | Hourly |
+| Work at a Startup Scraper | v12 | YC Work at a Startup | Every 6 hours |
+| Indeed Job Scraper | v4 | Indeed search configs | Configurable |
+| First Round Jobs Scraper | v1 | First Round Capital talent network | Tue/Fri 7am |
 
-### Bonuses & Penalties
+### VC Portfolio Scrapers
 
-| Signal | Points |
-|--------|--------|
-| VC-backed | +10 |
-| Recently founded (≤3 years) | +10 |
-| PE-backed | -50 (auto-skip) |
-| 200+ employees | -20 |
-| Founded before 2018 | -15 |
-| Series C or later | -20 |
+| Scraper | Version | VCs Covered | Schedule |
+|---------|---------|-------------|----------|
+| Healthcare | v27 | 14 VCs: Flare, 7wireVentures, Oak HC/FT, Digitalis, etc. | Tue/Fri 8am |
+| Climate Tech | v23 | Khosla, Congruent, Prelude, Lowercarbon | Mon/Thu 8am |
+| Social Justice | v25 | Kapor, Backstage, Harlem, Collab | Wed/Sat 8am |
+| Enterprise/Generalist | v26 | Unusual, First Round, Essence, etc. | Mon/Thu 8am |
+| Micro-VC | v14 | Pear, Floodgate, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
 
-### Decision Thresholds
+All VC scrapers use the shared **Enrich & Evaluate Pipeline v9**.
 
-| Score | Classification | Action |
-|-------|----------------|--------|
-| 80-100 | STRONG FIT | Apply immediately |
-| 60-79 | GOOD FIT | Research thoroughly |
-| 40-59 | MARGINAL | Only if exceptional |
-| <40 | SKIP | Do not pursue |
+### Shared Subworkflows
+
+| Workflow | Version | Purpose |
+|----------|---------|---------|
+| Enrich & Evaluate Pipeline | v9 | Company evaluation with 6-phase architecture |
+| Job Evaluation Pipeline | v6.1 | Job evaluation with JD fetching |
+| Dedup Check Subworkflow | v1 | Cross-source dedup lookup |
+| Dedup Register Subworkflow | v1 | Cross-source dedup registration |
+| Funding Alerts Rescore | v4 | Standalone rescore (HTTP Request bypass) |
 
 ---
 
 ## API Dependencies
 
-| Service | Purpose | Rate Limit | Cost |
-|---------|---------|------------|------|
-| **Anthropic Claude API** | Job fit scoring | ~1 req/30s | ~$0.001/job |
-| **Brave Search API** | Company enrichment | 2,000/month free | Free tier |
-| **Gmail API** | Email fetching/labeling | Generous | Free |
-| **Airtable API** | Data storage | 5 req/sec | Free tier |
-| **Browserless.io** | Headless scraping | Usage-based | ~$0.01/session |
-| **GitHub Raw** | Profile hosting | Generous | Free |
+| Service | Purpose | Rate Limit |
+|---------|---------|------------|
+| **Anthropic Claude API** | Scoring (Haiku) | ~1 req/30s |
+| **Brave Search API** | Company enrichment | 2,000/month free |
+| **Gmail API** | Email fetching/labeling | Generous |
+| **Airtable API** | Data storage | 5 req/sec |
+| **Browserless.io** | Headless scraping | Usage-based |
 
 ---
 
-## Configuration
+## Airtable Reference
 
-### Required Credentials (Airtable Config table)
+**Base ID:** `appFEzXvPWvRtXgRY` (Job Search)
 
-| Key | Description |
-|-----|-------------|
-| `ANTHROPIC_API_KEY` | Claude API authentication |
-| `BROWSERLESS_TOKEN` | Headless browser service |
-| `YC_USER` | Work at a Startup login |
-| `YC_PASSWORD` | Work at a Startup login |
-
-### n8n Credentials
-
-| Credential Type | Used By |
-|-----------------|---------|
-| Gmail OAuth2 | Email Parser |
-| Airtable Token | All workflows |
-| HTTP Header Auth (Brave) | Enrichment nodes |
+| Table | ID | Purpose |
+|-------|-----|---------|
+| **Funding Alerts** | `tbl7yU6QYfIFSC2nD` | Company evaluations from VC scrapers |
+| **Job Listings** | `tbl6ZV2rHjWz56pP3` | Job evaluations from job scrapers |
+| **LinkedIn Connections** | `tbliKHRPEVI6SceJX` | Imported LinkedIn network |
+| **Seen Opportunities** | `tbll8igHTftSqsTtQ` | Cross-source dedup registry |
+| **Indeed Searches** | `tblofzQpzGEN8igVS` | Indeed job search configs |
 
 ---
 
-## File Inventory
+## n8n Workflow IDs
 
-| File | Version | Description |
-|------|---------|-------------|
-| `Job Alert Email Parser v3-35.json` | v3-35 | Email-based job aggregation (10 sources) |
-| `Work at a Startup Scraper v12.json` | v12 | YC/Costanoa web scraping |
-| `Indeed Job Scraper v4.json` | v4 | Indeed direct scraping |
-| `Job Evaluation Pipeline v3.json` | v3 | Shared subworkflow for job evaluation (with JD fetching, dedup, scoring penalties) |
-| `Enrich & Evaluate Pipeline v3.json` | v3 | Shared subworkflow for company enrichment + evaluation (with dedup, Job Listings cross-reference) |
-| `Dedup Check Subworkflow.json` | v1 | Cross-source deduplication lookup |
-| `Dedup Register Subworkflow.json` | v1 | Cross-source deduplication registration |
-| `vc-portfolio-scraper-v26-enriched.json` | v26 | Enterprise/generalist VC mining |
-| `VC Scraper - Healthcare.json` | v25 | Healthcare-focused VC mining |
-| `VC Scraper - Climate Tech.json` | v23 | Climate-focused VC mining |
-| `VC Scraper - Social Justice.json` | v24 | Social justice-focused VC mining |
-| `VC Scraper - Micro-VC v13.json` | v13 | Micro-VC + Accelerator mining (Pear, Floodgate, Afore, Unshackled, 2048, Y Combinator) |
-| `Feedback Loop - Not a Fit.json` | v1 | Weekly pattern analysis for rejected jobs |
-| `Feedback Loop - Applied.json` | v1 | Weekly calibration analysis for applied jobs |
+| Workflow | ID | Used By |
+|----------|-----|---------|
+| **Enrich & Evaluate Pipeline v9** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
+| **Job Evaluation Pipeline v6.1** | `v24qHkIsp8GVCwFkscHP8` | Job scrapers |
+| **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
+| **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
 
-**Note:** All VC scrapers use the shared `Enrich & Evaluate Pipeline.json` subworkflow. Job workflows use `Job Evaluation Pipeline.json`.
+---
+
+## FigJam Diagrams
+
+Interactive diagrams for visual reference:
+
+- **[System Architecture v9](https://www.figma.com/online-whiteboard/create-diagram/f1065a98-f078-44b9-9ba6-b088601f526b)** - Overview of all scrapers, pipelines, and Airtable tables
+- **[v9 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/6d2f6511-9e89-4635-8585-238feae95221)** - 5-phase architecture with decision points
+- **[v9 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/d16d9d48-12af-4d27-9fa1-99566ea42a1d)** - 100-point scoring with domain distance
 
 ---
 
@@ -734,26 +398,14 @@ Feedback Report                    Tide Pool Agent Lens (GitHub)
 
 | Date | Change |
 |------|--------|
-| 2026-02-27 | Added Y Combinator to Micro-VC v13 (scrapes public directory sorted by launch date, extracts batch codes) |
-| 2026-02-27 | Updated Enrich & Evaluate Pipeline to v3 with Job Listings cross-reference |
-| 2026-02-27 | Updated Job Evaluation Pipeline to v3 with scoring penalties (500-999 employees: -15 pts, Support title without Director/VP/Head: -15 pts) |
-| 2026-02-27 | Updated evaluation-config.json to v2.2 with new penalty rules |
-| 2026-02-26 | Added cross-source deduplication (Dedup Check + Dedup Register subworkflows) |
-| 2026-02-26 | Updated Job Evaluation Pipeline to v2 with dedup integration |
-| 2026-02-26 | Updated Enrich & Evaluate Pipeline to v2 with dedup integration |
-| 2026-02-26 | Added Seen Opportunities table for dedup tracking |
-| 2026-02-24 | Added Feedback Loop - Not a Fit (weekly pattern analysis) |
-| 2026-02-24 | Added Feedback Loop - Applied (weekly calibration analysis) |
-| 2026-02-24 | Added Job Evaluation Pipeline with JD fetching |
-| 2026-02-24 | Added VC Scraper - Micro-VC v6 (Pear, Floodgate, Afore, Unshackled, 2048) |
-| 2026-02-23 | Refactored all VC scrapers to use shared Enrich & Evaluate Pipeline subworkflow |
-| 2026-02-23 | Healthcare v24: Added Cade Ventures, Hustle Fund (health filter) |
-| 2026-02-23 | Enterprise v22: Added K9 Ventures, Precursor, M25, GoAhead Ventures |
-| 2026-02-23 | v6: Standardized evaluation sub-routine across all workflows |
-| 2026-02-23 | v3-32: Removed Underdog.io source |
-| 2026-02-22 | Updated all workflows to Claude Haiku 4.5 |
-| 2026-02 | v3-31: Added zombie company detection |
+| 2026-03-11 | **v9 Full Redesign**: 6-phase architecture, entity validation, GTM motion gates, CS readiness threshold, domain distance scoring |
+| 2026-03-09 | v8.5: 8 scoring fixes, employee-user persona, stricter SaaS gate |
+| 2026-03-06 | v8.4: Customer Persona Gate, two-tier architecture |
+| 2026-02-27 | Y Combinator added to Micro-VC v13 |
+| 2026-02-27 | Job Evaluation Pipeline v3 with scoring penalties |
+| 2026-02-26 | Cross-source deduplication system |
+| 2026-02-24 | Feedback loops (Not a Fit, Applied) |
 
 ---
 
-*Last updated: February 2026*
+*Last updated: March 2026*
