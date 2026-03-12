@@ -1,0 +1,312 @@
+{
+  "name": "Health Tech Nerds Scraper v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://jobs.healthtechnerds.com/data/transformed_job_data.json",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-jobs",
+      "name": "Fetch Jobs JSON",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Health Tech Nerds Job Parser with CX Leadership Filter\n// v1.1: Fixed n8n JSON array handling\n\nconst input = $input.all();\n\n// Keywords for customer support/success roles\nconst SUPPORT_SUCCESS_KEYWORDS = [\n  'support', 'success', 'customer', 'client', 'cx', 'experience',\n  'service', 'care', 'advocate', 'engagement'\n];\n\n// Keywords for leadership roles\nconst LEADERSHIP_KEYWORDS = [\n  'manager', 'director', 'vp', 'vice president', 'head',\n  'lead', 'chief', 'supervisor', 'team lead', 'principal',\n  'senior manager', 'sr manager', 'associate director', 'sr. director'\n];\n\nfunction normalizeText(text) {\n  return (text || '').toLowerCase().trim();\n}\n\nfunction isCXLeadershipRole(title) {\n  const normalizedTitle = normalizeText(title);\n  \n  const hasSupportSuccess = SUPPORT_SUCCESS_KEYWORDS.some(kw => \n    normalizedTitle.includes(kw)\n  );\n  \n  const hasLeadership = LEADERSHIP_KEYWORDS.some(kw => \n    normalizedTitle.includes(kw)\n  );\n  \n  return hasSupportSuccess && hasLeadership;\n}\n\n// Flatten all jobs from input\n// Health Tech Nerds wraps jobs in { job_postings: [...] }\nlet allJobs = [];\n\nfor (const item of input) {\n  if (Array.isArray(item.json)) {\n    allJobs = allJobs.concat(item.json);\n  } else if (item.json && typeof item.json === 'object') {\n    // Check for job_postings wrapper (Health Tech Nerds structure)\n    if (item.json.job_postings && Array.isArray(item.json.job_postings)) {\n      allJobs = allJobs.concat(item.json.job_postings);\n    } else if (item.json.data && Array.isArray(item.json.data)) {\n      allJobs = allJobs.concat(item.json.data);\n    } else if (item.json.job_data) {\n      allJobs.push(item.json);\n    }\n  }\n}\n\nconsole.log(`Total jobs in feed: ${allJobs.length}`);\n\nconst parsedJobs = [];\nconst allTitles = [];\n\nfor (const job of allJobs) {\n  if (!job || !job.job_data) continue;\n  \n  const jobData = job.job_data;\n  const title = jobData.job_title || '';\n  allTitles.push(title);\n  \n  // Filter for CX leadership roles\n  if (!isCXLeadershipRole(title)) continue;\n  \n  // Skip Slack-only postings (no real job URL)\n  const jobUrl = job.job_url || '';\n  if (jobUrl.includes('slack.com/archives')) continue;\n  \n  // Build job object matching Job Evaluation Pipeline input format\n  parsedJobs.push({\n    title: title,\n    company: jobData.company_name || 'Unknown',\n    location: jobData.location || jobData.location_type || 'Remote',\n    salary: jobData.salary || '',\n    url: jobUrl,\n    source: 'Health Tech Nerds',\n    description: jobData.job_description || '',\n    company_description: jobData.company_description || '',\n    function: jobData.function || '',\n    experience_level: jobData.experience_level || '',\n    role_type: jobData.role_type || 'Full-time',\n    keywords: jobData.keywords_list || '',\n    job_id: `htn:${normalizeText(jobData.company_name)}:${normalizeText(title)}`.replace(/[^a-z0-9:]/g, '-')\n  });\n}\n\n// Debug: show sample titles\nconsole.log(`Sample titles: ${allTitles.slice(0, 5).join(', ')}`);\nconsole.log(`Found ${parsedJobs.length} CX leadership roles from Health Tech Nerds`);\n\nif (parsedJobs.length === 0) {\n  return [{ json: { _noJobs: true, message: 'No CX leadership jobs found', totalInFeed: allJobs.length, sampleTitles: allTitles.slice(0, 10) } }];\n}\n\nreturn parsedJobs.map(job => ({ json: job }));"
+      },
+      "id": "parse-filter",
+      "name": "Parse & Filter CX Roles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-title-check",
+              "leftValue": "={{ $json.title }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-jobs",
+      "name": "Has Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [660, 100]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl6ZV2rHjWz56pP3",
+          "mode": "id"
+        },
+        "filterByFormula": "OR(Source = 'Health Tech Nerds')",
+        "options": {
+          "fields": ["Job Title", "Company", "Job URL"]
+        }
+      },
+      "id": "search-existing",
+      "name": "Search Existing Jobs",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [880, 0],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dedup against existing Airtable records\n\nconst newJobs = $('Parse & Filter CX Roles').all();\nconst existingJobs = $('Search Existing Jobs').all();\n\n// Build lookup set from existing jobs\nconst existingKeys = new Set();\nfor (const existing of existingJobs) {\n  const company = (existing.json.Company || '').toLowerCase().trim();\n  const title = (existing.json['Job Title'] || '').toLowerCase().trim();\n  const url = (existing.json['Job URL'] || '').toLowerCase().trim();\n  \n  // Key by URL (most reliable)\n  if (url) existingKeys.add(url);\n  \n  // Also key by company+title combo\n  if (company && title) {\n    existingKeys.add(`${company}:${title}`);\n  }\n}\n\nconsole.log(`Existing jobs in Airtable: ${existingKeys.size}`);\n\n// Filter out duplicates\nconst uniqueJobs = [];\nfor (const job of newJobs) {\n  if (job.json._noJobs) continue;\n  \n  const url = (job.json.url || '').toLowerCase().trim();\n  const company = (job.json.company || '').toLowerCase().trim();\n  const title = (job.json.title || '').toLowerCase().trim();\n  const companyTitleKey = `${company}:${title}`;\n  \n  if (existingKeys.has(url) || existingKeys.has(companyTitleKey)) {\n    console.log(`Skipping duplicate: ${job.json.company} - ${job.json.title}`);\n    continue;\n  }\n  \n  uniqueJobs.push(job);\n}\n\nconsole.log(`New jobs to evaluate: ${uniqueJobs.length}`);\n\nif (uniqueJobs.length === 0) {\n  return [{ json: { _noJobs: true, message: 'All jobs already in Airtable' } }];\n}\n\nreturn uniqueJobs;"
+      },
+      "id": "dedup",
+      "name": "Dedup Against Airtable",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-new-jobs",
+              "leftValue": "={{ $json.title }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-new-jobs",
+      "name": "Has New Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map fields for Job Evaluation Pipeline v6.1\n\nconst jobs = $input.all();\nconst mappedJobs = [];\n\nfor (const job of jobs) {\n  if (job.json._noJobs) continue;\n  \n  mappedJobs.push({\n    json: {\n      'Job Title': job.json.title,\n      'Company': job.json.company,\n      'Location': job.json.location,\n      'Salary Info': job.json.salary,\n      'Job URL': job.json.url,\n      'Source': 'Health Tech Nerds',\n      'Job ID': job.json.job_id,\n      'Date Found': new Date().toISOString().split('T')[0],\n      // Extra context for evaluation\n      '_description': job.json.description,\n      '_company_description': job.json.company_description,\n      '_function': job.json.function,\n      '_experience': job.json.experience_level,\n      '_keywords': job.json.keywords\n    }\n  });\n}\n\nconsole.log(`Mapped ${mappedJobs.length} jobs for evaluation`);\n\nreturn mappedJobs;"
+      },
+      "id": "map-fields",
+      "name": "Map Fields for Pipeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, -100]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "v24qHkIsp8GVCwFkscHP8",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "evaluate",
+      "name": "Execute Job Evaluation Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1760, -100]
+    },
+    {
+      "parameters": {
+        "content": "## Health Tech Nerds Scraper v1\n\nFetches jobs from jobs.healthtechnerds.com static JSON endpoint.\n\n**Schedule:** Every 6 hours\n\n**Filters:**\n- CX leadership roles (support/success + manager/director/lead)\n- Skips Slack-only postings\n\n**Pipeline:** Job Evaluation Pipeline v6.1",
+        "height": 280,
+        "width": 360
+      },
+      "id": "sticky-note",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, -100]
+    },
+    {
+      "parameters": {
+        "content": "## No Jobs Branch\n\nEither no CX leadership jobs found or all jobs already in Airtable",
+        "height": 120,
+        "width": 280
+      },
+      "id": "sticky-no-jobs",
+      "name": "No Jobs Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1320, 200]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Jobs JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Jobs JSON": {
+      "main": [
+        [
+          {
+            "node": "Parse & Filter CX Roles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Filter CX Roles": {
+      "main": [
+        [
+          {
+            "node": "Has Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Search Existing Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Search Existing Jobs": {
+      "main": [
+        [
+          {
+            "node": "Dedup Against Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Against Airtable": {
+      "main": [
+        [
+          {
+            "node": "Has New Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has New Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Map Fields for Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Map Fields for Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Execute Job Evaluation Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

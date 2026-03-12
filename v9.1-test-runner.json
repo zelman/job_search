@@ -1,0 +1,69 @@
+{
+  "name": "v9.1 Test Runner",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "id": "test-trigger",
+      "name": "Run Test"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Change this to test different companies\n// Use 'batch' to run all 5 test companies at once\nconst testCase = 'batch';\n\nconst testCompanies = {\n  waterloop: {\n    company_name: 'Waterloop',\n    company_url: 'https://waterloop.org',\n    source: 'v9 Test',\n    expected: 'Invalid entity (podcast)'\n  },\n  fathom: {\n    company_name: 'Fathom',\n    company_url: 'https://fathom.video',\n    source: 'v9 Test',\n    expected: 'PLG-dominant'\n  },\n  brainbase: {\n    company_name: 'Brainbase',\n    company_url: 'https://brainbase.com',\n    source: 'v9 Test',\n    expected: 'Acquired by PE'\n  },\n  capboard: {\n    company_name: 'Capboard',\n    company_url: 'https://capboard.io',\n    source: 'v9 Test',\n    expected: 'Non-US primary market'\n  },\n  vivun: {\n    company_name: 'Vivun',\n    company_url: 'https://vivun.com',\n    source: 'v9 Test',\n    expected: 'Stale or Pre-sales'\n  },\n  pika: {\n    company_name: 'Pika Energy',\n    company_url: 'https://pika-energy.com',\n    source: 'v9 Test',\n    expected: 'Acquired'\n  },\n  batch: [\n    { company_name: 'Nomi Health', company_url: 'https://nomihealth.com', source: 'v9.1 Test', expected: 'Should DQ: direct care services' },\n    { company_name: 'Vesta Healthcare', company_url: 'https://vestahealthcare.com', source: 'v9.1 Test', expected: 'Should DQ: virtual care services' },\n    { company_name: 'Nava Benefits', company_url: 'https://navabenefits.com', source: 'v9.1 Test', expected: 'Should DQ: benefits brokerage' },\n    { company_name: 'PatientPing', company_url: 'https://bamboohealth.com', source: 'v9.1 Test', expected: 'Should DQ: PE-backed (Clearlake)' }\n  ]\n};\n\n// For batch mode, return array of items\nif (testCase === 'batch') {\n  return testCompanies.batch.map(c => ({ json: c }));\n}\n// Single test case - still return as array for runOnceForAllItems mode\nreturn [{ json: testCompanies[testCase] }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "id": "test-data",
+      "name": "Test Data"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "rcMNDrfZR6csHRsYKFn0W",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [650, 300],
+      "id": "call-v9",
+      "name": "Call v9 Pipeline"
+    }
+  ],
+  "connections": {
+    "Run Test": {
+      "main": [
+        [
+          {
+            "node": "Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Data": {
+      "main": [
+        [
+          {
+            "node": "Call v9 Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
