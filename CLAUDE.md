@@ -39,11 +39,11 @@ All workflow JSON files are stored in:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              JOB SCRAPERS                                    │
 │  Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v4, First Round v1, │
-│  Health Tech Nerds v1, GTMfund v1                                             │
+│  Health Tech Nerds v1                                                          │
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │  Job Evaluation Pipeline v6.1   │◄── v24qHkIsp8GVCwFkscHP8
+│                    │  Job Evaluation Pipeline v6.2   │◄── v24qHkIsp8GVCwFkscHP8
 │                    │    (100-point job scoring)    │                        │
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -161,43 +161,24 @@ When editing any n8n workflow JSON file:
 3. Keep the previous version file if the user wants to preserve it
 
 Current versions (as of Mar 2026):
-- `Job Alert Email Parser v3-43.json` - v3-43: Rewrote Browserless scraper title extraction using `isTitleLine()` keyword matching. Added `isRemoteLocation()` to detect "Remote - Location" patterns. Added "IF: Has Email ID?" node to skip Gmail labeling for OmniJobs jobs (fixes "'id' required" error). Updated Job Evaluation Pipeline v6.1 to use Upsert for Review Status (fixes "Could not get parameter" error).
-- `Job Alert Email Parser v3-42.json` (previous version) - v3-42: Fixed OmniJobs company extraction - added comprehensive location detection (US state names, "City, State" patterns) to Browserless scraper. Parse OmniJobs node now uses Browserless extracted fields directly with location validation. Marks location strings as "Unknown (check listing)".
-- `Job Alert Email Parser v3-41.json` (previous version) - v3-41: Improved OmniJobs company extraction - scraper now skips location words (Remote, USA, etc.) and tags when looking for company. Added dedup debug logging to show why jobs are filtered. Marks unknown companies as "Unknown (check listing)" instead of garbage values.
-- `Job Alert Email Parser v3-40.json` (previous version) - v3-40: CRITICAL FIX - dedup was treating existing Airtable records as new jobs (400+ jobs re-evaluated). Fixed by using `id.startsWith('rec')` to identify Airtable records.
-- `Job Alert Email Parser v3-39.json` (previous version) - v3-39: reduced OmniJobs pagination to 3 pages to prevent timeout
-- `Job Alert Email Parser v3-38.json` (previous version) - v3-38: fixed OmniJobs scraper - `/en/` path was being parsed as regex division causing "en is not defined" error
+- `Job Alert Email Parser v3-43.json` - v3-43: OmniJobs scraping, Gmail labeling, title extraction improvements.
 - `Work at a Startup Scraper v12.json`
 - `Indeed Job Scraper v4.json`
 - `First Round Jobs Scraper v1.json` - v1: API-based scraper for First Round Capital talent network. Fetches from `jobs.firstround.com/api-boards/search-jobs` with session cookie auth. Filters for CX-relevant roles, includes salary data. Runs Tue/Fri 7am. **Note:** Session cookies expire; refresh from Chrome DevTools when 401 errors occur.
 - `Health Tech Nerds Scraper v1.json` - v1: Static JSON scraper for jobs.healthtechnerds.com. Fetches `/data/transformed_job_data.json` directly (no auth needed). Filters for CX leadership roles. Rich data includes job_description, company_description, salary, experience_level, function, keywords. Runs every 6 hours.
-- `GTMfund Jobs Scraper v1.json` - v1: Browserless scraper for jobs.gtmfund.com (Consider platform). Extracts serverInitialData from JS-rendered page. Filters for CX leadership roles. 766 total jobs across 150 portfolio companies. Runs every 6 hours. **Note:** GTMfund is GTM-focused so CX matches may be limited.
 - `VC Scraper - Healthcare.json` (v27) - 14 VC portfolios: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms. v27: Added Tier 2 healthcare VCs (Transformation Capital, Brewer Lane) and vertical SaaS VCs (Mainsail, Five Elms). Removed Optum Ventures (timeout). Uses token in URL - find/replace `YOUR_BROWSERLESS_TOKEN` before importing.
 - `vc-portfolio-scraper-v26-enriched.json` (v26 - Enterprise/Generalist)
 - `VC Scraper - Climate Tech.json` (v23)
 - `VC Scraper - Social Justice.json` (v25) - Backstage uses /headliners/ links
 - `VC Scraper - Micro-VC v14.json` (v14) - Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** (sorted by launch date, extracts batch from cards). v14: reduced 2048 scroll iterations to prevent timeout.
-- `Enrich & Evaluate Pipeline v9.json` (**CURRENT** shared subworkflow - companies). v9: **FULL REDESIGN** addressing 4% signal rate. New features: (1) **Phase 0: Entity Validation** - catches non-companies (podcasts, media, nonprofits) before enrichment. (2) **Enhanced Acquisition Detection** - PE portfolio company patterns, Jonas/Constellation detection. (3) **GTM Motion Gates** - PLG-dominant auto-DQ, pre-sales function company detection. (4) **Stale Company Gates** - 3+ years since funding, shrinking headcount signals. (5) **Software-First Check** - services businesses and hardware-masquerading-as-SaaS detection. (6) **CS Hire Readiness Threshold** - Claude call to check CS need before full evaluation, must score >= 10. (7) **Domain Distance Scoring** - penalty for high-distance domains (ITSM, Legal Tech, Real Estate), bonus for target domains (Healthcare B2B SaaS). **v9.1 batch evaluation fixes (Mar 2026):** (a) Added PE firms: Ares Management, Ares Capital, Spring Lake Equity, Vector Capital. (b) Tightened employee cap: 200 → 150. (c) Tightened funding cap: $500M → $450M. (d) Enhanced healthcare services detection: direct care services, virtual care providers, insurance brokerage patterns.
-- `Enrich & Evaluate Pipeline v8.5.json` (previous version). v8.5: **8 SCORING FIXES** - (1) Added "employee-user" persona for B2B2C patterns like Oshi Health, Koa Health. (2) Stricter SaaS gate: catches marketplace, IoT, materials sectors. (3) Stricter funding cap: $75M soft cap with uncertainty handling. (4) Geography gate: US-HQ detection, non-US flagged. (5) Stricter developer persona: requires 3+ enterprise signals (was 2+). (6) Age gate: founded pre-2016 flagged as warning. (7) Stale funding penalty: 2+ years since funding reduces CS Hire Readiness score. (8) Build vs Maintain distinction: clearer MAINTAINER signals cap role_mandate at 5 max.
-- `Enrich & Evaluate Pipeline v8.4.15.json` (previous version). v8.4.15: PARSE EVALUATION RESCORE FIX - ref-based lookup in Parse Evaluation. v8.4: Customer Persona Gate. v8.3: Two-tier disqualification, Fortune 500 detection, employee 200 cap.
-- `Enrich & Evaluate Pipeline v8.4.14.json` (previous version) - __RID__ encoding for Brave Search, didn't fix Parse Evaluation index issue
-- `Enrich & Evaluate Pipeline v8.3.json` (previous version) - see v8.4 for March 2026 Audit fixes
-- `Enrich & Evaluate Pipeline v7.json` (previous version). v7: aligned pre-filter with Funding Alerts Rescore v2 - expanded PE list (29 firms), acquisition detection, tightened thresholds (>100 employees, >$500M funding), removed founded-year disqualifier.
-- `Enrich & Evaluate Pipeline v6.json` (previous version). v6: consumer/DTC exclusion, defense/govt penalty (cap 35), hardware vs SaaS distinction, maturity detection (cap 40), biotech/pharma drug development exclusion (cap 35, distinct from healthcare SaaS).
-- `Enrich & Evaluate Pipeline v5.json` (previous version - adds LinkedIn Connections cross-reference for Network Match Alerts)
-- `Enrich & Evaluate Pipeline v4.json` (older version - with cross-source dedup + Job Listings cross-reference, optimized Check Job Matches with Map lookup)
-- `Job Evaluation Pipeline v6.1.json` (shared subworkflow - jobs). v6.1: **Source field fix** - Added explicit Source preservation with fallback lookups in Parse Response node. Fixes CS Insider jobs having empty Source field. v6: upsert no longer overwrites Review Status; only sets "New" for genuinely new records. Preserves "Applied" and other user-set statuses.
-- `Job Evaluation Pipeline v5.json` (previous version). v5: tighter scoring thresholds - 200-499 emp penalty, $50M+ funding penalty, >5yr at Series B+ penalty, stronger MAINTAINER detection (scale existing org, multi-tier, global teams 30+)
-- `Job Evaluation Pipeline v4.json` (older version - with JD fetching, cross-source dedup, 500-999 employee penalty, Support title penalty, network connection override)
-- `Job Evaluation Pipeline v3.json` (older version, retained for rollback)
+- `Enrich & Evaluate Pipeline v9.5.json` (**CURRENT** shared subworkflow - companies). **v9.5: STATUS FALLBACK FIX** - Fixed bug where Status field was empty for some records. Added 'Research' fallback to both Create and Update paths when status is undefined. **v9.4: FIELD CONSOLIDATION** - Removed Next Steps field, consolidated to Status only. Status mapping: APPLY→Apply, WATCH→Monitor, PASS→Passed. Merged Skip into Passed. **v9.3: LOOSENED GATES** to widen opportunity funnel: (a) Employee cap raised 150 → 350 (VP roles exist at larger companies). (b) Soft employee cap raised 150 → 200 (penalty zone starts later). (c) Non-US HQ demoted from hard gate to soft penalty (remote work = HQ irrelevant). (d) WATCH bucket widened 55-69 → 40-69 (catch "not perfect but good" roles). v9.2: Added knownLargeCompanies list (Zapier, SnapLogic), knownAcquired list (Thinkful, Brainbase, Tempus-ex), Canadian cities to non-US geography (Calgary, Vancouver, Montreal). v9: **FULL REDESIGN** addressing 4% signal rate. New features: (1) **Phase 0: Entity Validation** - catches non-companies (podcasts, media, nonprofits) before enrichment. (2) **Enhanced Acquisition Detection** - PE portfolio company patterns, Jonas/Constellation detection. (3) **GTM Motion Gates** - PLG-dominant auto-DQ, pre-sales function company detection. (4) **Stale Company Gates** - 3+ years since funding, shrinking headcount signals. (5) **Software-First Check** - services businesses and hardware-masquerading-as-SaaS detection. (6) **CS Hire Readiness Threshold** - Claude call to check CS need before full evaluation, must score >= 10. (7) **Domain Distance Scoring** - penalty for high-distance domains (ITSM, Legal Tech, Real Estate), bonus for target domains (Healthcare B2B SaaS). **v9.1 batch evaluation fixes (Mar 2026):** (a) Added PE firms: Ares Management, Ares Capital, Spring Lake Equity, Vector Capital. (b) Tightened employee cap: 200 → 150. (c) Tightened funding cap: $500M → $450M. (d) Enhanced healthcare services detection: direct care services, virtual care providers, insurance brokerage patterns.
+- `Enrich & Evaluate Pipeline v8.5.json` (rollback version). v8.5: 8 scoring fixes including employee-user persona, stricter SaaS gate, geography gate, age gate.
+- `Job Evaluation Pipeline v6.2.json` (shared subworkflow - jobs). v6.2: Reduced scoring penalties for more elastic evaluation (employee counts: 500-999 now -10, 200-499 now -5; funding $50M-$499M now -10; 5+ years at Series B+ now -5; Support without Director/VP/Head now -10). v6.1: Source field fix, upsert preserves Review Status.
 - `Dedup Check Subworkflow.json` (cross-source deduplication lookup)
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
 - `Feedback Loop - Applied.json` (weekly calibration analysis)
-- `Funding Alerts Rescore v4-standalone.json` (v4 - **ACTIVE** - Standalone workflow that bypasses Execute Workflow entirely. Uses HTTP Request for Airtable updates to avoid n8n Airtable node data scrambling bug. Runs every 1 min, 1 record per execution. See "n8n Airtable Node Bug" section below.)
-- `Funding Alerts Rescore v3.json` (DEPRECATED - v3 used Execute Workflow which caused data scrambling; `_updateRecordId` was ignored due to state leakage. Deactivate this workflow.)
-- `Funding Alerts Rescore v2.1.json` (DEPRECATED - v2.1 had its own scoring logic that diverged from pipeline)
-- `Funding Alerts Rescore v1.json` (DEPRECATED - v1 - original, no pre-filter)
+- `Funding Alerts Rescore v4.2-standalone.json` (**ACTIVE** - Standalone workflow using HTTP Request for Airtable updates. Runs every 2 min. **v4.2: Added v9 fields** - Domain Distance, GTM Motion, Role Type now written to Airtable. Removed Next Steps field references. Updated status mapping to use Passed instead of Skip.)
 
 ## Workflow Architecture
 
@@ -205,12 +186,11 @@ Current versions (as of Mar 2026):
 All VC scrapers use the shared `Enrich & Evaluate Pipeline v9.json` subworkflow via Execute Workflow node.
 
 **Job evaluation:**
-All job workflows use the shared `Job Evaluation Pipeline v6.1.json` subworkflow:
+All job workflows use the shared `Job Evaluation Pipeline v6.2.json` subworkflow:
 - Work at a Startup Scraper v12
 - Job Alert Email Parser v3-43 (includes OmniJobs scraping, Gmail limit: 2)
 - First Round Jobs Scraper v1 (API-based, session cookie auth, CX roles only)
 - Health Tech Nerds Scraper v1 (static JSON, no auth)
-- GTMfund Jobs Scraper v1 (Browserless, Consider platform)
 
 **Accelerator monitoring:**
 - Y Combinator is now integrated into `VC Scraper - Micro-VC v14.json`
@@ -463,7 +443,6 @@ https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_I
 **Workflow Status (Mar 2026):**
 | Workflow | Status | Notes |
 |----------|--------|-------|
-| Funding Alerts Rescore v4 | **ACTIVE** | Uses HTTP Request, works correctly |
-| Funding Alerts Rescore v3 | **DEACTIVATE** | Uses Execute Workflow, causes scrambling |
-| Enrich & Evaluate Pipeline v9 | **ACTIVE** | Full redesign with enhanced gates, CS readiness threshold, domain distance |
-| Enrich & Evaluate Pipeline v8.5 | **PREVIOUS** | Keep for rollback if needed |
+| Funding Alerts Rescore v4.2 | **ACTIVE** | Uses HTTP Request, v4.2 adds v9 fields (Domain Distance, GTM Motion, Role Type) |
+| Enrich & Evaluate Pipeline v9.5 | **ACTIVE** | v9.5: Status fallback fix. v9.4: Next Steps removed |
+| Enrich & Evaluate Pipeline v8.5 | **ROLLBACK** | Keep for rollback if needed |

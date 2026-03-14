@@ -1,0 +1,346 @@
+{
+  "name": "Funding Alerts Rescore v4.2 (Standalone)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{"field": "minutes", "minutesInterval": 2}]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [200, 400],
+      "id": "trigger",
+      "name": "Every 5 Min"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {"__rl": true, "value": "appFEzXvPWvRtXgRY", "mode": "id"},
+        "table": {"__rl": true, "value": "Funding Alerts", "mode": "list"},
+        "filterByFormula": "OR({Company Name}='Employee Cycle',{Company Name}='Stack Influence',{Company Name}='Writesea',{Company Name}='Revry',{Company Name}='Backpack Healthcare',{Company Name}='Imin',{Company Name}='River Health',{Company Name}='Weir',{Company Name}='Dashbase',{Company Name}='Hairbrella',{Company Name}='Fanfest',{Company Name}='Sparkcharge',{Company Name}='Intus Care',{Company Name}='Loanwell',{Company Name}='Micruity',{Company Name}='Laine London',{Company Name}='Brightup',{Company Name}='Toolbelt',{Company Name}='Myya',{Company Name}='Greenlyne',{Company Name}='Please Assist Me',{Company Name}='Soarce',{Company Name}='Blue Butterfly',{Company Name}='Janta Power',{Company Name}='A0',{Company Name}='Uscope Technologies',{Company Name}='Boxed Up',{Company Name}='Healthy Hip Hop',{Company Name}='Nectar',{Company Name}='Hubble Iq',{Company Name}='Clear',{Company Name}='Hush',{Company Name}='Posterchild',{Company Name}='Goodr',{Company Name}='Nicklpass',{Company Name}='Mae',{Company Name}='Growth Signals',{Company Name}='counselhealth',{Company Name}='Options Md Acquired')",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [400, 400],
+      "id": "fetch",
+      "name": "Fetch 1 Record",
+      "credentials": {"airtableTokenApi": {"id": "airtable-token", "name": "Airtable Token"}}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "loose"},
+          "conditions": [{"id": "has-record", "leftValue": "={{ $json.id }}", "rightValue": "", "operator": {"type": "string", "operation": "notEmpty"}}],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [600, 400],
+      "id": "check-record",
+      "name": "Has Record"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Capture everything from Airtable record in ONE place\nconst record = $json;\nreturn {\n  json: {\n    RECORD_ID: record.id,\n    company_name: record['Company Name'] || '',\n    company_url: record['Company URL'] || '',\n    description: record['Company Description'] || '',\n    source: record['VC Firm'] || record['Source'] || 'Rescore',\n    existing_dq_reasons: record['Disqualify Reasons'] || '',\n    searchQuery: '\"' + (record['Company Name'] || '') + '\" company funding employees series startup'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400],
+      "id": "capture",
+      "name": "Capture"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.search.brave.com/res/v1/web/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "q", "value": "={{ $json.searchQuery }}"},
+            {"name": "count", "value": "10"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{"name": "Accept", "value": "application/json"}]
+        },
+        "options": {"timeout": 30000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 400],
+      "id": "brave",
+      "name": "Brave",
+      "onError": "continueRegularOutput",
+      "credentials": {"httpHeaderAuth": {"id": "brave-search-api", "name": "Brave Search API"}}
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const captured = $('Capture').first().json;\nconst RECORD_ID = captured.RECORD_ID;\nconst company_name = captured.company_name;\nconst company_url = captured.company_url;\nconst description = captured.description;\nconst source = captured.source;\nconst existing_dq_reasons = captured.existing_dq_reasons || '';\n\nconst braveResponse = $json;\nconst searchResults = braveResponse?.web?.results || [];\nconst allText = searchResults.map(r => (r.title || '') + ' ' + (r.description || '')).join(' ');\n\nconst peFirms = ['Vista Equity', 'Thoma Bravo', 'KKR', 'Blackstone', 'TPG', 'Carlyle', 'Bain Capital', 'Silver Lake', 'Francisco Partners', 'Insight Partners', 'Clearlake', 'Welsh Carson', 'General Atlantic', 'Warburg Pincus', 'Apollo', 'TA Associates', 'Brighton Park Capital', 'Summit Partners', 'SoftBank Vision Fund', 'EQT Partners', 'Permira', 'Hellman & Friedman', 'Advent', 'Providence Equity'];\n\nlet employeeCount = null;\nconst empMatch = allText.match(/(\\d[\\d,]*)\\s*(?:to\\s*[\\d,]+)?\\s*employees?/i);\nif (empMatch) employeeCount = parseInt(empMatch[1].replace(/,/g, ''));\n\nlet fundingStage = null;\nif (/Series\\s*D/i.test(allText)) fundingStage = 'Series D';\nelse if (/Series\\s*C/i.test(allText)) fundingStage = 'Series C';\nelse if (/Series\\s*B/i.test(allText)) fundingStage = 'Series B';\nelse if (/Series\\s*A/i.test(allText)) fundingStage = 'Series A';\nelse if (/\\bSeed\\b/i.test(allText)) fundingStage = 'Seed';\n\nlet totalFundingRaw = null;\nconst fundingMatch = allText.match(/(?:raised|funding|round)\\s*\\$([\\d.]+)\\s*(million|billion|M|B)/i);\nif (fundingMatch) {\n  const amt = parseFloat(fundingMatch[1]);\n  const u = fundingMatch[2].toLowerCase();\n  const val = (u === 'billion' || u === 'b') ? amt * 1000 : amt;\n  totalFundingRaw = val >= 1000 ? '$' + (val/1000).toFixed(1) + 'B' : '$' + val.toFixed(1) + 'M';\n}\n\nconst isPEBacked = peFirms.some(f => new RegExp(f, 'i').test(allText));\n\nlet foundedYear = null;\nconst foundMatch = allText.match(/(?:founded|established|since)\\s*(?:in)?\\s*(\\d{4})/i);\nif (foundMatch) foundedYear = parseInt(foundMatch[1]);\n\nconst isAcquired = /\\b(acquired|was acquired|acquisition|merged with|bought by|shut down|defunct)\\b/i.test(allText);\nconst isPublic = /\\b(NYSE|NASDAQ|publicly traded|IPO|went public)\\b/i.test(allText);\nconst isBiotech = /\\b(therapeutic|drug development|clinical trial|pharma|biotech)\\b/i.test(allText);\nconst isHardware = /\\b(hardware|sensors|devices|robotics|manufacturing|semiconductor)\\b/i.test(allText) && !/\\bSaaS\\b/i.test(allText);\nconst isCrypto = /\\b(blockchain|cryptocurrency|web3|NFT|DeFi)\\b/i.test(allText);\nconst isConsumer = /\\b(consumer app|DTC|direct-to-consumer|B2C|telehealth)\\b/i.test(allText);\n\n// v4.1: Check for existing disqualify reasons - don't let bad Brave data override previous DQ\nconst disqualifiers = [];\nif (existing_dq_reasons.length > 0) disqualifiers.push('Pre-existing DQ: ' + existing_dq_reasons);\nif (isAcquired) disqualifiers.push('Acquired');\nif (isPEBacked) disqualifiers.push('PE-backed');\nif (employeeCount && employeeCount > 200) disqualifiers.push('Too large (' + employeeCount + ' employees)');\nif (isPublic) disqualifiers.push('Public company');\nif (fundingStage === 'Series D') disqualifiers.push('Late stage (Series D)');\nif (isBiotech) disqualifiers.push('Biotech/pharma');\nif (isHardware) disqualifiers.push('Hardware');\nif (isCrypto) disqualifiers.push('Crypto/Web3');\nif (isConsumer) disqualifiers.push('Consumer/B2C');\nif (employeeCount && employeeCount < 15) disqualifiers.push('Too early (' + employeeCount + ' employees)');\n\nreturn {\n  json: {\n    RECORD_ID: RECORD_ID,\n    company_name: company_name,\n    company_url: company_url,\n    description: description,\n    source: source,\n    funding_stage: fundingStage,\n    total_funding: totalFundingRaw,\n    employee_count: employeeCount,\n    pe_backed: isPEBacked,\n    founded_year: foundedYear,\n    disqualify_reasons: disqualifiers.join('; '),\n    isAutoDisqualified: disqualifiers.length > 0\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 400],
+      "id": "parse-enrich",
+      "name": "Parse Enrich"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "typeValidation": "strict"},
+          "conditions": [{"leftValue": "={{ $json.isAutoDisqualified }}", "rightValue": true, "operator": {"type": "boolean", "operation": "equals"}}],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1400, 400],
+      "id": "check-dq",
+      "name": "Auto DQ"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"Status\": \"Auto-Disqualified\",\n    \"Disqualify Reasons\": {{ JSON.stringify($json.disqualify_reasons || '') }},\n    \"Tide-Pool Score\": 0,\n    \"Summary\": {{ JSON.stringify('Auto-disqualified: ' + ($json.disqualify_reasons || '')) }},\n    \"Stage\": {{ JSON.stringify($json.funding_stage || '') }},\n    \"Total Funding\": {{ JSON.stringify($json.total_funding || '') }},\n    \"Employee Count\": {{ $json.employee_count || 'null' }},\n    \"PE Backed\": {{ $json.pe_backed || false }},\n    \"Founded Year\": {{ $json.founded_year || 'null' }},\n    \"Customer Persona\": \"auto-disqualified\"\n  }\n}",
+        "options": {"timeout": 30000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1600, 300],
+      "id": "update-dq",
+      "name": "Update DQ (HTTP)",
+      "credentials": {"httpHeaderAuth": {"id": "airtable-token", "name": "Airtable Token"}}
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const c = $json;\nreturn {\n  json: {\n    RECORD_ID: c.RECORD_ID,\n    company_name: c.company_name,\n    company_url: c.company_url,\n    description: c.description,\n    source: c.source,\n    funding_stage: c.funding_stage,\n    total_funding: c.total_funding,\n    employee_count: c.employee_count,\n    pe_backed: c.pe_backed,\n    founded_year: c.founded_year,\n    personaPrompt: 'Company: ' + c.company_name + '. Description: ' + (c.description || 'No description') + '. URL: ' + (c.company_url || 'N/A') + '. Classify as business-user, developer, or mixed. Respond with ONE word only.'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 500],
+      "id": "build-persona",
+      "name": "Build Persona"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5\",\n  \"max_tokens\": 50,\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json.personaPrompt) }}}]\n}",
+        "options": {"timeout": 30000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1800, 500],
+      "id": "classify",
+      "name": "Classify",
+      "onError": "continueRegularOutput",
+      "credentials": {"httpHeaderAuth": {"id": "anthropic-api", "name": "Anthropic API"}}
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const prev = $('Build Persona').first().json;\nconst RECORD_ID = prev.RECORD_ID;\n\nconst response = $json;\nlet persona = 'unknown';\ntry {\n  const content = response.content?.[0]?.text || '';\n  const clean = content.toLowerCase().trim();\n  if (clean.includes('business')) persona = 'business-user';\n  else if (clean.includes('developer')) persona = 'developer';\n  else if (clean.includes('mixed')) persona = 'mixed';\n} catch (e) {}\n\nconst employeeCount = prev.employee_count || 0;\nconst shouldAutoPass = persona === 'developer' && employeeCount < 50;\n\nreturn {\n  json: {\n    RECORD_ID: RECORD_ID,\n    company_name: prev.company_name,\n    company_url: prev.company_url,\n    description: prev.description,\n    source: prev.source,\n    funding_stage: prev.funding_stage,\n    total_funding: prev.total_funding,\n    employee_count: prev.employee_count,\n    pe_backed: prev.pe_backed,\n    founded_year: prev.founded_year,\n    customer_persona: persona,\n    developer_auto_pass: shouldAutoPass\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 500],
+      "id": "parse-persona",
+      "name": "Parse Persona"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "typeValidation": "loose"},
+          "conditions": [{"leftValue": "={{ $json.developer_auto_pass }}", "rightValue": true, "operator": {"type": "boolean", "operation": "equals"}}],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2200, 500],
+      "id": "check-dev",
+      "name": "Dev Pass"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fields\": {\n    \"Status\": \"Auto-Disqualified\",\n    \"Disqualify Reasons\": \"Developer-as-customer\",\n    \"Tide-Pool Score\": 0,\n    \"Summary\": {{ JSON.stringify('Developer-as-customer (' + ($json.employee_count || 0) + ' employees)') }},\n    \"Customer Persona\": {{ JSON.stringify($json.customer_persona) }},\n    \"Stage\": {{ JSON.stringify($json.funding_stage || '') }},\n    \"Total Funding\": {{ JSON.stringify($json.total_funding || '') }},\n    \"Employee Count\": {{ $json.employee_count || 'null' }},\n    \"PE Backed\": {{ $json.pe_backed || false }},\n    \"Founded Year\": {{ $json.founded_year || 'null' }}\n  }\n}",
+        "options": {"timeout": 30000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2400, 400],
+      "id": "update-dev",
+      "name": "Update Dev (HTTP)",
+      "credentials": {"httpHeaderAuth": {"id": "airtable-token", "name": "Airtable Token"}}
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const c = $json;\nconst evalPrompt = 'COMPANY: ' + c.company_name + '. URL: ' + c.company_url + '. Description: ' + c.description + '. Funding: ' + (c.funding_stage || 'Unknown') + '. Employees: ' + (c.employee_count || 'Unknown') + '. Persona: ' + c.customer_persona + '. Score 0-100 for job search fit (VP/Head of Customer Support/Success). Return JSON: {\"bucket\":\"APPLY|WATCH|PASS\",\"total_score\":N,\"sector_match\":\"target|adjacent|unrelated\",\"cs_hire_likelihood\":\"high|medium|low\",\"product_type\":\"enterprise|mid-market|self-serve\",\"domain_distance\":\"target|adjacent|high-distance\",\"domain_distance_modifier\":N,\"gtm_motion\":\"enterprise|plg|hybrid\",\"role_type\":\"builder|maintainer|mixed\",\"cs_readiness_score\":N,\"summary\":\"2 sentences\"}. For domain_distance_modifier: target domains like healthcare B2B SaaS get +3 to +5, adjacent domains get 0, high-distance domains like ITSM/Legal/RealEstate get -5 to -10. For cs_readiness_score: 0-30 scale where 25-30 means first CX hire needed, 15-24 means small team needs leadership, 10-14 means possible need, 0-9 means no clear CS need.';\n\nreturn {\n  json: {\n    RECORD_ID: c.RECORD_ID,\n    company_name: c.company_name,\n    funding_stage: c.funding_stage,\n    total_funding: c.total_funding,\n    employee_count: c.employee_count,\n    pe_backed: c.pe_backed,\n    founded_year: c.founded_year,\n    customer_persona: c.customer_persona,\n    evalPrompt: evalPrompt\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2400, 600],
+      "id": "build-eval",
+      "name": "Build Eval"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-haiku-4-5\",\n  \"max_tokens\": 1500,\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json.evalPrompt) }}}]\n}",
+        "options": {"timeout": 60000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2600, 600],
+      "id": "evaluate",
+      "name": "Evaluate",
+      "onError": "continueRegularOutput",
+      "credentials": {"httpHeaderAuth": {"id": "anthropic-api", "name": "Anthropic API"}}
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const prev = $('Build Eval').first().json;\nconst RECORD_ID = prev.RECORD_ID;\n\nconst response = $json;\nlet evaluation = { bucket: 'WATCH', total_score: 0, summary: 'Parse error' };\ntry {\n  const content = response.content?.[0]?.text || '';\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) evaluation = JSON.parse(jsonMatch[0]);\n} catch (e) {}\n\n// v4.2: Updated status mapping (removed Skip, use Passed)\nconst statusMap = { 'APPLY': 'Apply', 'WATCH': 'Monitor', 'PASS': 'Passed' };\n\n// Valid Airtable select options\nconst validDomainDistance = ['target', 'adjacent', 'high-distance'];\nconst validGtmMotion = ['enterprise', 'plg', 'hybrid'];\nconst validRoleType = ['builder', 'maintainer', 'mixed'];\nconst validSectorMatch = ['target', 'adjacent', 'unrelated'];\nconst validCsHire = ['high', 'medium', 'low'];\nconst validProductType = ['enterprise', 'mid-market', 'self-serve'];\nconst validPersona = ['business-user', 'developer', 'employee-user', 'mixed'];\n\n// Build fields object conditionally (omit select fields if invalid)\nconst fields = {\n  'Status': statusMap[evaluation.bucket] || 'Research',\n  'Tide-Pool Score': evaluation.total_score || 0,\n  'Summary': evaluation.summary || '',\n  'Stage': prev.funding_stage || '',\n  'Total Funding': prev.total_funding || '',\n  'Employee Count': prev.employee_count || null,\n  'PE Backed': prev.pe_backed || false,\n  'Founded Year': prev.founded_year || null,\n  'Domain Distance Modifier': evaluation.domain_distance_modifier || 0,\n  'CS Readiness Score': evaluation.cs_readiness_score || null\n};\n\n// Only add select fields if they have valid values\nif (validSectorMatch.includes(evaluation.sector_match)) fields['Sector Match'] = evaluation.sector_match;\nif (validCsHire.includes(evaluation.cs_hire_likelihood)) fields['CS Hire Likelihood'] = evaluation.cs_hire_likelihood;\nif (validProductType.includes(evaluation.product_type)) fields['Product Type'] = evaluation.product_type;\nif (validPersona.includes(prev.customer_persona)) fields['Customer Persona'] = prev.customer_persona;\nif (validDomainDistance.includes(evaluation.domain_distance)) fields['Domain Distance'] = evaluation.domain_distance;\nif (validGtmMotion.includes(evaluation.gtm_motion)) fields['GTM Motion'] = evaluation.gtm_motion;\nif (validRoleType.includes(evaluation.role_type)) fields['Role Type'] = evaluation.role_type;\n\nreturn {\n  json: {\n    RECORD_ID: RECORD_ID,\n    company_name: prev.company_name,\n    airtableFields: fields\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2800, 600],
+      "id": "parse-eval",
+      "name": "Parse Eval"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_ID }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"fields\": {{ JSON.stringify($json.airtableFields) }} }",
+        "options": {"timeout": 30000}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3000, 600],
+      "id": "update-eval",
+      "name": "Update Eval (HTTP)",
+      "credentials": {"httpHeaderAuth": {"id": "airtable-token", "name": "Airtable Token"}}
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [800, 500],
+      "id": "no-record",
+      "name": "No Record"
+    }
+  ],
+  "connections": {
+    "Every 5 Min": {
+      "main": [[{"node": "Fetch 1 Record", "type": "main", "index": 0}]]
+    },
+    "Fetch 1 Record": {
+      "main": [[{"node": "Has Record", "type": "main", "index": 0}]]
+    },
+    "Has Record": {
+      "main": [
+        [{"node": "Capture", "type": "main", "index": 0}],
+        [{"node": "No Record", "type": "main", "index": 0}]
+      ]
+    },
+    "Capture": {
+      "main": [[{"node": "Brave", "type": "main", "index": 0}]]
+    },
+    "Brave": {
+      "main": [[{"node": "Parse Enrich", "type": "main", "index": 0}]]
+    },
+    "Parse Enrich": {
+      "main": [[{"node": "Auto DQ", "type": "main", "index": 0}]]
+    },
+    "Auto DQ": {
+      "main": [
+        [{"node": "Update DQ (HTTP)", "type": "main", "index": 0}],
+        [{"node": "Build Persona", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Persona": {
+      "main": [[{"node": "Classify", "type": "main", "index": 0}]]
+    },
+    "Classify": {
+      "main": [[{"node": "Parse Persona", "type": "main", "index": 0}]]
+    },
+    "Parse Persona": {
+      "main": [[{"node": "Dev Pass", "type": "main", "index": 0}]]
+    },
+    "Dev Pass": {
+      "main": [
+        [{"node": "Update Dev (HTTP)", "type": "main", "index": 0}],
+        [{"node": "Build Eval", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Eval": {
+      "main": [[{"node": "Evaluate", "type": "main", "index": 0}]]
+    },
+    "Evaluate": {
+      "main": [[{"node": "Parse Eval", "type": "main", "index": 0}]]
+    },
+    "Parse Eval": {
+      "main": [[{"node": "Update Eval (HTTP)", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "meta": {"templateCredsSetupCompleted": true},
+  "tags": []
+}

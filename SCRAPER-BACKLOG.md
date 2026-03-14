@@ -16,23 +16,12 @@ Tracking potential job sources, scrapability assessments, and implementation sta
 
 ---
 
-## In Progress
+## Skipped (Too Complex)
 
-### Bessemer Jobs (jobs.bvp.com)
-- **Status:** ❌ Skipped - requires two-stage scraping
-- **Platform:** Consider (client-side rendered)
-- **Volume:** 6,966 jobs / 305 companies (unfiltered)
-- **Filtered URL:** `?jobTypes=Customer+Support&...&stages=Seed&stages=Series+A&staffCountRanges=1-10&staffCountRanges=10-100`
-- **Challenge:** Even with tight filters, Consider shows company pages first ("All jobs at X"), not individual job listings
-- **Would require:** Two-stage scrape (1. get companies, 2. loop each company page)
-- **Notes:** Portfolio skews late-stage. Not worth the complexity given low expected signal.
-
-### GTMfund (jobs.gtmfund.com)
-- **Status:** ❌ Skipped - too complex
-- **Platform:** Consider (client-side rendered)
-- **Volume:** 766 jobs / 150 companies
-- **Challenge:** Job links are company pages, not individual jobs. Would need multi-level scraping.
-- **Notes:** GTM-focused (sales/marketing) - limited CX roles anyway.
+| Source | Platform | Reason |
+|--------|----------|--------|
+| Bessemer Jobs (jobs.bvp.com) | Consider | Two-stage scraping required; late-stage portfolio |
+| GTMfund (jobs.gtmfund.com) | Consider | Two-stage scraping required; GTM-focused (limited CX) |
 
 ---
 
@@ -96,6 +85,62 @@ For Bessemer and similar late-stage portfolios:
 Add to scoring prompt:
 - "CSM" without leadership signals → lower score
 - "Account Manager" without team-building language → skip
+
+---
+
+## Pipeline Enhancements Backlog
+
+### Rescore: Add Job/Network Cross-Reference
+- **Current state:** Rescore workflow only does enrichment + evaluation
+- **Gap:** Doesn't populate Has Active Job, Has CX Job, Matching Job Titles, Has Network Connection, Connection Name, Connection LinkedIn URL
+- **Enhancement:** Add Job Listings search, LinkedIn Connections search, and matching logic to Rescore workflow
+- **Complexity:** Medium - requires 3 new nodes (2 Airtable searches + 1 code node for matching)
+- **Benefit:** All companies would show job/network matches, not just new ones from main pipeline
+
+### Re-enable LinkedIn Network Matching
+- **Status:** Disabled in v9 to fix duplicate record bug
+- **Issue:** Two parallel merge paths (Job Check + LinkedIn Check) both fed into downstream node
+- **Fix needed:** Re-architect with single merge path that combines both job and LinkedIn data
+- **Priority:** Low - limited startup contacts in LinkedIn currently
+
+### Stale Job Cleanup
+- Jobs >30 days old with no action → archive
+- Recheck job URLs for 404s (position filled)
+
+---
+
+## Enrichment Ideas
+
+### Glassdoor/Blind Sentiment
+- Scrape company ratings, CS/Support team reviews
+- Flag companies with poor support team sentiment
+
+### Company Growth Signals
+- LinkedIn employee count delta (hiring velocity)
+- Recent funding announcements (Crunchbase RSS/API)
+- News mentions (Google News API or Brave News)
+
+---
+
+## Outreach & Reporting Ideas
+
+### Weekly Digest Email
+- Top 10 new opportunities by score
+- Pipeline summary (X new, Y applied, Z interviewing)
+- Source effectiveness (which VCs/emails produce best matches)
+
+### Cover Letter Drafting
+- Trigger: Job marked "Apply"
+- Input: Job description + resume
+- Output: Draft cover letter in Google Doc, linked in Airtable
+
+### Founder Research Automation
+- For top Tide Pool companies, auto-research founder names, LinkedIn URLs, recent appearances
+- Currently manual process
+
+### Application Funnel Tracking
+- Track conversion rates: Applied → Response → Interview → Offer
+- Identify patterns in successful applications
 
 ---
 
