@@ -178,7 +178,7 @@ Current versions (as of Mar 2026):
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
 - `Feedback Loop - Applied.json` (weekly calibration analysis)
-- `Funding Alerts Rescore v4.2-standalone.json` (**ACTIVE** - Standalone workflow using HTTP Request for Airtable updates. Runs every 2 min. **v4.2: Added v9 fields** - Domain Distance, GTM Motion, Role Type now written to Airtable. Removed Next Steps field references. Updated status mapping to use Passed instead of Skip.)
+- `Funding Alerts Rescore v4.3-standalone.json` (**ACTIVE** - Standalone workflow using HTTP Request for Airtable updates. Runs every 2 min. **v4.3: Filter fix** - Filter now excludes all processed statuses (Auto-Disqualified, Apply, Monitor, Passed, Research) to prevent re-processing. Fixed DQ stacking bug (checks for existing "Pre-existing DQ:" prefix). **v4.2:** Added v9 fields - Domain Distance, GTM Motion, Role Type now written to Airtable.)
 
 ## Workflow Architecture
 
@@ -443,6 +443,6 @@ https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_I
 **Workflow Status (Mar 2026):**
 | Workflow | Status | Notes |
 |----------|--------|-------|
-| Funding Alerts Rescore v4.2 | **ACTIVE** | Uses HTTP Request, v4.2 adds v9 fields (Domain Distance, GTM Motion, Role Type) |
+| Funding Alerts Rescore v4.3 | **ACTIVE** | Uses HTTP Request. v4.3: Fixed filter to exclude all processed statuses, fixed DQ stacking bug |
 | Enrich & Evaluate Pipeline v9.5 | **ACTIVE** | v9.5: Status fallback fix. v9.4: Next Steps removed |
 | Enrich & Evaluate Pipeline v8.5 | **ROLLBACK** | Keep for rollback if needed |
