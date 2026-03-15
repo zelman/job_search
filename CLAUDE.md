@@ -87,6 +87,30 @@ All workflow JSON files are stored in:
 
 ---
 
+## Candidate Profile (Base Resume)
+
+The pipeline evaluates companies and jobs against this candidate profile:
+
+**File:** `/Users/zelman/Desktop/eric_zelman_resume.md`
+
+| Attribute | Value |
+|-----------|-------|
+| **Target Role** | Founding CS Leader, VP/Director Customer Success & Support |
+| **Experience** | 13 years at Bigtincan (founding CS hire to VP), built 0-to-25 person global team |
+| **Domain Expertise** | Enterprise B2B SaaS, Healthcare Tech, AI-powered platforms, Regulated industries |
+| **Key Strengths** | Function building from scratch, hypergrowth scaling, distributed team leadership |
+| **Team Scale** | Managed 25+ across 3 continents, $2M budget, 24/7 coverage |
+| **Customer Scale** | 250+ Fortune 1000 accounts, 2M+ users, 15K+ annual cases, 93%+ CSAT |
+| **Tools** | Salesforce Service Cloud, Zendesk, AI agent tools |
+
+**Hard Rules (never claim):**
+- No 25% cost-per-contact reduction (false metric)
+- No Lean/Six Sigma (no training)
+- No "3 data centers" (Bigtincan was not self-hosted)
+- KB/self-service deflection was weak (no deflection wins)
+
+---
+
 ## FigJam Diagrams
 
 Interactive diagrams for the Job Search system architecture (updated Mar 14, 2026):
