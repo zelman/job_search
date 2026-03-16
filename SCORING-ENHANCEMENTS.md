@@ -1100,6 +1100,109 @@ After implementing v9.2:
 
 ---
 
+## Batch 3: March 11, 2026 Manual Triage (51 companies)
+
+**Signal rate:** ~8% (4/51 Monitor or better)
+**False positive rate in scored list:** ~72% (18/25 in "Apply Now" queue were false positives)
+**Source:** Manual fit analysis of 51 companies from mixed pipeline sources
+
+### New Failure Patterns
+
+#### 3.1 PE Gate Not Firing on Named PE Firms
+
+**Problem:** Absorb LMS is backed by Welsh Carson Anderson & Stowe (WCAS), a named PE firm. The company would score on SaaS + healthcare adjacency + revenue metrics before the PE gate fires. WCAS may not be in the PE blocklist.
+
+**Fix:** Audit PE blocklist against known PE firms that invest in SaaS. Add at minimum: Welsh Carson (WCAS), Vista Equity Partners, Thoma Bravo, Francisco Partners, Clearlake Capital, Ares Management, Carlyle Group, Hellman & Friedman, Insight Partners (when acting as PE), Silver Lake. The PE gate must run as a binary pre-scoring check, not a weighted factor.
+
+**Status:** [ ] Not implemented
+
+---
+
+#### 3.2 Non-SaaS Services Businesses Passing Sector Gate
+
+**Problem:** Nomi Health (direct healthcare services, 344 employees), Vesta Healthcare (virtual care services, $187M), Nava Benefits (brokerage model, 173 employees) all contain "healthcare" in their description but are services businesses, not SaaS. The sector gate catches the keyword but not the business model.
+
+**Fix:** Add a business model pre-scoring gate that runs before sector scoring. Key disqualifiers: "direct services," "brokerage," "staffing," "consulting," revenue model tied to per-visit/per-procedure/per-member rather than subscription. Look for negative signals: no "platform" or "software" in company description, presence of "services" as primary descriptor rather than modifier.
+
+**Status:** [ ] Not implemented
+
+---
+
+#### 3.3 Consumer Products Scoring as B2B
+
+**Problem:** Aavia (consumer health/femtech), Livetinted (beauty/lifestyle), calljoey.ai (consumer AI dating) could score on customer-count or user-count dimensions if the model pulls "customers" or "users" from marketing copy. Consumer apps are not B2B SaaS.
+
+**Fix:** Add a B2B/B2C classification gate in Phase 2 (pre-evaluation). Signals for B2C: "app store," "download," "users" without "enterprise" or "team" qualifier, consumer verticals (beauty, dating, personal finance, fitness). This gate should fire before CS Hire Readiness scoring, which assumes B2B motion.
+
+**Status:** [ ] Not implemented
+
+---
+
+#### 3.4 Grant-Funded Orgs Not Blocked Early
+
+**Problem:** Onc.AI is grant-funded and pre-commercial. No VC signal. The pipeline should not spend scoring cycles on companies that haven't raised institutional VC funding.
+
+**Fix:** Add a funding source validation in Phase 1 (enrichment). If primary funding source is grants (NIH, NSF, SBIR, etc.) with no institutional VC round, flag as "pre-commercial" and auto-pass. The VC-backing binary gate should catch this, but the enrichment phase needs to detect grant-only funding patterns.
+
+**Status:** [ ] Not implemented
+
+---
+
+#### 3.5 Stale Funding Not Penalized
+
+**Problem:** Hint Health ($3.7M revenue after 12 years, no funding since 2022) and Siteline (last round Feb 2022, no activity in 3+ years) passed enough surface criteria to appear in the pipeline. Companies with no funding activity in 2+ years are unlikely to be in a CS hiring window.
+
+**Fix:** Add a funding recency penalty in Phase 2. If last funding round is >24 months ago AND total funding is <$30M, apply a -15 point modifier or auto-flag for manual review. Exception: profitable bootstrapped companies with active job postings (rare but possible).
+
+**Status:** [ ] Not implemented
+
+---
+
+#### 3.6 Services/Consulting Hybrids Mimicking SaaS
+
+**Problem:** Socially Determined presents as analytics/SaaS but operates as a consulting/data services hybrid. Marketing copy passes the sector filter, but the actual business model doesn't qualify. Similar pattern to 3.2 but more subtle: the company has a software product but revenue is primarily services.
+
+**Fix:** Extend the business model gate (3.2) to look for hybrid signals: "consulting," "advisory," "professional services" as revenue line items, team composition heavily weighted toward consultants/analysts rather than engineers/product. This is harder to detect automatically and may need to remain a manual triage flag.
+
+**Status:** [ ] Not implemented
+
+---
+
+#### 3.7 Developer-as-Customer Gate Not Blocking Early Enough
+
+**Problem:** Coder, Zuplo, Kusari, Pinwheel, Jam all have "platform," "SaaS," and "enterprise" in their marketing copy but serve developers as primary customer persona. The customer persona gate runs correctly but may run after CS Hire Readiness scoring has already inflated the score.
+
+**Fix:** Confirm that Phase 3 (Customer Persona Classification) runs BEFORE Phase 4 (CS Hire Readiness Threshold). If a company is classified as developer-as-customer AND has <50 employees, it should be auto-passed before CS Hire Readiness scoring runs. Current pipeline architecture may already handle this, but validate execution order.
+
+**Status:** [ ] Verify pipeline execution order
+
+---
+
+#### 3.8 Company-Level vs. Role-Level Evaluation Gap (By Design)
+
+**Problem:** Candid Health correctly scored as Monitor (provider-side healthcare SaaS, right size, right funding). But the specific role posted was contributor-level into an existing CS team, not a build mandate. The scoring model evaluates the company, not the role. This is working as intended.
+
+**Documentation needed:** The post-score role fit filter is a manual step and should be documented as such. When a company passes company-level scoring but the open role fails the build mandate check, the company stays on Monitor and the role evaluation is noted in the Airtable record. This prevents the company from being passed entirely when a future VP/Head CS opening might appear.
+
+**Status:** [ ] Document as standard operating procedure in pipeline README
+
+---
+
+### Batch 3 Summary
+
+These 8 patterns represent the gap between "company matches keywords" and "company is actually a fit." Patterns 3.1-3.6 are pre-scoring gate failures (things that should be caught before scoring runs). Pattern 3.7 is an execution order question. Pattern 3.8 is a process documentation gap, not a scoring bug.
+
+**Priority order for implementation:**
+1. 3.1 (PE blocklist) and 3.7 (persona gate ordering) are quick wins
+2. 3.2 (non-SaaS) and 3.3 (B2C) require new classification logic
+3. 3.4 (grant-funded) and 3.5 (stale funding) are enrichment-phase additions
+4. 3.6 (services hybrids) is hardest to automate, may stay manual
+5. 3.8 (role vs. company) is documentation only
+
+*Batch 3 analysis documented: Mar 11 2026*
+
+---
+
 # Batch 4 Analysis — March 15, 2026 (0% Signal Rate)
 
 ## Summary
