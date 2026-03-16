@@ -18,7 +18,7 @@
         "operation": "search",
         "base": {"__rl": true, "value": "appFEzXvPWvRtXgRY", "mode": "id"},
         "table": {"__rl": true, "value": "Funding Alerts", "mode": "list"},
-        "filterByFormula": "AND({Tide-Pool Score}=0,{Status}!='Applied',{Status}!='Auto-Disqualified',{Status}!='Apply',{Status}!='Monitor',{Status}!='Passed',{Status}!='Research')",
+        "filterByFormula": "AND({Tide-Pool Score}=0,{Status}!='Applied',{Status}!='Auto-Disqualified',{Status}!='Apply',{Status}!='Monitor',{Status}!='Passed',{Status}!='Research',{Status}!='Reached Out')",
         "returnAll": false,
         "limit": 1,
         "options": {}
