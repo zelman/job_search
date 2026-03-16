@@ -204,7 +204,7 @@ Current versions (as of Mar 2026):
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
 - `Feedback Loop - Applied.json` (weekly calibration analysis)
-- `Funding Alerts Rescore v4.4-standalone.json` (**ACTIVE** - Standalone workflow using HTTP Request for Airtable updates. Runs every 2 min. **v4.4: Aligned with v9.8 gates** - Added unicorn gate (>$1B valuation), company age gate (>8 years = DQ), known large companies list, v9.7 sector gates (fintech, construction tech, etc.), PLG-dominant gate, evidence-based CS readiness prompt. **v4.3:** Filter excludes all processed statuses. **v4.2:** Added v9 fields.)
+- `Funding Alerts Rescore v4.5-standalone.json` (**ACTIVE** - Standalone workflow using HTTP Request for Airtable updates. Runs every 2 min. **v4.5: Job & Network Cross-Reference** - Added 3 new nodes to cross-reference companies against Job Listings and LinkedIn Connections tables. Populates 6 new fields: Has Active Job Posting, Has CX Job Posting, Matching Job Titles, Has Network Connection, Connection Name, Connection LinkedIn URL. CX job detection uses pattern matching for CS/Support/Implementation roles. Connection selection prioritizes senior roles. **v4.4: Aligned with v9.8 gates** - Added unicorn gate (>$1B valuation), company age gate (>8 years = DQ), known large companies list, v9.7 sector gates (fintech, construction tech, etc.), PLG-dominant gate, evidence-based CS readiness prompt. **v4.3:** Filter excludes all processed statuses. **v4.2:** Added v9 fields.)
 
 ## Workflow Architecture
 
