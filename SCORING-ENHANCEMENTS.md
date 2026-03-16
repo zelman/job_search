@@ -501,7 +501,7 @@ Several developer-tool companies in top 25 may be correctly auto-passing via per
 
 ### Critical (Top 25 fixes)
 - [x] Add SnapLogic, Zapier to KNOWN_LARGE_COMPANIES blocklist ✅ **Done in v9.2**
-- [ ] Add unicorn valuation gate (>$1B)
+- [x] Add unicorn valuation gate (>$1B) ✅ **Done in v9.8**
 - [ ] Add Contra-style marketplace patterns
 - [ ] Add Soona-style content services patterns
 
@@ -1097,6 +1097,510 @@ After implementing v9.2:
 ---
 
 *Implementation plan documented: Mar 12 2026*
+
+---
+
+# Batch 4 Analysis — March 15, 2026 (0% Signal Rate)
+
+## Summary
+
+| Metric | Value |
+|--------|-------|
+| Total evaluated | 50 |
+| Auto-Disqualified | 48 |
+| Already tracked | 2 (Assort Health, Subscript) |
+| Passed (no roles) | 1 (Axuall) |
+| **Actionable targets** | **0** |
+| **Signal rate** | **0%** |
+
+This batch represents a complete filter failure. Root causes below.
+
+---
+
+## Disqualification Breakdown
+
+### Over Employee Cap (150+) — 11 companies (22%)
+| Company | Employees | Funding | Notes |
+|---------|-----------|---------|-------|
+| Auditboard | 999 | $506M | PE-backed (Hg), acquired for $3B |
+| Pipedrive | 800+ | $99M | PE-backed (Vista Equity) |
+| Brightside Health | 464 | $114M | Series C |
+| Elation Health | 242 | $108M | Over both caps |
+| Virtru | 206 | $191M | Over both caps |
+| CertifyOS | 194 | $70M | Over employee cap |
+| Verato | 184 | $35M | Over employee cap |
+| Litify | 174+ | $78M+ | Acquired by Bessemer |
+| Sentra | 173 | $103M | Over both caps |
+| Fieldguide | 168 | $125M | Over both caps |
+| evolvedMD | 101-250 | $53M | Also services model |
+
+### Wrong Business Model (not B2B SaaS) — 16 companies (32%)
+| Company | Actual Model |
+|---------|-------------|
+| Chamber Cardio | Value-based care delivery (payer contracts) |
+| YourPath | Clinical substance use disorder services |
+| SimpliFed | Telehealth care delivery |
+| Flowneuroscience | Medical device (brain stimulation) |
+| Everyonemedicines | Biotech/pharma |
+| Counsel Health | AI virtual care (employs physicians) |
+| Daylight Health | Virtual mental health care delivery |
+| Eli Health | Consumer hormone monitoring device |
+| Insito Health | Care delivery |
+| Osana Salud | Latin American health platform (wrong geo + care delivery) |
+| Stylusmedicine | Medical/pharma |
+| Stratagen Bio | Biotech |
+| Live Chair Health | Community health/care delivery |
+| Contra | Freelance marketplace |
+| Collagerie | Consumer fashion marketplace |
+| Pivotal Health | Success-fee IDR services (hybrid) |
+
+### Wrong Sector (B2B SaaS but wrong domain) — 10 companies (20%)
+| Company | Sector |
+|---------|--------|
+| GetAccept | Sales engagement/digital sales rooms |
+| Momentum | Sales/call automation |
+| Zylo | SaaS management (IT/procurement) |
+| Marker Learning | Ed-tech |
+| goformz | Mobile forms/field operations |
+| neo.tax | Tax automation/fintech |
+| VendorPM | Property management |
+| Amicus Law | Legal AI |
+| Cyrisma | Cybersecurity |
+| Manifest Cyber | Cybersecurity SBOM |
+
+### Other Disqualifications
+| Category | Companies |
+|----------|-----------|
+| Developer-as-Customer | Bigeye, Pack |
+| PLG / No Enterprise | Creatify AI |
+| Too Early (<15 emp) | Develop Health, Daylight Health, Pivotal Health, Eli Health |
+| Clinical AI (not SaaS) | Onc.AI, Ellipsis Health |
+| Other | roo.vet (veterinary), AristaMD (hybrid), Ethicos, Colla, Healthnote |
+
+---
+
+## Root Cause Analysis
+
+### 1. "Healthcare" is too broad (32% false positives)
+The scraper flags anything with "health" in the name. Care delivery, devices, biotech, and consumer health all surface.
+
+**Fix needed:** Healthcare sector refinement
+- PASS: "provider-facing SaaS," "health system software," "clinical workflow automation," "EHR integration"
+- FAIL: "care delivery," "our physicians," "our clinicians," "telehealth visits," "clinical services"
+- FAIL: Medical devices, diagnostics hardware, consumer health devices
+
+### 2. Employee cap not enforced pre-score (22% false positives)
+11 companies exceeded 150 employees but still reached manual review.
+
+**Fix needed:** Hard employee cap in enrichment
+- >150 employees → auto-DQ before scoring
+- <15 employees → flag "Monitor - Too Early"
+
+### 3. No business model gate (32% false positives)
+Medical devices, biotech, consumer marketplaces, care delivery all get through.
+
+**Fix needed:** Business model validation
+- PASS: "SaaS," "platform," "software," "subscription," "API," "cloud-based"
+- FAIL: "our physicians," "patients can access," "care delivery," "clinical services," "medical device," "biotech," "pharmaceutical," "marketplace," "consumer"
+
+### 4. Non-target sectors persist (20% false positives)
+Cybersecurity, sales tools, property management, tax automation, ed-tech all surface.
+
+**Fix needed:** Sector keyword exclusions
+- Auto-DQ: "veterinary," "biotech," "pharmaceutical," "freelance," "marketplace," "consumer," "fashion," "e-commerce," "tax credit," "property management," "cybersecurity," "SBOM"
+
+---
+
+## Recommended Pipeline Additions
+
+### New Patterns for Parse Enrichment
+
+```javascript
+// =============================================
+// HEALTHCARE BUSINESS MODEL (care delivery vs SaaS)
+// =============================================
+const HEALTHCARE_CARE_DELIVERY_PATTERNS = [
+  /our (?:physicians|clinicians|doctors|therapists|providers)/i,
+  /patients can (?:access|schedule|receive)/i,
+  /(?:telehealth|virtual) (?:visits|appointments|care)/i,
+  /(?:clinical|medical) services/i,
+  /care delivery/i,
+  /value-based care/i,
+  /(?:mental health|behavioral health) (?:treatment|services)/i,
+  /employs? (?:physicians|clinicians|nurses)/i,
+  /board-certified (?:physicians|therapists)/i,
+  /direct primary care/i,
+];
+
+const HEALTHCARE_SAAS_SIGNALS = [
+  /(?:provider|hospital|clinic|health system)-facing/i,
+  /(?:EHR|EMR) integration/i,
+  /clinical workflow (?:automation|software)/i,
+  /healthcare (?:operations|analytics) (?:software|platform)/i,
+  /(?:revenue cycle|practice management) software/i,
+];
+
+// =============================================
+// MEDICAL DEVICE / HARDWARE
+// =============================================
+const MEDICAL_DEVICE_PATTERNS = [
+  /medical device/i,
+  /(?:FDA|CE) (?:cleared|approved)/i,
+  /(?:wearable|diagnostic|monitoring) device/i,
+  /(?:brain|neuro) stimulation/i,
+  /hormone (?:monitoring|testing) (?:device|kit)/i,
+  /(?:sensor|scanner|imager)/i,
+  /physical (?:product|device)/i,
+];
+
+// =============================================
+// EXPANDED SECTOR EXCLUSIONS
+// =============================================
+const EXCLUDED_SECTOR_PATTERNS = [
+  /veterinary|vet tech/i,
+  /biotech|pharmaceutical|pharma|drug discovery/i,
+  /cybersecurity|cyber security|infosec|SBOM/i,
+  /property management|real estate tech/i,
+  /tax (?:automation|credit|software)/i,
+  /(?:consumer|fashion) marketplace/i,
+  /e-commerce marketplace/i,
+  /ed-?tech|learning (?:platform|management)/i,
+  /sales (?:engagement|enablement|automation)/i,
+  /(?:digital sales|deal) room/i,
+];
+
+// =============================================
+// PLG / NO ENTERPRISE MOTION
+// =============================================
+const PLG_ONLY_PATTERNS = [
+  /self-serve (?:signup|trial|plan)/i,
+  /freemium/i,
+  /(?:ai|video|image) generator/i,
+  /(?:create|generate) (?:videos?|ads?|images?)/i,
+  /no.?touch sales/i,
+];
+
+const ENTERPRISE_MOTION_SIGNALS = [
+  /enterprise (?:sales|team|customers)/i,
+  /(?:account executive|sales rep)/i,
+  /(?:implementation|onboarding) (?:team|services)/i,
+  /customer success (?:team|manager)/i,
+  /\$[\d,]+k.?(?:acv|arr|contract)/i,
+  /fortune (?:500|1000)/i,
+];
+
+// PLG without enterprise = auto-DQ
+```
+
+### Updated Gate Logic
+
+```javascript
+// NEW: Business Model Gate
+const isHealthcareCareDelivery = HEALTHCARE_CARE_DELIVERY_PATTERNS.some(p => p.test(description)) &&
+                                  !HEALTHCARE_SAAS_SIGNALS.some(p => p.test(description));
+
+const isMedicalDevice = MEDICAL_DEVICE_PATTERNS.some(p => p.test(description));
+
+const isExcludedSector = EXCLUDED_SECTOR_PATTERNS.some(p => p.test(description));
+
+const isPLGOnly = PLG_ONLY_PATTERNS.some(p => p.test(description)) &&
+                  !ENTERPRISE_MOTION_SIGNALS.some(p => p.test(description));
+
+// Add to tier2Disqualify:
+const tier2Disqualify =
+  is_biotech ||
+  is_hardware ||
+  is_crypto ||
+  is_consumer ||
+  is_hrtech ||
+  is_marketplace ||
+  is_cs_tooling_product ||
+  is_carbon_credit_revenue ||
+  isHealthcareCareDelivery ||    // NEW
+  isMedicalDevice ||              // NEW
+  isExcludedSector ||             // NEW
+  isPLGOnly;                      // NEW
+```
+
+---
+
+## Projected Impact
+
+If all gates had been active, this batch would have reduced from:
+- **50 manual evaluations → ~3-5**
+- **~2 hours review time → ~15 minutes**
+- **100% false positive rate → ~20-30%**
+
+---
+
+## Scoring Model Observation
+
+Companies scoring 68-78 continue to produce near-zero yield:
+- Axuall: Score 78, CS Readiness 26 — no open roles, leadership stable, shrinking headcount
+- Helios (prior batch): Score 78 — 11 employees, consultancy model, no open roles
+
+**Pattern:** Weighted score over-indexes on company attributes, under-indexes on CS hire readiness.
+
+**Recommended:** If CS Readiness < 15, hard cap total score at 50 (forces Monitor, not Apply).
+
+---
+
+*Batch 4 analysis documented: Mar 15 2026*
+
+**IMPLEMENTATION STATUS: COMPLETE (v9.6)**
+
+Implemented in `Enrich & Evaluate Pipeline v9.6.json`:
+- ✅ Healthcare care delivery vs SaaS detection (isHealthcareCareDelivery)
+- ✅ Medical device detection (isMedicalDevice)
+- ✅ Cybersecurity sector gate (isCybersecurity)
+- ✅ Legal Tech sector gate (isLegalTech)
+- ✅ Ed-tech sector gate (isEdTech)
+- ✅ Property Management / Real Estate Tech gate (isPropertyManagement)
+- ✅ Tax automation gate (isTaxTech)
+- ✅ Sales tools gate (isSalesTools) - wrong buyer persona
+- ✅ Veterinary gate (isVeterinary)
+
+All 9 new sector detections added to isNotB2BSaaS check and TIER 2 disqualification logic.
+
+*Implementation completed: Mar 15 2026*
+
+---
+
+# v9.7 Implementation (Mar 15 2026)
+
+Based on Claude Opus 4.6 recommendations to address remaining false positives.
+
+## New Sector Gates (8 additions)
+
+Implemented in `Enrich & Evaluate Pipeline v9.7.json`:
+- ✅ Fintech/Banking (isFintech) - neobank, lending, payment processing, BaaS, core banking
+- ✅ Construction Tech (isConstructionTech) - job site, BIM, AEC, contractor management
+- ✅ Food Science/CPG (isFoodBiotech) - fermentation, alternative protein, beverage brands
+- ✅ Physical Security (isPhysicalSecurity) - access control, surveillance, weapon detection
+- ✅ Insurtech (isInsurtech) - policy management, claims processing, underwriting
+- ✅ SaaS Management (isSaaSManagement) - IT asset management, shadow IT, software spend
+- ✅ Consumer Digital Health (isConsumerDigitalHealth) - patient-facing apps, therapy apps, wellness, DTx
+- ✅ AI Calling (isAICalling) - voice agents, robocall, phone bots
+
+## Developer-as-Customer Persona Gate
+
+New persona detection with 15 signal patterns:
+- Detects: "for developers", "API-first", "SDK", "DevOps", "CI/CD", "Kubernetes", etc.
+- Counter-signals for enterprise dev tools: "enterprise plan", "Fortune 500", "SOC 2", "SSO"
+- Gate logic: DQ if developer-customer AND <50 employees AND no enterprise sales motion
+- If 50+ employees with enterprise motion, passes gate but gets warning flag
+
+## Evaluation Prompt Score Floor Fix
+
+**Critical change:** Removed false claim that companies passed all gates.
+
+Old prompt said:
+> "if company reached this prompt, it passed all gates including CS Hire Readiness >= 10"
+
+New prompt says:
+> "automated gates have limited information. You MUST independently verify sector fit and business model. If the company is clearly in the wrong sector... score it below 30 regardless of other factors."
+
+Additional calibration guidance:
+- Wrong sector = 0 points in sector scoring
+- Wrong sector + no CS hire signal = score 0-20
+- Explicit reminder: "do not inflate scores with stage/size points when fundamental sector is wrong"
+
+## Projected Impact
+
+Based on March 15 batch analysis:
+- ~16 wrong-business-model companies → caught by broadened care delivery, consumer digital health, food biotech gates
+- ~10 wrong-sector companies → caught by fintech, construction, physical security, SaaS management, AI calling gates
+- ~2 developer-as-customer companies → caught by persona gate
+- Remaining slip-throughs → caught by evaluation score floor (scores 20-35 instead of 72-78)
+
+*Implementation completed: Mar 15 2026*
+
+---
+
+# v9.8 Implementation (Mar 15 2026)
+
+Based on `/Users/zelman/Downloads/v9.8-scoring-fixes.md` spec targeting last high-impact scoring gaps.
+
+## Fix 1: Unicorn Valuation Gate (>$1B)
+
+**Problem:** Modern Treasury ($2B valuation, Series D) slipped through because no valuation gate existed. Employee count was borderline (137-155).
+
+**Solution:**
+```javascript
+// In Parse Enrichment - gate logic:
+if (valuation && valuation >= 1000000000) {
+  autoDisqualifiers.push(`Unicorn valuation (>$1B: ${valuationRaw})`);
+} else if (valuation && valuation > MAX_VALUATION) {
+  autoDisqualifiers.push(`>$450M valuation (${valuationRaw})`);
+}
+```
+
+**Changes:**
+- ✅ Valuation extraction already existed (unicorn keyword + regex patterns)
+- ✅ Added unicorn gate as TIER 1 hard gate (>$1B = DQ)
+- ✅ Made unicorn and >$450M checks mutually exclusive (unicorn takes priority)
+- ✅ Fixed funding cap message: "$500M" → "$450M" to match actual threshold
+
+## Fix 2: Company Age Gate + YC Batch Year Extraction
+
+**Problem:** Zapier (YC S12, founded 2011) scored 82 because YC batch was passed as "Seed" funding stage. 15-year-old companies shouldn't reach scoring.
+
+**Solution:**
+```javascript
+// In Parse Enrichment - YC batch extraction:
+const sourceStage = companyDataItem.stage || companyDataItem.batch ||
+                    companyDataItem.funding_stage || companyDataItem.yc_batch ||
+                    companyDataItem['YC Batch'] || '';
+const batchMatch = sourceStage.match(/\b([SWF])(\d{2})\b/i); // Word boundary, not anchored
+
+if (batchMatch) {
+  const twoDigitYear = parseInt(batchMatch[2], 10);
+  const candidateYear = 2000 + twoDigitYear;
+  // Validate: must be >= 2005 (YC founding) and <= current year
+  if (candidateYear >= 2005 && candidateYear <= currentYear) {
+    ycBatchYear = candidateYear;
+    companyAgeFromBatch = currentYear - ycBatchYear;
+  }
+}
+
+const companyAge = foundedYear ? (currentYear - foundedYear) : companyAgeFromBatch;
+
+// Age gates:
+const isTooOld = companyAge !== null && companyAge > 8;  // >8 years = DQ
+const isAgingFlag = companyAge !== null && companyAge > 5 && companyAge <= 8;  // 5-8 years = flag
+```
+
+**Changes:**
+- ✅ YC batch year extraction from S12/W24/F22 format
+- ✅ Word boundary regex (matches "YC S12" not just exact "S12")
+- ✅ Checks multiple field names: stage, batch, funding_stage, yc_batch, YC Batch
+- ✅ Year validation: >= 2005 (YC founding), <= currentYear
+- ✅ Company age calculated from foundedYear OR ycBatchYear
+- ✅ >8 years = hard DQ
+- ✅ 5-8 years = soft flag (warning)
+- ✅ Unknown age = warning flag
+
+**Output fields added:**
+- `yc_batch_year` - extracted YC batch year (2012, 2024, etc.)
+- `company_age` - years since founding/batch
+- `is_too_old` - boolean, >8 years
+- `is_aging_flag` - boolean, 5-8 years
+
+## Fix 3: CS Hire Readiness - Evidence Required, No Inference
+
+**Problem:** Summary generator used stage-based reasoning ("Series A = CS hiring likely") as positive signal. Primary driver of ~65% false positive rate in Batch 2. Companies like Mazama Energy got summaries claiming CS hiring need with zero sourced evidence.
+
+**Solution:** Complete CS Readiness prompt overhaul:
+
+```javascript
+// Key changes to Build CS Readiness Prompt:
+
+// CRITICAL RULE:
+// "Do NOT infer CS hiring need from stage alone."
+// "Series A companies often hire CS" is NOT evidence. Do not use it.
+// "Enterprise SaaS companies need CS" is NOT evidence. Do not use it.
+// "If you cannot point to a specific, sourced fact... the score is 0."
+
+// SCORING TIERS:
+// 25 points: No CS function exists + active build signal (all must be true)
+// 10 points: CS exists but no leader (IC CSMs with no VP/Head/Director)
+// 0 points: CS leadership in place (VP CS, Head of CS, Director of CS)
+// 0 points: No evidence found - DEFAULT TO ZERO
+
+// ROLE LANGUAGE DISQUALIFIER:
+// NRR, GRR, renewal ownership, expansion quota = subtract 15 pts + manage-and-optimize flag
+
+// OUTPUT:
+// - cs_readiness_score (0-25)
+// - cs_function_tier (1-3)
+// - evidence_found (array)
+// - is_manage_and_optimize (boolean)
+// - has_role_language_dq (boolean)
+```
+
+**Changes:**
+- ✅ Prompt explicitly requires EVIDENCE, not inference
+- ✅ Default to 0 if no sourced signals found
+- ✅ Stage alone is NOT evidence (explicit prohibition)
+- ✅ Role language check: NRR/GRR/renewal = subtract 15 pts
+- ✅ Added company_age to user prompt for context
+- ✅ "False negatives acceptable, false positives not" guidance
+
+## Opus 4.6 Review Findings (Post-Implementation)
+
+Code review via `code-review.mjs --model opus` caught additional issues:
+
+1. **Fixed:** YC batch extraction was reading from undefined `companyData` fields → now reads from `companyDataItem`
+2. **Fixed:** Unicorn and >$450M checks both fired for unicorns → now mutually exclusive
+3. **Fixed:** Funding cap message said "$500M" but threshold was $450M → corrected
+4. **Fixed:** Regex used anchors `^[SWF](\d{2})$` → changed to word boundaries `\b([SWF])(\d{2})\b`
+5. **Fixed:** Fellowship batch (F prefix) not supported → added to regex
+6. **Fixed:** No warning for unknown company age → added warning flag
+7. **Fixed:** Unescaped quotes in comment broke JSON → escaped properly
+
+## Testing Plan
+
+Companies that should now DQ:
+
+| Company | Root Cause | v9.8 Gate | Expected |
+|---------|------------|-----------|----------|
+| Modern Treasury | $2B valuation | Unicorn gate | DQ |
+| Zapier | YC S12, 15 years old | Age gate | DQ |
+| Mighty Networks | Founded 2010, 16 years | Age gate | DQ |
+| Helcim | Founded 2006, 20 years | Age gate | DQ |
+| InternMatch | Founded 2009, 17 years | Age gate | DQ |
+| VoltServer | Founded 2011, 15 years | Age gate | DQ |
+| Mazama Energy | Fabricated CS signal | CS readiness = 0 | Low score |
+| Ebb Carbon | Fabricated CS signal | CS readiness = 0 | Low score |
+
+Genuine candidates should still pass:
+- Paxton.ai (24 employees, legal AI SaaS, no CS function)
+- Assort Health (healthcare SaaS, provider-facing)
+- Subscript (if enrichment finds build signals)
+
+*Implementation completed: Mar 15 2026*
+
+---
+
+# Job Evaluation Pipeline v6.4 (Mar 15 2026)
+
+Code review via `code-review.mjs --model sonnet` found 2 critical issues:
+
+## Fix 1: Regex Backtracking Prevention
+
+**Problem:** Patterns with `([\s\S]*?)` inside complex lookaheads could hang on long HTML strings.
+
+**Solution:**
+```javascript
+// In Parse Job Description:
+const MAX_HTML_LENGTH = 50000;
+if (htmlStr.length > MAX_HTML_LENGTH) {
+  console.error(`Warning: HTML truncated from ${htmlStr.length} to ${MAX_HTML_LENGTH} chars`);
+  htmlStr = htmlStr.substring(0, MAX_HTML_LENGTH);
+}
+```
+
+## Fix 2: Silent Error Logging
+
+**Problem:** Try-catch blocks failed to empty objects without logging, masking real errors.
+
+**Solution:**
+```javascript
+// Added console.error() to all try-catch blocks:
+try {
+  braveData = $('Brave Search Company').item?.json || {};
+} catch(e) {
+  console.error('Parse JD: Failed to get Brave data:', e.message);
+  braveData = {};
+}
+```
+
+**Changes:**
+- ✅ HTML truncation before regex matching (50K char limit)
+- ✅ console.error() added to 8 try-catch blocks
+- ✅ Descriptive error context in all log messages
+
+*Implementation completed: Mar 15 2026*
 
 ---
 
