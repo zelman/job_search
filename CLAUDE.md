@@ -40,7 +40,7 @@ All workflow JSON files are stored in:
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              JOB SCRAPERS                                    │
-│  Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v5.2, First Round v1, │
+│  Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v6, First Round v1, │
 │  Health Tech Nerds v1                                                          │
 │                                    │                                         │
 │                                    ▼                                         │
@@ -189,7 +189,7 @@ When editing any n8n workflow JSON file:
 Current versions (as of Mar 2026):
 - `Job Alert Email Parser v3-43.json` - v3-43: OmniJobs scraping, Gmail labeling, title extraction improvements.
 - `Work at a Startup Scraper v12.json`
-- `Indeed Job Scraper v5.2.json` - v5.2: **Connection name fix**. Fixed broken loop - connections referenced "Wait 5s" but node was named "Wait 10s", causing batch processing to skip entirely (ran in 22s instead of 70s+). v5.1: **Opus review fixes**. Fixed: (1) `isBuilderQuery` string comparison bug (q10-q15 were incorrectly marked false). (2) Merge race condition (jobs now accumulate properly before dedup). (3) Empty token validation. (4) Rate limit increased 5s→10s. v5: **Builder-language query rotation** (Source Quality Pivot). Added 7 new queries targeting "founding", "first hire", "build", "ground up", "0 to 1" language in CS/Support job postings. Priority tiers: high (daily), medium (every 2 days), low (every 3 days). Tracks `_queryId`, `_isBuilderQuery` for signal analysis.
+- `Indeed Job Scraper v6.json` - v6: **Architecture rewrite**. Replaced SplitInBatches loop with single Code node that handles entire scraping loop internally using async/await + fetch(). Fixes n8n limitation where nodes in different execution branches can't reference each other. Cleaner flow: Get Token → Execute All Queries (internal loop with 10s delays) → Merge for Dedup. Includes all v5 features: builder-language queries, priority tiers, query tracking.
 - `First Round Jobs Scraper v1.json` - v1: API-based scraper for First Round Capital talent network. Fetches from `jobs.firstround.com/api-boards/search-jobs` with session cookie auth. Filters for CX-relevant roles, includes salary data. Runs Tue/Fri 7am. **Note:** Session cookies expire; refresh from Chrome DevTools when 401 errors occur.
 - `Health Tech Nerds Scraper v1.json` - v1: Static JSON scraper for jobs.healthtechnerds.com. Fetches `/data/transformed_job_data.json` directly (no auth needed). Filters for CX leadership roles. Rich data includes job_description, company_description, salary, experience_level, function, keywords. Runs every 6 hours.
 - `VC Scraper - Healthcare.json` (v27) - 14 VC portfolios: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms. v27: Added Tier 2 healthcare VCs (Transformation Capital, Brewer Lane) and vertical SaaS VCs (Mainsail, Five Elms). Removed Optum Ventures (timeout). Uses token in URL - find/replace `YOUR_BROWSERLESS_TOKEN` before importing.
