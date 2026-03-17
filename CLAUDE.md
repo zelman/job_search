@@ -40,7 +40,7 @@ All workflow JSON files are stored in:
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              JOB SCRAPERS                                    │
-│  Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v7, First Round v1, │
+│  Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v8, First Round v1, │
 │  Health Tech Nerds v1                                                          │
 │                                    │                                         │
 │                                    ▼                                         │
@@ -189,7 +189,7 @@ When editing any n8n workflow JSON file:
 Current versions (as of Mar 2026):
 - `Job Alert Email Parser v3-43.json` - v3-43: OmniJobs scraping, Gmail labeling, title extraction improvements.
 - `Work at a Startup Scraper v12.json`
-- `Indeed Job Scraper v7.json` - v7: **n8n Cloud compatible**. v6.x hit 60s Code node timeout on n8n Cloud. v7 returns to node-based architecture using SplitInBatches correctly: Loop Queries output 0 (done) receives ALL items passed back through the loop, then Filter Jobs Only extracts actual jobs. Flow: Build Queries → Loop Queries → Scrape → Parse → Wait 10s → loop back. When done: Filter Jobs Only → Merge → Dedup → Eval. Each node runs independently (no timeout). Includes all v6.1 fixes (token validation, etc.).
+- `Indeed Job Scraper v8.json` - v8: **Fixed SplitInBatches bug**. v7 failed because SplitInBatches output 0 fires PER ITERATION, not once at end (n8n issue #21376). v8 uses `$workflow.staticData` to accumulate jobs across iterations. After each query: Parse & Store writes to staticData. After Wait 10s: All Done? checks `noItemsLeft`. When true: Extract All Jobs retrieves from staticData → Merge → Dedup → Eval. Fatal token errors now properly caught with Check Fatal node. Race condition fixed: Merge only receives data when loop is fully complete.
 - `First Round Jobs Scraper v1.json` - v1: API-based scraper for First Round Capital talent network. Fetches from `jobs.firstround.com/api-boards/search-jobs` with session cookie auth. Filters for CX-relevant roles, includes salary data. Runs Tue/Fri 7am. **Note:** Session cookies expire; refresh from Chrome DevTools when 401 errors occur.
 - `Health Tech Nerds Scraper v1.json` - v1: Static JSON scraper for jobs.healthtechnerds.com. Fetches `/data/transformed_job_data.json` directly (no auth needed). Filters for CX leadership roles. Rich data includes job_description, company_description, salary, experience_level, function, keywords. Runs every 6 hours.
 - `VC Scraper - Healthcare.json` (v27) - 14 VC portfolios: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms. v27: Added Tier 2 healthcare VCs (Transformation Capital, Brewer Lane) and vertical SaaS VCs (Mainsail, Five Elms). Removed Optum Ventures (timeout). Uses token in URL - find/replace `YOUR_BROWSERLESS_TOKEN` before importing.
