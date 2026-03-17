@@ -6,7 +6,7 @@ The Tide Pool scoring system uses a **six-phase architecture** that splits respo
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         SCORING ARCHITECTURE (v9)                            │
+│                         SCORING ARCHITECTURE (v9.9)                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
@@ -46,8 +46,8 @@ The Tide Pool scoring system uses a **six-phase architecture** that splits respo
 │  │ PHASE 2: PRE-EVALUATION GATES (Parse Enrichment - 5 Tiers)          │   │
 │  │                                                                       │   │
 │  │ TIER 1 - HARD GATES (binary, immediate exit):                        │   │
-│  │   • PE-backed, >200 emp, >$500M funding, public, Series D+          │   │
-│  │   • Acquired/merged, Fortune 500, invalid entity, non-US market     │   │
+│  │   • PE-backed, >350 emp, >$500M funding, >$1B valuation, public    │   │
+│  │   • Acquired/merged, Fortune 500, Series D+, >8yr old, invalid entity │
 │  │                                                                       │   │
 │  │ TIER 2 - SECTOR GATES (also hard DQ):                                │   │
 │  │   • Biotech, hardware, crypto, consumer, HR Tech                     │   │
@@ -63,9 +63,9 @@ The Tide Pool scoring system uses a **six-phase architecture** that splits respo
 │  │                                                                       │   │
 │  │ TIER 5 - SOFT FLAGS (proceed but flag):                              │   │
 │  │   • <15 employees (too early)                                        │   │
-│  │   • 150-200 employees (penalty zone)                                 │   │
+│  │   • 200-350 employees (penalty zone)                                 │   │
 │  │   • $75M-$500M funding (soft cap)                                    │   │
-│  │   • Founded pre-2016 (age warning)                                   │   │
+│  │   • Founded 5-8 years ago (age warning)                              │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │                                    │                                         │
 │                    ┌───────────────┴───────────────┐                        │
@@ -196,7 +196,7 @@ Code can check `employee_count > 200`. Code cannot determine "this Series A comp
 
 ### Phase 0: Entity Validation
 
-**Location:** `Enrich & Evaluate Pipeline v9.json` → "Validate Entity" node
+**Location:** `Enrich & Evaluate Pipeline v9.9.json` → "Validate Entity" node
 
 **Purpose:** Catch non-companies before enrichment wastes API calls.
 
@@ -227,7 +227,7 @@ VALID_COMPANY_SIGNALS = [
 
 ### Phase 1: Enhanced Enrichment
 
-**Location:** `Enrich & Evaluate Pipeline v9.json` → "Brave Search" + "Parse Enrichment" nodes
+**Location:** `Enrich & Evaluate Pipeline v9.9.json` → "Brave Search" + "Parse Enrichment" nodes
 
 **Purpose:** Comprehensive data extraction with new v9 detection patterns.
 
@@ -247,7 +247,7 @@ VALID_COMPANY_SIGNALS = [
 
 ### Phase 2: Pre-Evaluation Gates (5 Tiers)
 
-**Location:** `Enrich & Evaluate Pipeline v9.json` → "IF: Auto-Disqualify" node
+**Location:** `Enrich & Evaluate Pipeline v9.9.json` → "IF: Auto-Disqualify" node
 
 **Tier Structure:**
 
@@ -258,11 +258,12 @@ const tier1Disqualify =
   pe_backed ||
   is_public ||
   is_fortune500 ||
-  employee_count > 200 ||
+  employee_count > 350 ||
   total_funding_numeric > 500000000 ||
+  valuation_numeric > 1000000000 ||  // Unicorn gate (v9.8)
+  company_age_years > 8 ||            // Age gate (v9.8)
   /series d|series e|growth/i.test(funding_stage) ||
-  !isValidEntity ||
-  geography.isNonUSBased;
+  !isValidEntity;
 
 // TIER 2: SECTOR GATES
 const tier2Disqualify =
@@ -285,14 +286,14 @@ const tier4Disqualify =
   hasShrinkingSignals;
 
 // TIER 5: SOFT FLAGS (proceed but flag)
-// <15 employees, 150-200 employees, $75M+ funding, pre-2016
+// <15 employees, 200-350 employees, $75M+ funding, 5-8 years old
 ```
 
 ---
 
 ### Phase 3: Customer Persona Classification
 
-**Location:** `Enrich & Evaluate Pipeline v9.json` → "Classify Persona via Claude" node
+**Location:** `Enrich & Evaluate Pipeline v9.9.json` → "Classify Persona via Claude" node
 
 **Purpose:** Identify customer type for CS motion fit.
 
@@ -313,7 +314,7 @@ const tier4Disqualify =
 
 ### Phase 4: CS Hire Readiness Threshold
 
-**Location:** `Enrich & Evaluate Pipeline v9.json` → "Check CS Readiness" node
+**Location:** `Enrich & Evaluate Pipeline v9.9.json` → "Check CS Readiness" node
 
 **Purpose:** Confirm company is actively building post-sales CS function before expensive full evaluation.
 
@@ -329,7 +330,7 @@ const tier4Disqualify =
 
 ### Phase 5: Full Evaluation with Domain Distance
 
-**Location:** `Enrich & Evaluate Pipeline v9.json` → "Build Evaluation Prompt" + "Claude Evaluate" nodes
+**Location:** `Enrich & Evaluate Pipeline v9.9.json` → "Build Evaluation Prompt" + "Claude Evaluate" nodes
 
 **100-Point Base Scoring:**
 
@@ -421,11 +422,12 @@ const V9_DQ_REASONS = [
   'PE-backed (firm name)',
   'Public company',
   'Fortune 500 subsidiary',
-  '>200 employees',
+  '>350 employees',
   '>$500M funding',
+  '>$1B valuation (unicorn)',       // v9.8
+  '>8 years old',                   // v9.8
   'Series D+ stage',
   'Invalid entity (media/podcast/nonprofit)',
-  'Non-US primary market',
 
   // Tier 2 - Sector Gates
   'Biotech/pharma',
@@ -471,6 +473,14 @@ const V9_DQ_REASONS = [
 
 | Version | Date | Changes |
 |---------|------|---------|
+| v9.9 | 2026-03-16 | Threshold alignment with reconciliation audit, minor gate fixes |
+| v9.8 | 2026-03-15 | **UNICORN + AGE GATES + CS EVIDENCE**: >$1B valuation DQ, >8yr company age DQ, YC batch year extraction, CS readiness now requires evidence (not inference from stage) |
+| v9.7 | 2026-03-14 | **EXPANDED SECTOR GATES**: 8 new sectors (Fintech, Construction, Food/CPG, Physical Security, Insurtech, SaaS Management, Consumer Digital Health, AI Calling), developer-as-customer persona gate, evaluation prompt score floor fix |
+| v9.6 | 2026-03-13 | **BATCH 4 FIXES**: 9 sector gates (Healthcare Care Delivery, Medical Device, Cybersecurity, Legal Tech, Ed-tech, Property Management, Tax Automation, Sales Tools, Veterinary) |
+| v9.5 | 2026-03-12 | Status fallback fix (empty Status field bug) |
+| v9.4 | 2026-03-12 | Field consolidation (removed Next Steps, Status-only) |
+| v9.3 | 2026-03-12 | Loosened gates: employee cap 150→350, soft cap 150→200, non-US demoted to soft penalty, WATCH bucket widened to 40-69 |
+| v9.2 | 2026-03-11 | knownLargeCompanies list, knownAcquired list, Canadian cities |
 | v9 | 2026-03-11 | **FULL REDESIGN**: Phase 0 Entity Validation, enhanced acquisition detection, GTM motion gates (PLG/pre-sales), stale company gates, CS Hire Readiness threshold (>=10), domain distance scoring, employee-user persona, stricter enterprise exception (3+ signals) |
 | v8.5 | 2026-03-09 | 8 scoring fixes: employee-user persona, stricter SaaS gate, geography gate, stricter developer persona, age gate, stale funding penalty |
 | v8.4 | 2026-03-06 | Customer Persona Gate - classifies business-user vs developer-as-customer |
@@ -488,4 +498,4 @@ Interactive diagrams for visual reference:
 
 ---
 
-*Last updated: March 2026*
+*Last updated: March 16, 2026 — Updated to v9.9, added unicorn/age gates (v9.8), expanded sector gates (v9.7), threshold alignment*
