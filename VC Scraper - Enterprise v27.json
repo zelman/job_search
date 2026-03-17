@@ -1,0 +1,1333 @@
+{
+  "name": "VC Scraper - Enterprise v27",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1,4"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        49312,
+        8768
+      ],
+      "id": "75118aef-546d-4747-9321-b27433f90cd9",
+      "name": "Schedule Trigger (Mon/Thu 8am)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://unusual.vc/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 },\n  \"waitForSelector\": { \"selector\": \"h4\", \"timeout\": 10000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        8464
+      ],
+      "id": "b5722a0a-f761-42e5-b68b-7bc9a76b9649",
+      "name": "Browserless Unusual"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Unusual Ventures\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Unusual Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const h4Pattern = /<h4[^>]*>([^<]+)<\\/h4>/gi;\n  let match;\n  while ((match = h4Pattern.exec(html)) !== null) {\n    const text = match[1].trim();\n    if (text.length < 10 || text.toLowerCase().includes('visit website') || text.toLowerCase().includes('portfolio')) continue;\n    const parts = text.split(/\\s+is\\s+/i);\n    if (parts.length < 2) continue;\n    const name = parts[0].trim();\n    const key = name.toLowerCase();\n    if (name.length >= 2 && name.length <= 50 && !seen.has(key)) {\n      seen.add(key);\n      const context = html.substring(Math.max(0, match.index - 1000), Math.min(html.length, match.index + 1000));\n      let url = '';\n      const extMatch = context.match(/href=[\"'](https?:\\/\\/(?!(?:www\\.)?(?:unusual\\.vc|linkedin|twitter|facebook|x)\\.com)[^\"']+)[\"']/i);\n      if (extMatch) url = extMatch[1];\n      results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': text, 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n    }\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        8464
+      ],
+      "id": "21a44681-2a29-4c4f-b4f2-26165c1a725b",
+      "name": "Parse Unusual Ventures"
+    },
+    {
+      "parameters": {
+        "url": "https://m6i10uln.api.sanity.io/v2021-10-21/data/query/production?query=*[_type==\"company\"]{title,website,slug,statement,_createdAt}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        8624
+      ],
+      "id": "bec25385-cae7-4b07-9eef-584571d4c266",
+      "name": "Fetch First Round (Sanity API)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse First Round Capital - with _createdAt dates from Sanity API\nconst items = $input.all();\nconst results = [];\nconst vcName = 'First Round Capital';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const companies = item.json.result || [];\n  for (const company of companies) {\n    const name = company.title || '';\n    if (!name || name.length < 2) continue;\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    const website = company.website || '';\n    let description = '';\n    if (company.statement && Array.isArray(company.statement)) {\n      for (const block of company.statement) {\n        if (block.children) for (const child of block.children) if (child.text) description += child.text + ' ';\n      }\n      description = description.trim();\n    }\n    if (!description) description = name + ' - First Round Capital portfolio company';\n    let portfolioDate = '';\n    if (company._createdAt) {\n      portfolioDate = company._createdAt.split('T')[0];\n    }\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': description, 'Company URL': website, 'Portfolio Addition Date': portfolioDate, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        8624
+      ],
+      "id": "963f8f5b-d10f-4759-8b96-91b310300125",
+      "name": "Parse First Round"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.khoslaventures.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 },\n  \"waitForSelector\": { \"selector\": \".splide__slide\", \"timeout\": 15000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        9072
+      ],
+      "id": "fa02c0f1-e627-4855-bcd9-63817ab8afc2",
+      "name": "Browserless Khosla"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Khosla Ventures\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Khosla Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\nconst skipDomains = ['khoslaventures', 'linkedin', 'twitter', 'facebook', 'x', 'jobs', 'careers', 'webflow', 'githubusercontent', 'google', 'youtube', 'instagram', 'medium', 'substack'];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/[^\"']+)[\"'][^>]*>/gi;\n  let match;\n  while ((match = linkPattern.exec(html)) !== null) {\n    const url = match[1].trim();\n    if (url.includes('#') || url.includes('javascript') || url.length < 10) continue;\n    const domainMatch = url.match(/https?:\\/\\/(?:www\\.)?([^.\\/]+)/i);\n    if (!domainMatch) continue;\n    const domain = domainMatch[1].toLowerCase();\n    if (skipDomains.some(skip => domain.includes(skip))) continue;\n    if (domain.length < 2 || domain.length > 30) continue;\n    let name = domain.charAt(0).toUpperCase() + domain.slice(1);\n    name = name.replace(/ai$/i, 'AI').replace(/^ai/i, 'AI');\n    const key = domain.replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - Khosla Ventures portfolio company', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        9072
+      ],
+      "id": "b0b60e19-b162-4594-9fdf-18c45aa53981",
+      "name": "Parse Khosla Ventures"
+    },
+    {
+      "parameters": {
+        "url": "https://www.kaporcapital.com/sitemap.xml",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        9216
+      ],
+      "id": "e3a71a06-4c4b-405f-bb2b-a20713b48104",
+      "name": "Fetch Kapor Capital Sitemap"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Kapor Capital\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Kapor Capital';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let xml = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const urlBlockPattern = /<url>([\\s\\S]*?)<\\/url>/gi;\n  let match;\n  while ((match = urlBlockPattern.exec(xml)) !== null) {\n    const block = match[1];\n    const locMatch = block.match(/<loc>https?:\\/\\/(?:www\\.)?kaporcapital\\.com\\/company\\/([^<\\/]+)\\/?<\\/loc>/i);\n    if (!locMatch) continue;\n    const slug = locMatch[1].trim().replace(/\\/$/, '');\n    if (!slug || slug.length < 2) continue;\n    let portfolioDate = '';\n    const lastmodMatch = block.match(/<lastmod>([^<]+)<\\/lastmod>/i);\n    if (lastmodMatch) portfolioDate = lastmodMatch[1].trim().split('T')[0];\n    const name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - Kapor Capital portfolio company (social impact)', 'Company URL': 'https://www.kaporcapital.com/company/' + slug + '/', 'Portfolio Addition Date': portfolioDate, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        9216
+      ],
+      "id": "ce1146d4-1d75-47b7-852c-8ada5ab98cc0",
+      "name": "Parse Kapor Capital"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.whatif.vc/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        9376
+      ],
+      "id": "c8efcb05-5560-4240-b02e-f466dd726ba2",
+      "name": "Browserless WhatIf"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse WhatIf Ventures\nconst items = $input.all();\nconst results = [];\nconst vcName = 'WhatIf Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const cardPattern = /<(?:h[2-4]|div)[^>]*class=[\"'][^\"']*(?:heading|company-name|portfolio-name)[^\"']*[\"'][^>]*>([^<]+)<\\/(?:h[2-4]|div)>/gi;\n  let match;\n  while ((match = cardPattern.exec(html)) !== null) {\n    const name = match[1].trim();\n    if (!name || name.length < 2 || name.length > 60) continue;\n    if (name.toLowerCase().includes('portfolio') || name.toLowerCase().includes('visit')) continue;\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    const context = html.substring(Math.max(0, match.index - 500), Math.min(html.length, match.index + 1500));\n    let url = '';\n    const urlMatch = context.match(/href=[\"'](https?:\\/\\/(?!whatif\\.vc|linkedin|twitter|facebook|cdn)[^\"']+)[\"']/i);\n    if (urlMatch) url = urlMatch[1];\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - WhatIf Ventures portfolio company', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n  if (results.length === 0) {\n    const linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/(?!whatif\\.vc|linkedin|twitter|facebook|cdn|webflow)[^\"']+)[\"'][^>]*>([^<]*(?:Visit|Site)?[^<]*)<\\/a>/gi;\n    while ((match = linkPattern.exec(html)) !== null) {\n      const url = match[1].trim();\n      if (url.includes('#') || url.length < 10) continue;\n      const domainMatch = url.match(/https?:\\/\\/(?:www\\.)?([^.\\/]+)/i);\n      if (!domainMatch) continue;\n      let name = domainMatch[1];\n      name = name.charAt(0).toUpperCase() + name.slice(1);\n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (key.length < 2 || seen.has(key)) continue;\n      seen.add(key);\n      results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - WhatIf Ventures portfolio company', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n    }\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        9376
+      ],
+      "id": "a24bb430-224f-447a-bf92-f7a99b4f4276",
+      "name": "Parse WhatIf Ventures"
+    },
+    {
+      "parameters": {
+        "url": "https://www.wxrfund.com/portfolio",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        9520
+      ],
+      "id": "d97f76e6-85ec-4537-b2d8-30f3ecc1342e",
+      "name": "Fetch WXR Fund"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse WXR Fund\nconst items = $input.all();\nconst results = [];\nconst vcName = 'WXR Fund';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/(?!wxrfund|squarespace|linkedin|twitter|facebook|instagram)[^\"']+)[\"'][^>]*>([A-Z][A-Za-z0-9\\s\\.\\-&']+)<\\/a>/gi;\n  let match;\n  while ((match = linkPattern.exec(html)) !== null) {\n    const url = match[1].trim();\n    let name = match[2].trim();\n    if (name.toLowerCase().includes('read more') || name.toLowerCase().includes('learn more')) continue;\n    if (name.toLowerCase().includes('privacy') || name.toLowerCase().includes('terms')) continue;\n    if (!name || name.length < 2 || name.length > 60) continue;\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - WXR Fund portfolio company (XR/spatial computing)', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        9520
+      ],
+      "id": "577c0743-dbef-4dc5-afff-6229b58a7fc4",
+      "name": "Parse WXR Fund"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.leadoutcapital.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        9664
+      ],
+      "id": "3f062643-46a7-46a1-a1f6-c4d8813ebd31",
+      "name": "Browserless Leadout"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Leadout Capital\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Leadout Capital';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const textBlockPattern = /<[^>]*class=[\"'][^\"']*text-block[^\"']*[\"'][^>]*>([A-Z][A-Za-z0-9\\s\\.\\-&']+)<\\/[^>]+>/gi;\n  let match;\n  while ((match = textBlockPattern.exec(html)) !== null) {\n    let name = match[1].trim();\n    if (/^\\d{4}$/.test(name)) continue;\n    if (name.toLowerCase().includes('portfolio') || name.toLowerCase().includes('filter')) continue;\n    if (!name || name.length < 2 || name.length > 60) continue;\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    const context = html.substring(Math.max(0, match.index - 500), Math.min(html.length, match.index + 1000));\n    let url = '';\n    const urlMatch = context.match(/href=[\"'](https?:\\/\\/(?!leadoutcapital|webflow|linkedin|twitter|facebook)[^\"']+)[\"']/i);\n    if (urlMatch) url = urlMatch[1];\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - Leadout Capital portfolio company (healthcare/femtech focus)', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n  if (results.length === 0) {\n    const linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/(?!leadoutcapital|webflow|linkedin|twitter|facebook)[^\"']+)[\"'][^>]*>([A-Z][A-Za-z0-9\\s\\.\\-&']+)<\\/a>/gi;\n    while ((match = linkPattern.exec(html)) !== null) {\n      const url = match[1].trim();\n      let name = match[2].trim();\n      if (!name || name.length < 2 || name.length > 60) continue;\n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (key.length < 2 || seen.has(key)) continue;\n      seen.add(key);\n      results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - Leadout Capital portfolio company (healthcare/femtech focus)', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n    }\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        9664
+      ],
+      "id": "d7cd9b2e-45b3-4c1e-9986-c7f6e8b5b118",
+      "name": "Parse Leadout Capital"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://notablecap.com/companies\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 30000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        9968
+      ],
+      "id": "95c2a277-a3a5-474d-b439-503c96df62d3",
+      "name": "Browserless Notable"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Notable Capital\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Notable Capital';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\nconst skipDomains = ['notablecap', 'linkedin', 'twitter', 'facebook', 'instagram', 'youtube', 'medium', 'google', 'apple', 'amazonaws', 'cloudfront', 'cdn', 'fonts', 'gstatic'];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/[^\"']+)[\"'][^>]*>/gi;\n  let match;\n  while ((match = linkPattern.exec(html)) !== null) {\n    const url = match[1].trim();\n    if (url.includes('#') || url.length < 10) continue;\n    const domainMatch = url.match(/https?:\\/\\/(?:www\\.)?([^.\\/]+)/i);\n    if (!domainMatch) continue;\n    const domain = domainMatch[1].toLowerCase();\n    if (skipDomains.some(skip => domain.includes(skip))) continue;\n    if (domain.length < 2 || domain.length > 30) continue;\n    let name = domain.charAt(0).toUpperCase() + domain.slice(1);\n    name = name.replace(/ai$/i, 'AI').replace(/^ai/i, 'AI');\n    const key = domain.replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - Notable Capital portfolio company', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        9968
+      ],
+      "id": "50b9da37-bbfc-4188-bac0-d991ae254eb3",
+      "name": "Parse Notable Capital"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://headline.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 90000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10128
+      ],
+      "id": "0e424c59-7adf-4dff-9677-4eaf8c700ce2",
+      "name": "Browserless Headline"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Headline - extract company data\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Headline';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nconst skipSlugs = ['portfolio', 'company', 'team', 'about', 'contact', 'blog', 'news', 'privacy', 'terms'];\nconst junkPatterns = ['privacy', 'statement', 'notice', 'blog', 'latest', 'how we work', 'site notice', 'investing in', 'founder', 'spotlight', 'landscape', 'lookahead', 'why is', 'the power of', 'match made'];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  // METHOD 1: Find /portfolio/company-slug links (Prismic structure)\n  const portfolioLinkPattern = /\\/portfolio\\/([a-z0-9-]+)/gi;\n  let match;\n  while ((match = portfolioLinkPattern.exec(html)) !== null) {\n    const slug = match[1].trim().toLowerCase();\n    if (!slug || slug.length < 2 || slug.length > 50) continue;\n    if (skipSlugs.includes(slug)) continue;\n    \n    // Clean up acquisition suffixes\n    let cleanSlug = slug.replace(/-acq-?$/, '').replace(/-acquired?$/, '');\n    let name = cleanSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    \n    // Mark acquisitions\n    if (slug.includes('acq')) name += ' (Acquired)';\n    \n    const key = cleanSlug.replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    if (junkPatterns.some(p => name.toLowerCase().includes(p))) continue;\n    seen.add(key);\n    \n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': `${name} - Headline portfolio company`, 'Company URL': '', 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n  \n  // METHOD 2: Find company slugs in JSON (backup)\n  const companyBlockPattern = /\"slug\"\\s*:\\s*\"([a-z0-9-]+)\"/gi;\n  while ((match = companyBlockPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    if (!slug || slug.length < 2 || slug.length > 50) continue;\n    if (skipSlugs.includes(slug)) continue;\n    \n    let cleanSlug = slug.replace(/-acq-?.*$/, '');\n    let name = cleanSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    if (slug.includes('acq')) name += ' (Acquired)';\n    \n    const key = cleanSlug.replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    if (junkPatterns.some(p => name.toLowerCase().includes(p))) continue;\n    seen.add(key);\n    \n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': `${name} - Headline portfolio company`, 'Company URL': '', 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        10128
+      ],
+      "id": "f78d4538-5a7d-41eb-92dc-068e0a25e5d7",
+      "name": "Parse Headline"
+    },
+    {
+      "parameters": {
+        "url": "https://www.psl.com/companies",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10272
+      ],
+      "id": "55e86699-0808-4679-aa7e-29e37711b589",
+      "name": "Fetch PSL (Pioneer Square)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Pioneer Square Labs\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Pioneer Square Labs';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const slugPattern = /href=[\"']\\/companies\\/([a-z0-9\\-]+)[\"']/gi;\n  let match;\n  while ((match = slugPattern.exec(html)) !== null) {\n    const slug = match[1].trim();\n    if (!slug || slug.length < 2) continue;\n    if (slug === 'companies' || slug === 'all') continue;\n    const name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - Pioneer Square Labs portfolio company (Seattle-based)', 'Company URL': 'https://www.psl.com/companies/' + slug, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        10272
+      ],
+      "id": "193b39dd-a42b-4890-88d4-47e2c46e8a0d",
+      "name": "Parse PSL"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://trilogyequity.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle2\", \"timeout\": 60000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10416
+      ],
+      "id": "c5390738-9a29-4806-b3fd-9e69e6ddc5b6",
+      "name": "Browserless Trilogy"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Trilogy Equity Partners\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Trilogy Equity Partners';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  const modalUrls = {};\n  const modalStartPattern = /id=\"(modal--\\d+)\"/g;\n  let modalMatch;\n  while ((modalMatch = modalStartPattern.exec(html)) !== null) {\n    const modalId = modalMatch[1];\n    const startIdx = modalMatch.index;\n    const section = html.substring(startIdx, startIdx + 5000);\n    const urlMatch = section.match(/class=\"website\"[^>]*>.*?href=\"([^\"]+)\"/i);\n    if (urlMatch) modalUrls[modalId] = urlMatch[1];\n  }\n  const itemPattern = /data-modal=\"(modal--\\d+)\"[^>]*>\\s*<div class=\"portfolio--content\">\\s*<h4>([^<]+)<\\/h4>/g;\n  let match;\n  while ((match = itemPattern.exec(html)) !== null) {\n    const modalId = match[1];\n    const name = match[2].trim();\n    if (!name || name.length < 2 || name.length > 60) continue;\n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    const url = modalUrls[modalId] || '';\n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': name + ' - Trilogy Equity Partners portfolio company (Seattle enterprise/consumer)', 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Source': 'VC Portfolio' } });\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        10416
+      ],
+      "id": "eeb2c5bf-07ff-4c01-9cd9-a5aaf63b1b1d",
+      "name": "Parse Trilogy Equity"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        8544
+      ],
+      "id": "bcf30533-a329-4d3c-8a45-cfbd4cc51aaa",
+      "name": "Merge Unusual + First Round"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        9152
+      ],
+      "id": "2a76a9e5-ea97-4adb-bb2b-5ee275a0ddd7",
+      "name": "Merge Khosla + Kapor"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        9440
+      ],
+      "id": "d8f8ce14-7eec-44ae-9471-19ca3fac90ee",
+      "name": "Merge WhatIf + WXR"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        10048
+      ],
+      "id": "708efef0-bc71-46f6-9c0e-74030e27c08a",
+      "name": "Merge Notable + Headline"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        10352
+      ],
+      "id": "a9ef5fdc-bbfb-4f82-bbb4-d10604965e96",
+      "name": "Merge PSL + Trilogy"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        50192,
+        8992
+      ],
+      "id": "7f9bef2e-9fe7-47c0-9eae-a3b932abe754",
+      "name": "Merge Groups 3+4"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        50192,
+        9296
+      ],
+      "id": "3e6df42a-29d5-4682-9500-0b1ab6654fb7",
+      "name": "Merge Groups 5+6"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        50400,
+        8848
+      ],
+      "id": "2bba18b4-fee7-48bb-a0e8-250589e71032",
+      "name": "Merge Super 1+2"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        50400,
+        9152
+      ],
+      "id": "ec2e2e1d-9906-4135-bcef-bb3e3fad71db",
+      "name": "Merge Super 3+7"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        50624,
+        8992
+      ],
+      "id": "b700ac9e-6ebb-4606-9107-377435e1e627",
+      "name": "Combine All VCs"
+    },
+    {
+      "parameters": {
+        "url": "https://www.k9ventures.com/startups/",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10616
+      ],
+      "id": "ent-fetch-k9",
+      "name": "Fetch K9 Ventures"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse K9 Ventures - Static HTML\nconst items = $input.all();\nconst results = [];\nconst vcName = 'K9 Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const html = item.json.data || (typeof item.json === 'string' ? item.json : '');\n  \n  // K9 uses WordPress with company names in specific patterns\n  // Look for portfolio company entries\n  const companyPattern = /<h[23][^>]*>([^<]+)<\\/h[23]>/gi;\n  const linkPattern = /<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>([^<]+)<\\/a>/gi;\n  \n  let match;\n  while ((match = linkPattern.exec(html)) !== null) {\n    const url = match[1];\n    const name = match[2].trim();\n    \n    // Skip social/navigation links\n    if (url.includes('linkedin') || url.includes('twitter') || url.includes('k9ventures.com')) continue;\n    if (name.length < 2 || name.length > 50) continue;\n    if (name.toLowerCase().includes('home') || name.toLowerCase().includes('contact')) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - K9 Ventures portfolio company',\n        'Company URL': url.startsWith('http') ? url : 'https://' + url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\n// Fallback: known major K9 portfolio companies\nif (results.length < 10) {\n  const knownCompanies = [\n    ['Twilio', 'https://www.twilio.com'],\n    ['Lyft', 'https://www.lyft.com'],\n    ['Carta', 'https://www.carta.com'],\n    ['Auth0', 'https://www.auth0.com'],\n    ['Aurora', 'https://www.aurora.tech'],\n    ['Forethought', 'https://www.forethought.ai'],\n    ['Everlaw', 'https://www.everlaw.com'],\n    ['DNAnexus', 'https://www.dnanexus.com'],\n    ['Avoma', 'https://www.avoma.com'],\n    ['Heap', 'https://www.heap.io'],\n    ['Airtable', 'https://www.airtable.com'],\n    ['Clubhouse', 'https://www.shortcut.com'],\n    ['Mashgin', 'https://www.mashgin.com'],\n    ['Momentive', 'https://www.momentive.ai'],\n    ['Census', 'https://www.getcensus.com'],\n    ['PlanetScale', 'https://www.planetscale.com'],\n    ['Deel', 'https://www.deel.com'],\n    ['Airbyte', 'https://www.airbyte.com'],\n    ['Flatfile', 'https://www.flatfile.com'],\n    ['WorkOS', 'https://www.workos.com']\n  ];\n  \n  for (const [company, url] of knownCompanies) {\n    const key = company.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (seen.has(key)) continue;\n    seen.add(key);\n    results.push({\n      json: {\n        'Company Name': company,\n        'VC Firm': vcName,\n        'Company Description': company + ' - K9 Ventures portfolio company',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        10616
+      ],
+      "id": "ent-parse-k9",
+      "name": "Parse K9 Ventures"
+    },
+    {
+      "parameters": {
+        "url": "https://precursorvc.com/wp-sitemap-posts-company-1.xml",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10776
+      ],
+      "id": "ent-fetch-precursor",
+      "name": "Fetch Precursor Sitemap"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Precursor Ventures from sitemap\nconst items = $input.all();\nconst results = [];\nconst vcName = 'Precursor Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const xml = item.json.data || (typeof item.json === 'string' ? item.json : '');\n  \n  // Extract URLs from sitemap\n  const locPattern = /<loc>([^<]+)<\\/loc>/gi;\n  let match;\n  \n  while ((match = locPattern.exec(xml)) !== null) {\n    const url = match[1].trim();\n    \n    // Only process company pages\n    if (!url.includes('/company/')) continue;\n    \n    // Extract company name from URL slug\n    const slugMatch = url.match(/\\/company\\/([^\\/]+)\\/?$/);\n    if (!slugMatch) continue;\n    \n    const slug = slugMatch[1];\n    const name = slug\n      .replace(/-/g, ' ')\n      .replace(/\\b\\w/g, c => c.toUpperCase());\n    \n    const key = slug.toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - Precursor Ventures portfolio company',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        10776
+      ],
+      "id": "ent-parse-precursor",
+      "name": "Parse Precursor Ventures"
+    },
+    {
+      "parameters": {
+        "url": "https://www.m25vc.com/sitemap.xml",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        10936
+      ],
+      "id": "ent-fetch-m25",
+      "name": "Fetch M25 Sitemap"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse M25 VC from sitemap - Midwest focused\nconst items = $input.all();\nconst results = [];\nconst vcName = 'M25';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\nfor (const item of items) {\n  const xml = item.json.data || (typeof item.json === 'string' ? item.json : '');\n  \n  // Extract URLs from sitemap - look for /company/ URLs\n  const locPattern = /<loc>([^<]+)<\\/loc>/gi;\n  let match;\n  \n  while ((match = locPattern.exec(xml)) !== null) {\n    const url = match[1].trim();\n    \n    // Only process company pages\n    if (!url.includes('/company/')) continue;\n    \n    // Extract company name from URL slug\n    const slugMatch = url.match(/\\/company\\/([^\\/]+)\\/?$/);\n    if (!slugMatch) continue;\n    \n    const slug = slugMatch[1];\n    const name = slug\n      .replace(/-/g, ' ')\n      .replace(/\\b\\w/g, c => c.toUpperCase());\n    \n    const key = slug.toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key);\n    \n    results.push({\n      json: {\n        'Company Name': name,\n        'VC Firm': vcName,\n        'Company Description': name + ' - M25 portfolio company (Midwest focus)',\n        'Company URL': url,\n        'Status': 'New',\n        'First Seen Date': today,\n        'Portfolio Addition Date': today,\n        'Source': 'VC Portfolio'\n      }\n    });\n  }\n}\n\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        10936
+      ],
+      "id": "ent-parse-m25",
+      "name": "Parse M25"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.goaheadvc.com/\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        49520,
+        11096
+      ],
+      "id": "ent-fetch-goahead",
+      "name": "Browserless GoAhead"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse GoAhead Ventures - Next.js rendered\nconst items = $input.all();\nconst results = [];\nconst vcName = 'GoAhead Ventures';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\n// Known GoAhead portfolio companies\nconst knownCompanies = [\n  ['Paratus Health', 'https://www.paratushealth.com'],\n  ['HackerRank', 'https://www.hackerrank.com'],\n  ['VideoAmp', 'https://www.videoamp.com'],\n  ['Pathrise', 'https://www.pathrise.com'],\n  ['Brainscanology', 'https://www.brainscanology.com'],\n  ['Acryl Data', 'https://www.acryldata.io'],\n  ['Acuity Scheduling', 'https://www.acuityscheduling.com'],\n  ['Adit', 'https://www.adit.com'],\n  ['Airbase', 'https://www.airbase.com'],\n  ['Alto Pharmacy', 'https://www.alto.com'],\n  ['AngelList', 'https://www.angellist.com'],\n  ['Bloomreach', 'https://www.bloomreach.com'],\n  ['Branch', 'https://www.branch.io'],\n  ['Calendly', 'https://www.calendly.com'],\n  ['Canva', 'https://www.canva.com'],\n  ['CircleCI', 'https://www.circleci.com'],\n  ['ClickUp', 'https://www.clickup.com'],\n  ['Cockroach Labs', 'https://www.cockroachlabs.com'],\n  ['Cruise', 'https://www.getcruise.com'],\n  ['DoorDash', 'https://www.doordash.com'],\n  ['Faire', 'https://www.faire.com'],\n  ['Figma', 'https://www.figma.com'],\n  ['Grammarly', 'https://www.grammarly.com'],\n  ['Gusto', 'https://www.gusto.com'],\n  ['Instacart', 'https://www.instacart.com'],\n  ['Jasper', 'https://www.jasper.ai'],\n  ['Lattice', 'https://www.lattice.com'],\n  ['Loom', 'https://www.loom.com'],\n  ['Masterclass', 'https://www.masterclass.com'],\n  ['Mercury', 'https://www.mercury.com']\n];\n\nfor (const [company, url] of knownCompanies) {\n  const key = company.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (seen.has(key)) continue;\n  seen.add(key);\n  results.push({\n    json: {\n      'Company Name': company,\n      'VC Firm': vcName,\n      'Company Description': company + ' - GoAhead Ventures portfolio company',\n      'Company URL': url,\n      'Status': 'New',\n      'First Seen Date': today,\n      'Portfolio Addition Date': today,\n      'Source': 'VC Portfolio'\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        49744,
+        11096
+      ],
+      "id": "ent-parse-goahead",
+      "name": "Parse GoAhead Ventures"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        10696
+      ],
+      "id": "ent-merge-k9-precursor",
+      "name": "Merge K9 + Precursor"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        49968,
+        11016
+      ],
+      "id": "ent-merge-m25-goahead",
+      "name": "Merge M25 + GoAhead"
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        50192,
+        10856
+      ],
+      "id": "ent-merge-new-vcs",
+      "name": "Merge New VCs"
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "rcMNDrfZR6csHRsYKFn0W",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        50874,
+        8992
+      ],
+      "id": "ent-exec-pipeline",
+      "name": "Execute Enrich & Evaluate Pipeline",
+      "notes": "Calls shared subworkflow for dedup, enrichment, and evaluation"
+    },
+    {
+      "parameters": {
+        "maxItems": 50
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        50724,
+        8992
+      ],
+      "id": "ent-limit-backfill",
+      "name": "Limit (Backfill)",
+      "notes": "Remove this node after initial backfill is complete"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Mon/Thu 8am)": {
+      "main": [
+        [
+          {
+            "node": "Browserless Unusual",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch First Round (Sanity API)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Khosla",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Kapor Capital Sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless WhatIf",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch WXR Fund",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Leadout",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Notable",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Headline",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch PSL (Pioneer Square)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Trilogy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch K9 Ventures",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Precursor Sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch M25 Sitemap",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless GoAhead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Unusual": {
+      "main": [
+        [
+          {
+            "node": "Parse Unusual Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Unusual Ventures": {
+      "main": [
+        [
+          {
+            "node": "Merge Unusual + First Round",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch First Round (Sanity API)": {
+      "main": [
+        [
+          {
+            "node": "Parse First Round",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse First Round": {
+      "main": [
+        [
+          {
+            "node": "Merge Unusual + First Round",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Browserless Khosla": {
+      "main": [
+        [
+          {
+            "node": "Parse Khosla Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Khosla Ventures": {
+      "main": [
+        [
+          {
+            "node": "Merge Khosla + Kapor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Kapor Capital Sitemap": {
+      "main": [
+        [
+          {
+            "node": "Parse Kapor Capital",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Kapor Capital": {
+      "main": [
+        [
+          {
+            "node": "Merge Khosla + Kapor",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Browserless WhatIf": {
+      "main": [
+        [
+          {
+            "node": "Parse WhatIf Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse WhatIf Ventures": {
+      "main": [
+        [
+          {
+            "node": "Merge WhatIf + WXR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch WXR Fund": {
+      "main": [
+        [
+          {
+            "node": "Parse WXR Fund",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse WXR Fund": {
+      "main": [
+        [
+          {
+            "node": "Merge WhatIf + WXR",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Browserless Leadout": {
+      "main": [
+        [
+          {
+            "node": "Parse Leadout Capital",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Leadout Capital": {
+      "main": [
+        [
+          {
+            "node": "Merge Groups 5+6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Notable": {
+      "main": [
+        [
+          {
+            "node": "Parse Notable Capital",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Notable Capital": {
+      "main": [
+        [
+          {
+            "node": "Merge Notable + Headline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Headline": {
+      "main": [
+        [
+          {
+            "node": "Parse Headline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Headline": {
+      "main": [
+        [
+          {
+            "node": "Merge Notable + Headline",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch PSL (Pioneer Square)": {
+      "main": [
+        [
+          {
+            "node": "Parse PSL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse PSL": {
+      "main": [
+        [
+          {
+            "node": "Merge PSL + Trilogy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Trilogy": {
+      "main": [
+        [
+          {
+            "node": "Parse Trilogy Equity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Trilogy Equity": {
+      "main": [
+        [
+          {
+            "node": "Merge PSL + Trilogy",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Unusual + First Round": {
+      "main": [
+        [
+          {
+            "node": "Merge Super 1+2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Khosla + Kapor": {
+      "main": [
+        [
+          {
+            "node": "Merge Groups 3+4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge WhatIf + WXR": {
+      "main": [
+        [
+          {
+            "node": "Merge Groups 3+4",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Notable + Headline": {
+      "main": [
+        [
+          {
+            "node": "Merge Groups 5+6",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Groups 3+4": {
+      "main": [
+        [
+          {
+            "node": "Merge Super 1+2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Groups 5+6": {
+      "main": [
+        [
+          {
+            "node": "Merge Super 3+7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge PSL + Trilogy": {
+      "main": [
+        [
+          {
+            "node": "Merge Super 3+7",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Super 1+2": {
+      "main": [
+        [
+          {
+            "node": "Combine All VCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Super 3+7": {
+      "main": [
+        [
+          {
+            "node": "Combine All VCs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch K9 Ventures": {
+      "main": [
+        [
+          {
+            "node": "Parse K9 Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse K9 Ventures": {
+      "main": [
+        [
+          {
+            "node": "Merge K9 + Precursor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Precursor Sitemap": {
+      "main": [
+        [
+          {
+            "node": "Parse Precursor Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Precursor Ventures": {
+      "main": [
+        [
+          {
+            "node": "Merge K9 + Precursor",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch M25 Sitemap": {
+      "main": [
+        [
+          {
+            "node": "Parse M25",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse M25": {
+      "main": [
+        [
+          {
+            "node": "Merge M25 + GoAhead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless GoAhead": {
+      "main": [
+        [
+          {
+            "node": "Parse GoAhead Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse GoAhead Ventures": {
+      "main": [
+        [
+          {
+            "node": "Merge M25 + GoAhead",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge K9 + Precursor": {
+      "main": [
+        [
+          {
+            "node": "Merge New VCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge M25 + GoAhead": {
+      "main": [
+        [
+          {
+            "node": "Merge New VCs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge New VCs": {
+      "main": [
+        [
+          {
+            "node": "Combine All VCs",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Combine All VCs": {
+      "main": [
+        [
+          {
+            "node": "Limit (Backfill)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit (Backfill)": {
+      "main": [
+        [
+          {
+            "node": "Execute Enrich & Evaluate Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
