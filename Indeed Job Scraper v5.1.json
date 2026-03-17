@@ -1,5 +1,5 @@
 {
-  "name": "Indeed Job Scraper v5",
+  "name": "Indeed Job Scraper v5.1",
   "nodes": [
     {
       "parameters": {
@@ -64,7 +64,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// v5: Query rotation with builder-language searches\nconst tokenItem = $input.first();\nconst token = tokenItem?.json?.fields?.Value || tokenItem?.json?.Value || '';\n\n// Query definitions with priority tiers\nconst queries = [\n  // HIGH PRIORITY (run daily) - Title-based\n  { id: 'q1', query: 'Head of Customer Support B2B SaaS', priority: 'high' },\n  { id: 'q2', query: 'Director Customer Support SaaS startup', priority: 'high' },\n  { id: 'q3', query: 'Director Customer Support healthcare SaaS', priority: 'high' },\n  { id: 'q4', query: 'Head of Customer Support developer tools', priority: 'high' },\n  // HIGH PRIORITY (run daily) - Builder language\n  { id: 'q9', query: '\"founding\" customer success SaaS', priority: 'high' },\n  { id: 'q10', query: '\"first hire\" customer support SaaS', priority: 'high' },\n  { id: 'q11', query: '\"build\" customer support team startup', priority: 'high' },\n  // MEDIUM PRIORITY (every 2 days)\n  { id: 'q5', query: 'Head of Customer Experience B2B SaaS', priority: 'medium' },\n  { id: 'q6', query: 'VP Customer Support SaaS', priority: 'medium' },\n  { id: 'q7', query: 'Head of Support SaaS startup', priority: 'medium' },\n  { id: 'q12', query: '\"ground up\" customer success startup', priority: 'medium' },\n  { id: 'q13', query: '\"0 to 1\" customer success', priority: 'medium' },\n  { id: 'q14', query: '\"first customer success\" hire startup', priority: 'medium' },\n  // LOW PRIORITY (every 3 days)\n  { id: 'q8', query: 'founding support leader SaaS', priority: 'low' },\n  { id: 'q15', query: '\"build customer support from scratch\"', priority: 'low' }\n];\n\n// Determine which queries to run based on day\nconst dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);\nconst runHigh = true; // Always run high priority\nconst runMedium = dayOfYear % 2 === 0; // Every 2 days\nconst runLow = dayOfYear % 3 === 0; // Every 3 days\n\nconst todaysQueries = queries.filter(q => {\n  if (q.priority === 'high') return runHigh;\n  if (q.priority === 'medium') return runMedium;\n  if (q.priority === 'low') return runLow;\n  return false;\n});\n\n// Return all queries for this run\nreturn todaysQueries.map(q => ({\n  json: {\n    browserlessToken: token,\n    searchUrl: `https://www.indeed.com/jobs?q=${encodeURIComponent(q.query)}&l=remote&fromage=7&remotejob=032b3046-06a3-4876-8dfd-474eb5e7ed11`,\n    queryId: q.id,\n    queryText: q.query,\n    priority: q.priority,\n    isBuilderQuery: q.id >= 'q9'\n  }\n}));"
+        "jsCode": "// v5.1: Query rotation with builder-language searches (Opus fixes)\nconst tokenItem = $input.first();\nconst token = tokenItem?.json?.fields?.Value || tokenItem?.json?.Value || '';\n\n// CRITICAL: Early termination if token missing\nif (!token) {\n  return [{ json: { _error: 'BROWSERLESS_TOKEN not found in Config table', _fatal: true } }];\n}\n\n// Query definitions with priority tiers\nconst queries = [\n  // HIGH PRIORITY (run daily) - Title-based\n  { id: 'q1', query: 'Head of Customer Support B2B SaaS', priority: 'high' },\n  { id: 'q2', query: 'Director Customer Support SaaS startup', priority: 'high' },\n  { id: 'q3', query: 'Director Customer Support healthcare SaaS', priority: 'high' },\n  { id: 'q4', query: 'Head of Customer Support developer tools', priority: 'high' },\n  // HIGH PRIORITY (run daily) - Builder language\n  { id: 'q9', query: '\"founding\" customer success SaaS', priority: 'high' },\n  { id: 'q10', query: '\"first hire\" customer support SaaS', priority: 'high' },\n  { id: 'q11', query: '\"build\" customer support team startup', priority: 'high' },\n  // MEDIUM PRIORITY (every 2 days)\n  { id: 'q5', query: 'Head of Customer Experience B2B SaaS', priority: 'medium' },\n  { id: 'q6', query: 'VP Customer Support SaaS', priority: 'medium' },\n  { id: 'q7', query: 'Head of Support SaaS startup', priority: 'medium' },\n  { id: 'q12', query: '\"ground up\" customer success startup', priority: 'medium' },\n  { id: 'q13', query: '\"0 to 1\" customer success', priority: 'medium' },\n  { id: 'q14', query: '\"first customer success\" hire startup', priority: 'medium' },\n  // LOW PRIORITY (every 3 days)\n  { id: 'q8', query: 'founding support leader SaaS', priority: 'low' },\n  { id: 'q15', query: '\"build customer support from scratch\"', priority: 'low' }\n];\n\n// Determine which queries to run based on day\nconst dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);\nconst runHigh = true; // Always run high priority\nconst runMedium = dayOfYear % 2 === 0; // Every 2 days\nconst runLow = dayOfYear % 3 === 0; // Every 3 days\n\nconst todaysQueries = queries.filter(q => {\n  if (q.priority === 'high') return runHigh;\n  if (q.priority === 'medium') return runMedium;\n  if (q.priority === 'low') return runLow;\n  return false;\n});\n\n// Return all queries for this run\nreturn todaysQueries.map(q => ({\n  json: {\n    browserlessToken: token,\n    searchUrl: `https://www.indeed.com/jobs?q=${encodeURIComponent(q.query)}&l=remote&fromage=7&remotejob=032b3046-06a3-4876-8dfd-474eb5e7ed11`,\n    queryId: q.id,\n    queryText: q.query,\n    priority: q.priority,\n    isBuilderQuery: parseInt(q.id.slice(1)) >= 9\n  }\n}));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -102,7 +102,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// v5: Parse Indeed response with query tracking\nconst item = $input.first().json;\nconst response = item.data || item;\nconst queryId = item.queryId || $('Build Search Query').first()?.json?.queryId || 'unknown';\nconst queryText = item.queryText || $('Build Search Query').first()?.json?.queryText || '';\nconst isBuilderQuery = item.isBuilderQuery || $('Build Search Query').first()?.json?.isBuilderQuery || false;\n\nif (response.error) {\n  return [{ json: { _error: response.error, queryId } }];\n}\n\nconst jobs = response.jobs || [];\n\nif (jobs.length === 0) {\n  return [{ json: { _empty: true, _message: 'No jobs found', queryId } }];\n}\n\nconst supportKeywords = ['support', 'success', 'customer', 'client', 'cx', 'experience'];\nconst leadershipKeywords = ['head', 'director', 'vp', 'vice president', 'chief', 'lead', 'manager', 'supervisor', 'founding', 'first'];\n\nconst filtered = jobs.filter(job => {\n  const title = (job.title || '').toLowerCase();\n  return supportKeywords.some(kw => title.includes(kw)) && leadershipKeywords.some(kw => title.includes(kw));\n});\n\nif (filtered.length === 0) {\n  return [{ json: { _empty: true, _rawCount: jobs.length, queryId } }];\n}\n\nreturn filtered.map(job => ({\n  json: {\n    'Job Title': job.title,\n    'Company': job.company,\n    'Location': job.location,\n    'Source': 'Indeed',\n    'Job URL': job.url,\n    'Job ID': job.jobId,\n    'Salary Info': job.salary,\n    'Date Found': new Date().toISOString().split('T')[0],\n    'Review Status': 'New',\n    '_queryId': queryId,\n    '_queryText': queryText,\n    '_isBuilderQuery': isBuilderQuery\n  }\n}));"
+        "jsCode": "// v5.1: Parse Indeed response with query tracking (Opus fixes)\nconst item = $input.first().json;\nconst response = item.data || item;\n\n// Get query metadata from current batch item, not Build Search Query (which returns first item only)\nconst batchItem = $('Query Batches').first()?.json || {};\nconst queryId = response.queryId || batchItem.queryId || 'unknown';\nconst queryText = batchItem.queryText || '';\nconst isBuilderQuery = batchItem.isBuilderQuery || false;\n\nif (response.error) {\n  console.log('Query failed:', queryId, response.error);\n  return [{ json: { _error: response.error, queryId, timestamp: new Date().toISOString() } }];\n}\n\nconst jobs = response.jobs || [];\n\nif (jobs.length === 0) {\n  return [{ json: { _empty: true, _message: 'No jobs found', queryId } }];\n}\n\nconst supportKeywords = ['support', 'success', 'customer', 'client', 'cx', 'experience'];\nconst leadershipKeywords = ['head', 'director', 'vp', 'vice president', 'chief', 'lead', 'manager', 'supervisor', 'founding', 'first'];\n\nconst filtered = jobs.filter(job => {\n  const title = (job.title || '').toLowerCase();\n  return supportKeywords.some(kw => title.includes(kw)) && leadershipKeywords.some(kw => title.includes(kw));\n});\n\nif (filtered.length === 0) {\n  return [{ json: { _empty: true, _rawCount: jobs.length, queryId } }];\n}\n\nreturn filtered.map(job => ({\n  json: {\n    'Job Title': job.title,\n    'Company': job.company,\n    'Location': job.location,\n    'Source': 'Indeed',\n    'Job URL': job.url,\n    'Job ID': job.jobId,\n    'Salary Info': job.salary,\n    'Date Found': new Date().toISOString().split('T')[0],\n    'Review Status': 'New',\n    '_queryId': queryId,\n    '_queryText': queryText,\n    '_isBuilderQuery': isBuilderQuery\n  }\n}));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -173,13 +173,13 @@
     },
     {
       "parameters": {
-        "amount": 5
+        "amount": 10
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [-300, 100],
       "id": "a13",
-      "name": "Wait 5s"
+      "name": "Wait 10s"
     },
     {
       "parameters": {
@@ -208,6 +208,16 @@
       "position": [-100, 300],
       "id": "a15",
       "name": "Collect All Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull all accumulated jobs from Collect All Jobs when loop completes\nconst allJobs = $('Collect All Jobs').all();\nif (allJobs.length === 0) {\n  return [{ json: { _empty: true, _message: 'No jobs collected from any query' } }];\n}\nreturn allJobs;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-100, 100],
+      "id": "a16",
+      "name": "Get All Collected Jobs"
     }
   ],
   "connections": {
@@ -310,6 +320,17 @@
         ],
         [
           {
+            "node": "Get All Collected Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Collected Jobs": {
+      "main": [
+        [
+          {
             "node": "Merge for Dedup",
             "type": "main",
             "index": 0
@@ -319,13 +340,7 @@
     },
     "Collect All Jobs": {
       "main": [
-        [
-          {
-            "node": "Merge for Dedup",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "Get Existing Indeed Jobs": {
