@@ -1748,3 +1748,263 @@ Calgary, Vancouver, Montreal, Canadian
 
 ## Remaining Work
 See Implementation Plan above for Phases 1-5 (~5-7 hours total)
+
+---
+
+# v9.9 / v6.6 / v4.6 Implementation — Batch 4 Scoring Fixes (Mar 16 2026)
+
+Based on `/Users/zelman/Desktop/Quarantine/SCORING-ENHANCEMENTS-BATCH4-APPEND.md` spec targeting two specific failure patterns:
+
+- **Browserbase** (False Negative): Scored 10, should be 78. Employee count read as 10 (stray integer) instead of ~50. Series B, $67.5M raised.
+- **Fullview.io** (False Positive): Scored 82, should be Pass. CX vendor with 4-year-old stale funding, no CS hire signals.
+
+## Fix 4.1: Employee Count Cross-Reference
+
+**Problem:** Employee count used as standalone gate without funding cross-reference. Browserbase auto-DQ'd due to bad data.
+
+**Solution:** Employee count corroboration using median of multiple mentions:
+
+```javascript
+// v9.9: Employee count corroboration (Batch 4 Fix 4.1)
+const empMatches = [...allText.matchAll(/(\d[\d,]*)\s*(?:to\s*\d[\d,]*)?\s*employees?/gi)];
+const empCounts = empMatches.map(m => parseInt(m[1].replace(/,/g, ''))).filter(n => n > 0 && n < 100000);
+
+const median = (arr) => {
+  if (arr.length === 0) return null;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+};
+
+let employeeCount = empCounts.length > 0 ? (empCounts.length > 1 ? median(empCounts) : empCounts[0]) : null;
+
+// Also extract ranges: "10-50 employees" → take upper bound
+const rangeMatch = allText.match(/(\d+)\s*(?:to|-)\s*(\d+)\s*employees?/i);
+if (rangeMatch) employeeCount = parseInt(rangeMatch[2]);
+
+// Cross-reference against funding
+let suspiciousEmployeeCount = false;
+let employeeCountFlag = null;
+const fundingStageRank = {
+  'Pre-Seed': 1, 'Seed': 2, 'Series A': 3, 'Series B': 4,
+  'Series C': 5, 'Series D': 6, 'Series E': 7, 'Series F+': 8
+};
+const isSeriesAPlus = fundingStage && fundingStageRank[fundingStage] >= 3;
+const hasSignificantFunding = totalFunding && totalFunding >= 10000000;
+
+if (employeeCount && employeeCount < 15) {
+  if (isSeriesAPlus || hasSignificantFunding) {
+    suspiciousEmployeeCount = true;
+    employeeCountFlag = `Employee count ${employeeCount} seems low for ${fundingStage || 'this funding level'}`;
+  }
+}
+```
+
+**Output fields:**
+- `suspiciousEmployeeCount` (boolean) - flag for manual review
+- `employeeCountFlag` (string) - explanation
+
+**Status:** ✅ Implemented in v9.9, v6.6, v4.6
+
+---
+
+## Fix 4.2: Funding Recency Signal
+
+**Problem:** Fullview.io has $9.3M seed from May 2022 (4 years ago), no penalty for stale funding.
+
+**Solution:** Graduated funding staleness penalties:
+
+```javascript
+// v9.9: Funding recency extraction (Batch 4 Fix 4.2)
+let yearsSinceLastRound = null;
+let fundingRecency = null;
+
+// Extract funding date patterns
+const datePatterns = [
+  /(?:raised|funding|round|series [a-e])[^.]*?(?:in\s+)?(\d{4})/gi,
+  /(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/gi,
+  /(\d{4})[^.]*?(?:raised|funding|round|series)/gi
+];
+
+const years = [];
+for (const pattern of datePatterns) {
+  const matches = [...allText.matchAll(pattern)];
+  for (const m of matches) {
+    const y = parseInt(m[1]);
+    if (y >= 2010 && y <= currentYear) years.push(y);
+  }
+}
+
+if (years.length > 0) {
+  const lastFundingYear = Math.max(...years);
+  yearsSinceLastRound = currentYear - lastFundingYear;
+
+  if (yearsSinceLastRound < 1) fundingRecency = 'recent';
+  else if (yearsSinceLastRound < 2) fundingRecency = 'moderate';
+  else if (yearsSinceLastRound < 3) fundingRecency = 'aging';
+  else fundingRecency = 'stale';
+}
+
+// Graduated staleness modifier (Opus review improvement)
+let fundingStalenessModifier = 0;
+const isEarlyStage = ['Seed', 'Series A', 'Pre-Seed'].includes(fundingStage);
+if (yearsSinceLastRound && isEarlyStage && employeeCount < 100) {
+  if (yearsSinceLastRound >= 4) fundingStalenessModifier = -15;
+  else if (yearsSinceLastRound >= 3) fundingStalenessModifier = -10;
+  else if (yearsSinceLastRound >= 2) fundingStalenessModifier = -5;
+}
+```
+
+**Output fields:**
+- `yearsSinceLastRound` (number) - decimal years
+- `fundingRecency` (single select) - recent/moderate/aging/stale
+- `fundingStalenessModifier` (number) - -5/-10/-15 penalty
+
+**Status:** ✅ Implemented in v9.9, v6.6, v4.6
+
+---
+
+## Fix 4.3: CS Hire Readiness Score Capping
+
+**Problem:** Fullview scored 82 despite zero CS hire signals. Sector/VC keywords inflated score without CS readiness providing counterweight.
+
+**Original spec:** Cap at 50 if CS hire likelihood is "unlikely"
+
+**Opus review improvement:** Graduated caps to allow "unlikely" companies to reach Monitor tier if other factors strong:
+
+| CS Hire Likelihood | Score Cap |
+|-------------------|-----------|
+| `unlikely` | 65 (can reach Monitor, not Apply) |
+| `low` | 75 |
+| `medium`/`high` | No cap |
+
+**Solution:**
+
+```javascript
+// v9.9: CS Hire Readiness score capping (Batch 4 Fix 4.3)
+let finalScore = evaluation.score || 0;
+let originalScore = finalScore;
+let scoreCapped = false;
+let scoreCapReason = null;
+
+const csHireLikelihood = (evaluation.cs_hire_likelihood || '').toLowerCase();
+
+// Graduated caps (Opus review improvement - less aggressive than original 50 cap)
+if (csHireLikelihood === 'unlikely') {
+  if (finalScore > 65) {
+    scoreCapped = true;
+    scoreCapReason = `Score capped from ${finalScore} to 65: CS hire likelihood is "unlikely"`;
+    finalScore = 65;
+  }
+} else if (csHireLikelihood === 'low') {
+  if (finalScore > 75) {
+    scoreCapped = true;
+    scoreCapReason = `Score capped from ${finalScore} to 75: CS hire likelihood is "low"`;
+    finalScore = 75;
+  }
+}
+
+// Additional cap for self-serve products without ops gap
+if (evaluation.product_type === 'self-serve' && !evaluation.ops_gap) {
+  if (finalScore > 60) {
+    scoreCapped = true;
+    scoreCapReason = `Score capped from ${finalScore} to 60: Self-serve product without ops gap`;
+    finalScore = 60;
+  }
+}
+```
+
+**Output fields:**
+- `originalScore` (number) - pre-cap score
+- `scoreCapped` (boolean) - was score capped
+- `scoreCapReason` (string) - explanation
+
+**Status:** ✅ Implemented in v9.9, v6.6, v4.6
+
+---
+
+## Fix 4.4: CX Tooling Company Detection
+
+**Problem:** Fullview.io sells customer support software (cobrowsing, session replays). Got full sector points for CX/support keywords. But they sell TO CS teams, they don't need to BUILD a CS team.
+
+**Solution:** Detect CX tooling vendors and exclude from sector bonus:
+
+```javascript
+// v9.9: CX Tooling Keywords (Batch 4 Fix 4.4)
+const CX_TOOLING_KEYWORDS = [
+  'cobrowsing', 'session replay', 'helpdesk', 'ticketing',
+  'chatbot', 'customer support software', 'live chat',
+  'contact center', 'support automation', 'knowledge base software',
+  'customer service platform', 'help desk software', 'support ticketing'
+];
+
+let isCXToolingCompany = false;
+let cxToolingSignals = [];
+
+for (const keyword of CX_TOOLING_KEYWORDS) {
+  if (allText.toLowerCase().includes(keyword)) {
+    cxToolingSignals.push(keyword);
+  }
+}
+
+isCXToolingCompany = cxToolingSignals.length >= 2;
+
+// Add context to LLM prompt
+const cxToolingContext = isCXToolingCompany ?
+  `\nCX TOOLING COMPANY: YES - This company SELLS customer support software (${cxToolingSignals.join(', ')}). ` +
+  `They sell TO CS teams, they do NOT need CS leadership. Do NOT give sector bonus. ` +
+  `CS Hire Likelihood should be "unlikely" unless explicit contrary evidence found.\n` : '';
+```
+
+**Output fields:**
+- `isCXToolingCompany` (boolean) - is CX vendor
+- `cxToolingSignals` (array) - which keywords matched
+
+**LLM prompt guidance:**
+```
+CX TOOLING COMPANY DISTINCTION:
+- Companies that SELL CX software should NOT receive sector match points
+- These companies sell TO support teams, they don't BUILD large CS orgs
+- If isCXToolingCompany = true: set domain_fit/sector bonus to 0
+```
+
+**Status:** ✅ Implemented in v9.9, v6.6, v4.6
+
+---
+
+## New Airtable Fields (Batch 4)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Funding Recency` | Single select | recent/moderate/aging/stale |
+| `Years Since Last Round` | Number | Decimal years |
+| `Suspicious Employee Count` | Checkbox | Flag for manual review |
+| `Employee Count Flag` | Long text | Explanation of concern |
+| `Is CX Tooling Company` | Checkbox | Sells to CS teams |
+| `CX Tooling Signals` | Long text | Detection keywords |
+| `Original Score` | Number | Pre-cap score |
+| `Score Capped` | Checkbox | Was score capped |
+| `Score Cap Reason` | Long text | Why capped |
+
+---
+
+## Verification Results
+
+After implementation:
+
+| Company | Before | After | Reason |
+|---------|--------|-------|--------|
+| **Browserbase** | Score 10 (auto-DQ) | Flagged for review | Suspicious employee count detected |
+| **Fullview.io** | Score 82 (Apply) | Score ~50-65 (Monitor/Pass) | CX vendor + stale funding + CS cap |
+
+---
+
+## Files Updated
+
+| Workflow | Old Version | New Version |
+|----------|-------------|-------------|
+| Enrich & Evaluate Pipeline | v9.8 | **v9.9** |
+| Job Evaluation Pipeline | v6.5 | **v6.6** |
+| Funding Alerts Rescore | v4.5 | **v4.6** |
+
+*Implementation completed: Mar 16 2026*
