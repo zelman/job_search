@@ -35,7 +35,7 @@ The system is designed around a unique personal positioning framework called "Ti
 │                    ENRICHMENT & EVALUATION LAYER                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ COMPANIES: Enrich & Evaluate Pipeline v9 (6-Phase Architecture)       │  │
+│  │ COMPANIES: Enrich & Evaluate Pipeline v9.9 (6-Phase Architecture)     │  │
 │  │  Phase 0: Entity Validation (is this a company?)                      │  │
 │  │  Phase 1: Brave Search Enrichment + Enhanced Detection                │  │
 │  │  Phase 2: Pre-Evaluation Gates (5 Tiers)                             │  │
@@ -45,7 +45,7 @@ The system is designed around a unique personal positioning framework called "Ti
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ JOBS: Job Evaluation Pipeline v6.1                                    │  │
+│  │ JOBS: Job Evaluation Pipeline v6.6                                    │  │
 │  │  JD Fetch (Browserless) → Build Prompt → Claude Evaluate → Upsert    │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 └────────────────────────────────────┬────────────────────────────────────────┘
@@ -75,11 +75,11 @@ The system is designed around a unique personal positioning framework called "Ti
 
 ---
 
-## v9 Pipeline Highlights
+## v9.9 Pipeline Highlights
 
-The v9 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing) from v8.5 through a full redesign:
+The v9.9 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing) from v8.5 through a full redesign:
 
-### New in v9
+### Key Features (v9 → v9.9)
 
 | Feature | Purpose | Impact |
 |---------|---------|--------|
@@ -90,18 +90,21 @@ The v9 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing) f
 | **Software-First Check** | Services businesses, hardware-with-software | Filters non-SaaS companies |
 | **CS Hire Readiness Threshold** | Quick Claude call, must score >=10 | Filters timing mismatches |
 | **Domain Distance Scoring** | +5 healthcare to -10 physical security | Penalizes high-distance domains |
-| **Employee-User Persona** | B2B2C pattern detection (Oshi, Koa Health) | More accurate persona classification |
-| **Stricter Enterprise Exception** | 3+ signals required (was 2+) | Fewer developer tool false positives |
+| **Unicorn Gate** (v9.8) | >$1B valuation = DQ | Catches late-stage unicorns |
+| **Company Age Gate** (v9.8) | >8 years old = DQ, 5-8 years = flag | Filters stale startups |
+| **Employee Corroboration** (v9.9) | Median of multiple mentions, suspicious count flagging | Catches inflated/deflated headcounts |
+| **Funding Recency Penalty** (v9.9) | 2yr=-5pts, 3yr=-10pts, 4yr=-15pts | Penalizes zombie startups |
+| **CX Tooling Detection** (v9.9) | Helpdesk/chatbot vendors flagged | They sell to CS, don't need CS leadership |
 
 ### Gate Tiers
 
 | Tier | Gate Type | Examples |
 |------|-----------|----------|
-| **Tier 1** | Hard Gates | PE-backed, >200 emp, >$500M, acquired, non-US |
-| **Tier 2** | Sector Gates | Biotech, hardware, crypto, not software-first |
-| **Tier 3** | GTM Motion | PLG-dominant, pre-sales function company |
+| **Tier 1** | Hard Gates | PE-backed, >350 emp, >$500M funding, >$1B valuation, acquired, >8yr old |
+| **Tier 2** | Sector Gates | Biotech, hardware, crypto, fintech, insurtech, not software-first |
+| **Tier 3** | GTM Motion | PLG-dominant, pre-sales function company, developer-as-customer |
 | **Tier 4** | Stale Company | 3+ years since funding, shrinking signals |
-| **Tier 5** | Soft Flags | <15 employees, 150-200 employees, pre-2016 |
+| **Tier 5** | Soft Flags | <15 employees, 200-350 employees, 5-8 years old |
 
 ---
 
@@ -113,8 +116,10 @@ The v9 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing) f
 |----------|---------|-------------|----------|
 | **Job Alert Email Parser** | v3-43 | 10 email job boards + OmniJobs scraping | Hourly |
 | **Work at a Startup Scraper** | v12 | YC Work at a Startup job board | Every 6 hours |
-| **Indeed Job Scraper** | v4 | Indeed direct scraping with search configs | Configurable |
+| **Indeed Job Scraper** | v6 | Indeed scraping with internal loop architecture | Configurable |
 | **First Round Jobs Scraper** | v1 | First Round Capital talent network API | Tue/Fri 7am |
+| **Health Tech Nerds Scraper** | v1 | jobs.healthtechnerds.com static JSON | Every 6 hours |
+| **CS Insider Scraper** | v1.7 | csinsider.co/job-board (Notion embed) | Tue/Fri 7am |
 
 ### VC Portfolio Scrapers
 
@@ -123,20 +128,20 @@ The v9 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing) f
 | **Healthcare** | v27 | 14 VCs: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms |
 | **Climate Tech** | v23 | Khosla Ventures, Congruent, Prelude, Lowercarbon |
 | **Social Justice** | v25 | Kapor Capital, Backstage, Harlem, Collab |
-| **Enterprise/Generalist** | v26 | Unusual, First Round, Essence, K9, Precursor, M25, GoAhead |
-| **Micro-VC** | v14 | Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** |
+| **Enterprise** | v27 | 15 VCs: Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead |
+| **Micro-VC** | v15 | 5 VCs: Pear VC, Afore, Unshackled, 2048, **Y Combinator** |
 
-All VC scrapers use the shared **Enrich & Evaluate Pipeline v9**.
+All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.9**.
 
 ### Shared Subworkflows
 
 | Workflow | Version | Purpose |
 |----------|---------|---------|
-| **Enrich & Evaluate Pipeline** | v9 | Company evaluation (6-phase architecture) |
-| **Job Evaluation Pipeline** | v6.1 | Job evaluation with JD fetching |
+| **Enrich & Evaluate Pipeline** | v9.9 | Company evaluation (6-phase architecture) |
+| **Job Evaluation Pipeline** | v6.6 | Job evaluation with JD fetching |
 | **Dedup Check Subworkflow** | v1 | Cross-source dedup lookup |
 | **Dedup Register Subworkflow** | v1 | Cross-source dedup registration |
-| **Funding Alerts Rescore** | v4 | Standalone rescore workflow |
+| **Funding Alerts Rescore** | v4.6 | Standalone rescore workflow |
 
 ---
 
@@ -253,9 +258,9 @@ Weekly automated analysis of user decisions creates a self-improving system that
 
 Interactive diagrams for visual reference:
 
-- **[System Architecture v9](https://www.figma.com/online-whiteboard/create-diagram/f1065a98-f078-44b9-9ba6-b088601f526b)** - Overview of all scrapers, pipelines, and Airtable tables
-- **[v9 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/6d2f6511-9e89-4635-8585-238feae95221)** - 6-phase architecture with decision points
-- **[v9 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/d16d9d48-12af-4d27-9fa1-99566ea42a1d)** - 100-point scoring with domain distance modifiers
+- **[System Architecture v9.5](https://www.figma.com/online-whiteboard/create-diagram/b857c91d-d47d-4e6b-a2ff-352e76022940)** - Overview of all scrapers, pipelines, and Airtable tables
+- **[v9.5 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/8f8d33b6-7b5f-44ce-b606-45a74ef3e2d8)** - 6-phase architecture with decision points
+- **[v9.5 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/916baf11-8e56-4d7a-a2f7-5def6b74042f)** - 100-point scoring with domain distance modifiers
 
 ---
 
@@ -269,5 +274,5 @@ Interactive diagrams for visual reference:
 
 ---
 
-*Document updated: March 2026*
-*System Version: Enrich & Evaluate Pipeline v9, Job Evaluation Pipeline v6.1, Job Alert Email Parser v3-43, VC Scrapers v14-v27*
+*Document updated: March 16, 2026*
+*System Version: Enrich & Evaluate Pipeline v9.9, Job Evaluation Pipeline v6.6, Job Alert Email Parser v3-43, VC Scrapers v15-v27*
