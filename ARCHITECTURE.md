@@ -13,7 +13,7 @@ This document details the technical architecture of the Tide Pool job search aut
 │                              DATA SOURCES                                        │
 ├─────────────────────┬─────────────────────┬─────────────────────────────────────┤
 │   Email Parsers     │   Web Scrapers      │   VC Portfolio Miners               │
-│   (10 job boards)   │   (YC, Costanoa)    │   (5 thematic scrapers)             │
+│   (10 job boards)   │   (YC, CS Insider)  │   (5 thematic scrapers)             │
 └──────────┬──────────┴──────────┬──────────┴──────────────┬──────────────────────┘
            │                     │                         │
            ▼                     ▼                         ▼
@@ -29,12 +29,12 @@ This document details the technical architecture of the Tide Pool job search aut
 │                 STANDARDIZED EVALUATION SUB-ROUTINES                             │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │ JOBS: Job Evaluation Pipeline v6.1                                       │    │
+│  │ JOBS: Job Evaluation Pipeline v6.6                                       │    │
 │  │  JD Fetch → Parse → Build Prompt → Claude Evaluate → Parse Response     │    │
 │  └─────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │ COMPANIES: Enrich & Evaluate Pipeline v9                                 │    │
+│  │ COMPANIES: Enrich & Evaluate Pipeline v9.9                               │    │
 │  │  Phase 0: Entity Validation                                              │    │
 │  │  Phase 1: Brave Search Enrichment                                        │    │
 │  │  Phase 2: Pre-Evaluation Gates (5 Tiers)                                │    │
@@ -66,9 +66,9 @@ This document details the technical architecture of the Tide Pool job search aut
 
 ---
 
-## Enrich & Evaluate Pipeline v9 Architecture
+## Enrich & Evaluate Pipeline v9.9 Architecture
 
-The v9 pipeline represents a **full redesign** addressing a 4% signal rate (1/25 companies worth pursuing).
+The v9.9 pipeline represents a **full redesign** addressing a 4% signal rate (1/25 companies worth pursuing).
 
 ### Six-Phase Flow
 
@@ -99,8 +99,8 @@ INPUT (company from scraper)
 │ PHASE 2: PRE-EVALUATION GATES (5 Tiers)                                    │
 │                                                                            │
 │ TIER 1 - HARD GATES (binary, immediate exit):                             │
-│   PE-backed, >200 emp, >$500M funding, public, Series D+,                 │
-│   acquired, Fortune 500, invalid entity, non-US market                    │
+│   PE-backed, >350 emp, >$500M funding, >$1B valuation, public,            │
+│   Series D+, acquired, Fortune 500, invalid entity, >8yr old              │
 │                                                                            │
 │ TIER 2 - SECTOR GATES:                                                    │
 │   Biotech, hardware, crypto, consumer, HR Tech, marketplace,              │
@@ -113,7 +113,7 @@ INPUT (company from scraper)
 │   3+ years since funding, shrinking headcount signals                     │
 │                                                                            │
 │ TIER 5 - SOFT FLAGS (proceed but flag):                                   │
-│   <15 employees, 150-200 employees, $75M+ funding, pre-2016               │
+│   <15 employees, 200-350 employees, $75M+ funding, 5-8yr old              │
 └───────────────────────────────────────────────────────────────────────────┘
     │
     ├──────────────────────┐
@@ -176,7 +176,7 @@ INPUT (company from scraper)
 
 ---
 
-## Job Evaluation Pipeline v6.1 Architecture
+## Job Evaluation Pipeline v6.6 Architecture
 
 ```
 INPUT (job from scraper/email parser)
@@ -206,7 +206,8 @@ INPUT (job from scraper/email parser)
     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ AIRTABLE UPSERT                                                              │
-│   • v6.1: Upsert preserves Review Status (doesn't overwrite "Applied")     │
+│   • v6.6: Batch 4 fixes (employee corroboration, funding recency,          │
+│     CS readiness capping, CX tooling vendor detection)                      │
 │   • Source field preserved with fallback lookups                            │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -266,7 +267,7 @@ Prevent duplicate evaluations when the same job/company appears from multiple so
 
 ## Job Listings Cross-Reference
 
-The Enrich & Evaluate Pipeline v9 checks if a company already has active job postings.
+The Enrich & Evaluate Pipeline v9.9 checks if a company already has active job postings.
 
 **Fields in Funding Alerts:**
 - `Has Active Job Posting` (checkbox)
@@ -320,8 +321,10 @@ Output:
 |----------|---------|---------|----------|
 | Job Alert Email Parser | v3-43 | 10 email job boards + OmniJobs | Hourly |
 | Work at a Startup Scraper | v12 | YC Work at a Startup | Every 6 hours |
-| Indeed Job Scraper | v4 | Indeed search configs | Configurable |
+| Indeed Job Scraper | v6 | Indeed search configs | Configurable |
 | First Round Jobs Scraper | v1 | First Round Capital talent network | Tue/Fri 7am |
+| Health Tech Nerds Scraper | v1 | jobs.healthtechnerds.com static JSON | Every 6 hours |
+| CS Insider Scraper | v1.7 | csinsider.co/job-board (Notion embed) | Tue/Fri 7am |
 
 ### VC Portfolio Scrapers
 
@@ -330,20 +333,20 @@ Output:
 | Healthcare | v27 | 14 VCs: Flare, 7wireVentures, Oak HC/FT, Digitalis, etc. | Tue/Fri 8am |
 | Climate Tech | v23 | Khosla, Congruent, Prelude, Lowercarbon | Mon/Thu 8am |
 | Social Justice | v25 | Kapor, Backstage, Harlem, Collab | Wed/Sat 8am |
-| Enterprise/Generalist | v26 | Unusual, First Round, Essence, etc. | Mon/Thu 8am |
-| Micro-VC | v14 | Pear, Floodgate, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
+| Enterprise | v27 | 15 VCs: Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead | Mon/Thu 8am |
+| Micro-VC | v15 | 5 VCs: Pear, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
 
-All VC scrapers use the shared **Enrich & Evaluate Pipeline v9**.
+All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.9**.
 
 ### Shared Subworkflows
 
 | Workflow | Version | Purpose |
 |----------|---------|---------|
-| Enrich & Evaluate Pipeline | v9 | Company evaluation with 6-phase architecture |
-| Job Evaluation Pipeline | v6.1 | Job evaluation with JD fetching |
+| Enrich & Evaluate Pipeline | v9.9 | Company evaluation with 6-phase architecture |
+| Job Evaluation Pipeline | v6.6 | Job evaluation with JD fetching |
 | Dedup Check Subworkflow | v1 | Cross-source dedup lookup |
 | Dedup Register Subworkflow | v1 | Cross-source dedup registration |
-| Funding Alerts Rescore | v4 | Standalone rescore (HTTP Request bypass) |
+| Funding Alerts Rescore | v4.6 | Standalone rescore (HTTP Request bypass) |
 
 ---
 
@@ -377,8 +380,8 @@ All VC scrapers use the shared **Enrich & Evaluate Pipeline v9**.
 
 | Workflow | ID | Used By |
 |----------|-----|---------|
-| **Enrich & Evaluate Pipeline v9** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
-| **Job Evaluation Pipeline v6.1** | `v24qHkIsp8GVCwFkscHP8` | Job scrapers |
+| **Enrich & Evaluate Pipeline v9.9** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
+| **Job Evaluation Pipeline v6.6** | `v24qHkIsp8GVCwFkscHP8` | Job scrapers |
 | **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
 | **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
 
@@ -388,9 +391,9 @@ All VC scrapers use the shared **Enrich & Evaluate Pipeline v9**.
 
 Interactive diagrams for visual reference:
 
-- **[System Architecture v9](https://www.figma.com/online-whiteboard/create-diagram/f1065a98-f078-44b9-9ba6-b088601f526b)** - Overview of all scrapers, pipelines, and Airtable tables
-- **[v9 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/6d2f6511-9e89-4635-8585-238feae95221)** - 5-phase architecture with decision points
-- **[v9 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/d16d9d48-12af-4d27-9fa1-99566ea42a1d)** - 100-point scoring with domain distance
+- **[System Architecture v9.5](https://www.figma.com/online-whiteboard/create-diagram/b857c91d-d47d-4e6b-a2ff-352e76022940)** - Overview of all scrapers, pipelines, and Airtable tables
+- **[v9.5 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/8f8d33b6-7b5f-44ce-b606-45a74ef3e2d8)** - 5-phase architecture with decision points
+- **[v9.5 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/916baf11-8e56-4d7a-a2f7-5def6b74042f)** - 100-point scoring with domain distance
 
 ---
 
@@ -398,6 +401,12 @@ Interactive diagrams for visual reference:
 
 | Date | Change |
 |------|--------|
+| 2026-03-16 | **v9.9 Batch 4 Fixes**: Employee corroboration (median), funding recency penalties, CS readiness capping, CX tooling vendor detection |
+| 2026-03-16 | VC scraper cleanup: Removed Essence, Costanoa, Golden (Enterprise v27), Floodgate (Micro-VC v15) |
+| 2026-03-16 | Job Evaluation Pipeline v6.6: Ported Batch 4 fixes from company pipeline |
+| 2026-03-15 | v9.8: Unicorn gate (>$1B), company age gate (>8yr), evidence-based CS readiness |
+| 2026-03-15 | Job Evaluation Pipeline v6.3-v6.5: Major overhaul, sector gates, code review fixes |
+| 2026-03-14 | v9.7: Expanded sector gates (fintech, construction, insurtech, etc.), developer persona gate |
 | 2026-03-11 | **v9 Full Redesign**: 6-phase architecture, entity validation, GTM motion gates, CS readiness threshold, domain distance scoring |
 | 2026-03-09 | v8.5: 8 scoring fixes, employee-user persona, stricter SaaS gate |
 | 2026-03-06 | v8.4: Customer Persona Gate, two-tier architecture |
@@ -408,4 +417,4 @@ Interactive diagrams for visual reference:
 
 ---
 
-*Last updated: March 2026*
+*Last updated: March 16, 2026*
