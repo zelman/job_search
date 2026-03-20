@@ -3,9 +3,9 @@
 # Automation tools: parse this block for quick state checks
 # Full doc: https://raw.githubusercontent.com/zelman/tidepool/main/tide-pool-agent-lens.md
 
-version: "2.13"
+version: "2.15"
 schema_version: 1
-last_updated: "2026-03-06"
+last_updated: "2026-03-20"
 
 # Identity
 name: Eric Zelman
@@ -33,7 +33,7 @@ projects:
     status: active
   - name: UT Austin Cloud Computing PGP
     type: education
-    status: in_progress
+    status: completed
     end_date: "2026-03"
 
 # Auto-Disqualifiers (for automated job filtering)
@@ -43,18 +43,18 @@ disqualify:
   investor_type: [PE, Growth Equity]
   company_status: [Acquired, Shut Down, Merged, Defunct]  # No longer independent
   company_type: [Fortune 500, Fortune 500 Subsidiary, Public]
-  employee_count_max: 200         # >200 = CS function already exists (hard DQ)
-  employee_count_min: 15          # <15 = pre-CS inflection, founder-led support
+  employee_count_max: 350         # >350 = past builder window for most orgs
+  employee_count_min: 10          # <10 = pre-CS inflection, founder-led support
   total_funding_max: 500000000    # $500M+ total funding = late stage
   valuation_max: 500000000        # $500M+ valuation = unicorn territory
   funding_stage: [Series D, Series E, Growth]  # Late stage
 
   # TIER 2: SECTOR GATES (also hard DQ - must be B2B SaaS)
   business_model: [B2C, Consumer, Hardware, Industrial, Cleantech Hardware, Robotics Hardware, AgTech, Aquaculture]
-  domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi, Biotech, Life Sciences, Drug Discovery, HR Tech, DEI, Workforce Analytics]
+  domain_expertise_required: [Pharmaceutical Marketing, Healthcare Agency, Financial Services, Legal/LegalTech, AdTech, Government, Web3, Crypto, Blockchain, DeFi, Biotech, Life Sciences, Drug Discovery, HR Tech]
 
   # TIER 3: ROLE GATES
-  role_type: [IT Support, Technical Support, Help Desk, Quota-carrying CSM]
+  role_type: [IT Support, Technical Support, Help Desk]
   jd_scale_signals: [">500M users", ">500 enterprise clients", "Fortune 500 partners"]
   nrr_first_language: [NRR, "Net Revenue Retention", "Gross Retention", GRR, "Renewal forecasting"] # in first 2 bullets
 
@@ -87,7 +87,6 @@ customer_persona:
     min_employees: 50
     min_enterprise_signals: 2
     signals:
-      - "SOC 2, HIPAA, compliance"
       - "Fortune 500/1000 customers"
       - "Enterprise sales team, account executives"
       - "SSO, SAML, multi-tenant"
@@ -103,23 +102,47 @@ data_validation:
   - { stage: Series D, funding_max: 20000000, flag: "Series D with <$20M funding - verify data" }
 
 # Scoring Penalties (non-disqualifying)
-# v2.12: 150-200 employees is now a penalty zone, not a hard DQ
+# v2.15: Flattened penalties. >200 is penalty zone, not hard DQ
 penalties:
-  - rule: "150-200 employees"
-    points: -20
+  - rule: ">200 employees"
+    points: -5
     note: "Penalty zone - CS function may already exist"
   - rule: "Support title without Director/VP/Head"
-    points: -15
+    points: -5
   - rule: "Total funding $100M-$500M"
-    points: -15
-  - rule: "Series C"
     points: -10
+  - rule: "Series C"
+    points: -5
   - rule: "Sector match alone (no CS hire readiness signals)"
     points: -10
     note: "Sector alignment is a tiebreaker, not a primary driver"
+  - rule: "Insufficient JD data (title only, no description)"
+    points: -10
+    note: "Cannot evaluate without job details"
 
-# Scoring Threshold
-min_score: 60
+# Scoring Bonuses (restored from v6.5 calibration - these are hard-won from real data)
+bonuses:
+  - rule: "Builder language in JD"
+    points: +40
+    note: "Highest-weighted positive signal"
+  - rule: "Leadership title (Head of, Director, VP)"
+    points: +15
+  - rule: "Healthcare B2B SaaS"
+    points: +15
+  - rule: "Series A stage"
+    points: +50
+  - rule: "Series B stage"
+    points: +30
+  - rule: "0-50 employees"
+    points: +50
+
+# Scoring Thresholds
+thresholds:
+  strong_fit: 80    # Apply immediately
+  good_fit: 60      # Research thoroughly, likely apply
+  marginal: 40      # Only if other factors exceptional
+  skip: 0           # Not aligned
+min_score: 45  # Calibrated from v6.5 - every job Eric applied to scored 0-32 in v6.4
 
 # Toolchain
 tools:
@@ -261,8 +284,8 @@ Jobs requiring X years of domain expertise in these industries should be SKIPPED
 
 ### Clarifications for Scoring
 - **Healthcare experience**: Alliance HealthCare was medical imaging equipment field marketing + account management (provider operations), NOT pharma marketing or healthcare agency work
-- **"Manufacturing" customers**: Bigtincan served manufacturing companies as customers; I don't have manufacturing operations expertise
-- **Technical but not engineer**: Strong technical foundation (Apple, workflow automation) but not a software developer
+- **"pharma, banking, manufacturing" customers**: Bigtincan served pharma, banking, manufacturing companies as customers; I don't have pharma, banking, manufacturing operations expertise
+- **Technical but not engineer**: Strong technical foundation (Apple, API troubleshooting, workflow automation, AWS Certified) but not a software developer
 
 ### Key Disqualifier Patterns in Job Postings
 Flag and SKIP jobs containing:
@@ -320,7 +343,7 @@ Flag and SKIP jobs containing:
 
 ### Ideal Company Fit (Weight Heavily in Scoring)
 - **Company Stage**: Pre-Series A to Series A ideal with Series B possible; early-stage startups are the best match
-- **Company Size**: 0-25 people preferred; 26-100 acceptable; penalize 500+ employees
+- **Company Size**: 0-50 people preferred; 26-300 acceptable; penalize 500+ employees
 - **Revenue**: $0-1M range (building phase)
 - **Mission-Driven Sectors**: Healthcare, environmental, life sciences, education, audio/music technology
 - **Enterprise AI**: B2B AI companies selling to enterprises will need high-touch CS from day one. AI governance, compliance AI, enterprise analytics, and similar plays require human support to build trust and handle complex implementations. These are inherently high-touch, not self-serve.
@@ -387,15 +410,15 @@ Before sector alignment (healthcare, dev tools, climate) does ANY scoring work, 
 - **Consulting Firm Acquisitions** - Company that acquired a consulting practice signals services-heavy model, not product-led SaaS.
 - **Fortune 100 Customer Base** - "Enterprise AI for Fortune 100" = horizontal platform, established sales motion, no CS build signal.
 
-**Pre-CS Inflection Threshold (Hard Gate: <15 employees = auto-disqualify):**
-At <15 employees, support/success is founder-and-community-led. No structured CS function exists to build. These are **not actionable**:
+**Pre-CS Inflection Threshold (Hard Gate: <10 employees = auto-disqualify):**
+At <10 employees, support/success is founder-and-community-led. No structured CS function exists to build. These are **not actionable**:
 - getbluejay.ai (3 employees), AgentOps (pre-seed), Variant AI (5 emp), Groundlight (1-10 emp), Fused.io (pre-seed), Unkey (10 emp)
 
-Soft threshold 15-30 employees: Worth monitoring but likely pre-inflection unless explicit CS hire signal.
+Soft threshold 10-30 employees: Worth monitoring but likely pre-inflection unless explicit CS hire signal.
 
 Actionable threshold: 30-50+ employees, OR Series A+ with clear "founder relationships breaking down" signal.
 
-**Too Large / Past Window (Hard Gate: >150 employees OR $500M+ valuation):**
+**Too Large / Past Window (Hard Gate: >350 employees OR $500M+ valuation):**
 - Gamma ($2.1B valuation, 179 emp, $100M ARR) — unicorn, existing CS org
 - Distyl ($1.8B valuation, 130 emp) — unicorn territory
 - Descope ($88M seed, 91 emp, 1,200 customers) — effectively Series B scale
@@ -479,7 +502,7 @@ Core disqualifiers in YAML frontmatter. Additional signals:
 
 ### Auto-Disqualifiers
 
-See YAML frontmatter `disqualify` section for complete list. Key gates: PE-backed, >200 employees, >$500M funding, Fortune 500/Public, non-B2B-SaaS sectors, domain expertise gaps.
+See YAML frontmatter `disqualify` section for complete list. Key gates: PE-backed, >350 employees, >$500M funding, Fortune 500/Public, non-B2B-SaaS sectors, domain expertise gaps.
 
 **Exception**: Network opportunities with direct founder relationship may bypass if product is high-touch enterprise and role is builder-focused.
 
@@ -487,8 +510,8 @@ See YAML frontmatter `disqualify` section for complete list. Key gates: PE-backe
 
 **Company Stage & Fit (50 points max)**
 - Pre-Series A to Series A (0-50 people): **+50 pts**
-- Series B (51-200 people): **+30 pts**
-- Series C (201-500 people): **+10 pts**
+- Series B (51-300 people): **+30 pts**
+- Series C (301-500 people): **+10 pts**
 - 500-999 employees: **+5 pts**
 - Founded <3 years ago: **+10 pts bonus**
 - VC-backed (not PE): **+10 pts bonus**
@@ -514,17 +537,16 @@ See YAML frontmatter `disqualify` section for complete list. Key gates: PE-backe
 - Other mission-driven: **+5 pts**
 
 **Compensation & Location (Bonus/Penalty)**
-- $125K+ base: **+0 pts** (baseline requirement)
+- $125K+ base: **+10 pts** (baseline requirement)
 - <$125K base: **-10 pts**
 - Remote: **+0 pts** (baseline preference)
 - On-site in acceptable cities: **+0 pts**
-- On-site elsewhere: **-10 pts**
 
 **Scoring Penalties**
 - Total funding $200M-$500M: **-15 pts** (approaching enterprise scale)
 - Series C or later: **-10 pts** (past prime builder phase)
 - 500-999 employees: **-15 pts** (gap between 500-1000 still too large for builder roles)
-- Support title without Director/VP/Head: **-15 pts** (Support Manager/Supervisor roles consistently rejected)
+- Support title without Director/VP/Head: **-5 pts** (Support Manager/Supervisor roles consistently rejected)
 
 **Network Opportunity Bonus**
 - Direct founder relationship: **+15 pts**
@@ -533,7 +555,7 @@ See YAML frontmatter `disqualify` section for complete list. Key gates: PE-backe
 
 ### Decision Thresholds
 - **80-100 points**: STRONG FIT - Apply immediately
-- **60-79 points**: GOOD FIT - Research thoroughly, likely apply
+- **60-79 points**: GOOD FIT - Research thoroughly, likely apply. Check for builder language, leadership titles, or other strong signals.
 - **40-59 points**: MARGINAL - Only if other factors exceptional
 - **<40 points**: SKIP - Not aligned with builder goals
 - **Network opportunity with <40 points**: EVALUATE MANUALLY - Founder relationship may override score
@@ -545,7 +567,7 @@ See YAML frontmatter `disqualify` section for complete list. Key gates: PE-backe
 Before spending time on any application, verify:
 
 ### Stage Validation (5 min)
-- [ ] LinkedIn employee count <200?
+- [ ] LinkedIn employee count <300?
 - [ ] Crunchbase: Total funding <$100M?
 - [ ] Latest round: Series A or B (not Growth/PE)?
 - [ ] Investor names: VCs not PE firms?
@@ -553,7 +575,7 @@ Before spending time on any application, verify:
 
 ### Role Validation (3 min)
 - [ ] Job description uses "build/create/launch" language?
-- [ ] Current team size <15 people?
+- [ ] Current team size <10 people?
 - [ ] NOT "maintain/optimize/inherit" language?
 - [ ] Support operations focus (not CSM/Account Mgmt)?
 - [ ] NOT Technical Support / Help Desk / IT Support?
@@ -616,8 +638,8 @@ Before spending time on any application, verify:
 
 ---
 
-*Last Updated: March 6, 2026*
-*Version: 2.13*
+*Last Updated: March 20, 2026*
+*Version: 2.15*
 
 ---
 
@@ -626,6 +648,8 @@ Before spending time on any application, verify:
 This document serves as a "lens" for AI agents. Import or paste into system prompts to create agents that understand my context, values, and working style. The essence, pathway, and evaluation questions are not abstract philosophy; they are active decision-making tools for career search and daily life. Update periodically as circumstances change.
 
 ### Changelog
+- **v2.15** (Mar 20, 2026): Gate loosening + scoring rebalance. Too many opportunities were getting DQ'd; pipeline reality requires wider gates. Changes: (1) Employee hard cap raised from 200 to 350 (founding CS in new market at 200+ company is still a builder role); (2) Employee min lowered from 15 to 10; (3) Removed "Quota-carrying CSM" from role gates (revenue accountability at early-stage is normal); (4) Removed DEI/Workforce Analytics from domain DQ list; (5) Removed SOC 2/HIPAA from enterprise exception signals; (6) Flattened penalties (>200 emp now -5 instead of -20, Series C -5 instead of -10, title penalty simplified to -5); (7) Removed context-dependent IC title penalties (kept simple -5 for non-Director title); (8) Restored YAML bonuses from v6.5 calibration (builder language +40, Series A +50, etc.); (9) Renamed thresholds: STRONG FIT 80+, GOOD FIT 60-79, MARGINAL 40-59, SKIP <40; (10) Pre-CS inflection lowered to <10 employees; (11) Series B scoring range expanded to 51-300 people; (12) $125K+ comp now +10 bonus; (13) On-site elsewhere penalty removed. Net effect: wider funnel, more opportunities reach scoring, bonuses create differentiation above 40.
+- **v2.14** (Mar 2026): v6.5 Scoring Calibration - Critical fix based on applied jobs feedback loop. Every job Eric applied to (Assort Health, Parakeet Health, Ashby, Wolters Kluwer) scored 0-32 pts in v6.4 while APPLY threshold was 60+. Changes: (1) Added MANUAL_REVIEW tier (45-69 pts) for partial matches with positive signals; (2) Reduced title penalty at <25 employees from -15 to -5; (3) Added context-dependent IC title penalties based on company size; (4) Increased builder language bonus to +40 pts; (5) Added leadership title bonus +15 pts; (6) Increased Healthcare B2B SaaS bonus from +10 to +15 pts; (7) Series C routes to MANUAL_REVIEW if builder language present; (8) Added -10 pts for insufficient JD data; (9) Added bonuses section to YAML frontmatter.
 - **v2.13** (Mar 2026): Added Customer Persona Gate - classifies companies as business-user-customer vs developer-as-customer. ~60% of "Apply Now" companies were developer tools (Coiled, Inngest, Datafold, etc.) that don't match Eric's enterprise B2B support background. Developer-as-customer companies auto-pass unless they meet enterprise exception: 50+ employees AND 2+ enterprise signals (SOC 2, Fortune 500 customers, enterprise sales, SSO/SAML, compliance, procurement). New Airtable field: Customer Persona.
 - **v2.12** (Mar 2026): March 2026 Audit - Two-tier disqualification architecture. Employee hard cap reduced to 200 (CS function exists at this scale). $500M funding/valuation caps. Fortune 500 subsidiary detection. Enhanced acquisition detection (merged, shut down, defunct). Data validation flags for impossible combinations. AgTech/Aquaculture and Climate Hardware exclusions. 150-200 employees moved to penalty zone instead of hard DQ.
 - **v2.10** (Mar 2026): Merged v2.9 additions from tidepool repo - added scoring penalties from feedback loop pattern analysis: 500-999 employees (-15 pts), Support title without Director/VP/Head (-15 pts). Added penalties section to YAML frontmatter for machine-readable access. Consolidated all scoring penalties under single "Scoring Penalties" heading. Added Scoring Penalties row to Quick Reference table.
