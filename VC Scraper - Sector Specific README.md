@@ -4,12 +4,12 @@ Five n8n workflows that scrape portfolio companies from sector-focused venture c
 
 **Current Versions:**
 - Healthcare: v27 (14 VCs including Tier 2 healthcare and vertical SaaS)
-- Enterprise/Generalist: v26 (14 VCs)
+- Enterprise/Generalist: v27 (15 VCs)
 - Climate Tech: v23
 - Social Justice: v25
-- Micro-VC: v14 (includes Y Combinator)
+- Micro-VC: v15 (includes Y Combinator)
 
-**All workflows use the shared `Enrich & Evaluate Pipeline v9.json` subworkflow** for:
+**All workflows use the shared `Enrich & Evaluate Pipeline v9.9.json` subworkflow** for:
 - 6-phase evaluation architecture
 - 100-point scoring with domain distance modifiers
 - 5-tier gate system (hard gates, sector gates, GTM motion, stale company, soft flags)
@@ -60,17 +60,18 @@ Five n8n workflows that scrape portfolio companies from sector-focused venture c
 | Harlem Capital | Static list | Diverse founders |
 | Collab Capital | Static list | Black founders |
 
-### VC Scraper - Enterprise & Generalist v26
+### VC Scraper - Enterprise & Generalist v27
 **Schedule:** Monday/Thursday at 8am
 
 | VC Firm | Method | Focus |
 |---------|--------|-------|
 | Unusual Ventures | Browserless | Enterprise software |
 | First Round Capital | HTTP (Sanity API) | Seed-stage generalist |
-| Essence VC | HTTP | Early-stage generalist |
-| Costanoa Ventures | HTTP (Sitemap) | Enterprise/B2B |
+| Khosla Ventures | Browserless | Enterprise/Climate |
+| Kapor Capital | HTTP (Sitemap) | Social impact |
+| WhatIf Ventures | Browserless | Healthcare innovation |
 | WXR Fund | HTTP | XR/spatial computing |
-| Golden Ventures | HTTP | Canadian early-stage |
+| Leadout Capital | Browserless | Healthcare/femtech |
 | Notable Capital | Browserless | Enterprise/consumer |
 | Headline | Browserless | Global generalist |
 | Pioneer Square Labs | HTTP | Seattle-based |
@@ -80,19 +81,22 @@ Five n8n workflows that scrape portfolio companies from sector-focused venture c
 | M25 | Sitemap | Midwest HealthTech/FinTech |
 | GoAhead Ventures | Browserless | Generalist |
 
-### VC Scraper - Micro-VC v14
+**Removed in v27:** Essence VC, Costanoa Ventures, Golden Ventures (developer-tools focus, Canadian geography mismatch, low CS signal)
+
+### VC Scraper - Micro-VC v15
 **Schedule:** Tuesday/Friday at 8am
 
 | Source | Method | Focus |
 |--------|--------|-------|
 | Pear VC | Browserless | Early-stage |
-| Floodgate | Browserless | Early-stage |
 | Afore | Browserless | Pre-seed |
 | Unshackled | Browserless | Immigrant founders |
 | 2048 | Browserless | Deep tech |
 | **Y Combinator** | Browserless | Sorted by launch date, extracts batch codes |
 
-## Enrich & Evaluate Pipeline v9 Features
+**Removed in v15:** Floodgate (mixed dev/consumer portfolio, low CS signal)
+
+## Enrich & Evaluate Pipeline v9.9 Features
 
 ### 6-Phase Architecture
 
@@ -150,7 +154,7 @@ Schedule Trigger
 ## Setup
 
 1. **Import the pipeline subworkflow first:**
-   - Import `Enrich & Evaluate Pipeline v9.json` into n8n
+   - Import `Enrich & Evaluate Pipeline v9.9.json` into n8n
    - Configure credentials ONCE in the pipeline:
      - Airtable API token
      - Brave Search API (Header Auth with `X-Subscription-Token`)
@@ -161,8 +165,8 @@ Schedule Trigger
    - `VC Scraper - Healthcare.json` (v27)
    - `VC Scraper - Climate Tech.json` (v23)
    - `VC Scraper - Social Justice.json` (v25)
-   - `vc-portfolio-scraper-v26-enriched.json` (Enterprise v26)
-   - `VC Scraper - Micro-VC v14.json`
+   - `VC Scraper - Enterprise v27.json`
+   - `VC Scraper - Micro-VC v15.json`
 
 3. **Configure each workflow:**
    - Open the "Execute Enrich & Evaluate Pipeline" node
@@ -173,15 +177,15 @@ Schedule Trigger
 
 ## Files
 
-### Pipeline (v9)
-- `Enrich & Evaluate Pipeline v9.json` - Shared 6-phase evaluation pipeline
+### Pipeline (v9.9)
+- `Enrich & Evaluate Pipeline v9.9.json` - Shared 6-phase evaluation pipeline
 
 ### Scrapers
 - `VC Scraper - Healthcare.json` (v27) - 14 VCs
 - `VC Scraper - Climate Tech.json` (v23) - 4 VCs
 - `VC Scraper - Social Justice.json` (v25) - 4 VCs
-- `vc-portfolio-scraper-v26-enriched.json` (v26) - 14 VCs
-- `VC Scraper - Micro-VC v14.json` - 6 sources including YC
+- `VC Scraper - Enterprise v27.json` - 15 VCs
+- `VC Scraper - Micro-VC v15.json` - 5 sources including YC
 
 ## Notes
 
@@ -199,10 +203,12 @@ Schedule Trigger
 
 ## Version History
 
+- **Mar 2026 (v9.9 pipeline)**: Batch 4 fixes - employee corroboration, funding recency, CS capping, CX tooling
+- **Mar 2026 (v9.8 pipeline)**: Unicorn gate, company age gate, evidence-based CS readiness
+- **Mar 2026 (Enterprise v27)**: Removed Essence VC, Costanoa, Golden; added Khosla, Kapor, WhatIf, Leadout
+- **Mar 2026 (Micro-VC v15)**: Removed Floodgate
 - **Mar 2026 (v9 pipeline)**: Full redesign - 6-phase architecture, domain distance scoring
 - **Mar 2026 (Healthcare v27)**: Added Tier 2 healthcare VCs, vertical SaaS VCs
-- **Feb 2026 (Micro-VC v14)**: Added Y Combinator
-- **Feb 2026 (Enterprise v26)**: Added K9, Precursor, M25, GoAhead
 
 ---
 

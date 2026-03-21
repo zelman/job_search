@@ -1,6 +1,6 @@
 # Work at a Startup Scraper v12
 
-An n8n workflow that scrapes job listings from Y Combinator's Work at a Startup and Costanoa Ventures portfolio, using the shared Job Evaluation Pipeline v6.1 for AI-powered job scoring.
+An n8n workflow that scrapes job listings from Y Combinator's Work at a Startup and Costanoa Ventures portfolio, using the shared Job Evaluation Pipeline v6.6 for AI-powered job scoring.
 
 ## Overview
 
@@ -14,7 +14,7 @@ This workflow runs every 6 hours to:
 7. Score using Claude AI (Haiku 4.5) with Tide Pool Agent Lens
 8. Add scored jobs to Airtable
 
-**Note:** Uses shared `Job Evaluation Pipeline v6.1` subworkflow for evaluation.
+**Note:** Uses shared `Job Evaluation Pipeline v6.6` subworkflow for evaluation.
 
 ## Data Sources
 
@@ -74,7 +74,7 @@ Skip Filtered          Execute Job Evaluation
                       Add to Airtable
 ```
 
-## Job Evaluation Pipeline v6.1 Features
+## Job Evaluation Pipeline v6.6 Features
 
 ### Enrichment (Brave Search)
 - Employee count
@@ -179,7 +179,7 @@ Jobs must contain:
 
 ## Version History
 
-- **v12**: Uses Job Evaluation Pipeline v6.1 with Review Status preservation fix
+- **v12**: Uses Job Evaluation Pipeline v6.6 with Batch 4 scoring fixes
 - **v11**: Uses Job Evaluation Pipeline v5 with tighter scoring thresholds
 - **v10**: Added cross-source deduplication via shared subworkflows
 - **v9**: Refactored to use shared Job Evaluation Pipeline subworkflow

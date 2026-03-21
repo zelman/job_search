@@ -2,7 +2,7 @@
 
 An n8n workflow that automatically processes job alert emails from multiple sources, filters for relevant roles, enriches company data via Brave Search, uses AI to rate job fit with builder vs maintainer classification, and adds them to an Airtable database.
 
-**Note:** Uses shared `Job Evaluation Pipeline v6.1` subworkflow for evaluation.
+**Note:** Uses shared `Job Evaluation Pipeline v6.6` subworkflow for evaluation.
 
 ## Overview
 
@@ -46,7 +46,7 @@ Jobs must contain:
 **AND at least one leadership keyword:**
 - manager, director, vp, vice president, head, lead, chief, supervisor, team lead
 
-## Job Evaluation Pipeline v6.1 Features
+## Job Evaluation Pipeline v6.6 Features
 
 ### Enrichment (Brave Search)
 - Employee count
@@ -192,7 +192,7 @@ Schedule Trigger (hourly)
 
 ## Version History
 
-- **v3-43**: Rewrote Browserless title extraction with `isTitleLine()`. Added `isRemoteLocation()` for location patterns. Added "IF: Has Email ID?" for OmniJobs Gmail labeling fix. Fixed Job Evaluation Pipeline v6.1 Upsert for Review Status.
+- **v3-43**: Rewrote Browserless title extraction with `isTitleLine()`. Added `isRemoteLocation()` for location patterns. Added "IF: Has Email ID?" for OmniJobs Gmail labeling fix. Fixed Job Evaluation Pipeline v6.6 Upsert for Review Status.
 - **v3-42**: Fixed OmniJobs company extraction with comprehensive location detection.
 - **v3-41**: Improved OmniJobs company extraction, dedup debug logging.
 - **v3-40**: CRITICAL FIX - Dedup was treating Airtable records as new jobs.

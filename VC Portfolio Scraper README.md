@@ -4,7 +4,7 @@ An n8n workflow system that automatically scrapes portfolio companies from missi
 
 ## Current Architecture
 
-**All VC scrapers now use the shared `Enrich & Evaluate Pipeline v9.json` subworkflow** which provides:
+**All VC scrapers now use the shared `Enrich & Evaluate Pipeline v9.9.json` subworkflow** which provides:
 
 - **6-phase evaluation architecture** (entity validation → enrichment → gates → persona → CS readiness → full evaluation)
 - **100-point scoring** with domain distance modifiers (+5 healthcare to -10 physical security)
@@ -19,10 +19,10 @@ An n8n workflow system that automatically scrapes portfolio companies from missi
 | **Healthcare** | v27 | 14 VCs: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms | Tue/Fri 8am |
 | **Climate Tech** | v23 | 4 VCs: Khosla, Congruent, Prelude, Lowercarbon | Mon/Thu 8am |
 | **Social Justice** | v25 | 4 VCs: Kapor, Backstage, Harlem, Collab | Wed/Sat 8am |
-| **Enterprise/Generalist** | v26 | 14 VCs: Unusual, First Round, Essence, Costanoa, WXR, Golden, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead | Mon/Thu 8am |
-| **Micro-VC** | v14 | 6 sources: Pear VC, Floodgate, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
+| **Enterprise/Generalist** | v27 | 15 VCs: Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead | Mon/Thu 8am |
+| **Micro-VC** | v15 | 5 sources: Pear VC, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
 
-## Enrich & Evaluate Pipeline v9 Features
+## Enrich & Evaluate Pipeline v9.9 Features
 
 ### 6-Phase Architecture
 
@@ -75,7 +75,7 @@ Phase 5: FULL EVALUATION
 | Outreach Feasibility | 0-15 | Network access? |
 | **Domain Distance** | -10 to +5 | Healthcare +5, Physical Security -10 |
 
-### Auto-Disqualification Reasons (v9)
+### Auto-Disqualification Reasons (v9.9)
 
 - Acquired/merged company
 - PE-backed (with firm name detection)
@@ -100,7 +100,7 @@ Phase 5: FULL EVALUATION
 ## Setup
 
 1. **Import the pipeline subworkflow first:**
-   - Import `Enrich & Evaluate Pipeline v9.json` into n8n
+   - Import `Enrich & Evaluate Pipeline v9.9.json` into n8n
    - Configure credentials in the pipeline:
      - Airtable API token
      - Brave Search API (Header Auth with `X-Subscription-Token`)
@@ -111,8 +111,8 @@ Phase 5: FULL EVALUATION
    - `VC Scraper - Healthcare.json` (v27)
    - `VC Scraper - Climate Tech.json` (v23)
    - `VC Scraper - Social Justice.json` (v25)
-   - `vc-portfolio-scraper-v26-enriched.json` (Enterprise/Generalist)
-   - `VC Scraper - Micro-VC v14.json`
+   - `VC Scraper - Enterprise v27.json`
+   - `VC Scraper - Micro-VC v15.json`
 
 3. **Configure each workflow:**
    - Open the "Execute Enrich & Evaluate Pipeline" node
@@ -158,10 +158,11 @@ Required fields in Funding Alerts table:
 
 ## Version History
 
+- **Mar 2026 (v9.9)**: Batch 4 fixes - employee corroboration, funding recency penalties, CS readiness capping, CX tooling detection
+- **Mar 2026 (v9.8)**: Unicorn gate (>$1B), company age gate (>8yr), evidence-based CS readiness
+- **Mar 2026 (v27)**: Healthcare scraper - Added Tier 2 VCs; Enterprise scraper - Removed low-signal VCs (Essence, Costanoa, Golden)
+- **Mar 2026 (v15)**: Micro-VC - Removed Floodgate (low signal)
 - **Mar 2026 (v9)**: Full pipeline redesign - 6-phase architecture, entity validation, GTM motion gates, CS readiness threshold, domain distance scoring
-- **Mar 2026 (v27)**: Healthcare scraper - Added Tier 2 VCs (Transformation Capital, Brewer Lane) and vertical SaaS VCs (Mainsail, Five Elms)
-- **Feb 2026 (v14)**: Micro-VC - Added Y Combinator (sorted by launch date, extracts batch codes)
-- **Feb 2026 (v26)**: Enterprise - Added K9, Precursor, M25, GoAhead
 
 ---
 
