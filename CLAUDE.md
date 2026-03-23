@@ -20,7 +20,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │ Enrich & Evaluate Pipeline v9.11  │◄── UPDATE_AFTER_IMPORT
+│                    │ Enrich & Evaluate Pipeline v9.13  │◄── UPDATE_AFTER_IMPORT
 │                    │   (100-point company scoring) │    (UPDATE after import)
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -68,7 +68,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │  Funding Alerts Rescore v4.6  │ (standalone)           │
+│                    │  Funding Alerts Rescore v4.9.2│ (standalone)           │
 │                    │  HTTP Request → Airtable API  │ (every 1 min)          │
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -469,7 +469,37 @@ https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_I
 **Workflow Status (Mar 2026):**
 | Workflow | Status | Notes |
 |----------|--------|-------|
-| Funding Alerts Rescore v4.6 | **ACTIVE** | Uses HTTP Request. v4.6: Batch 4 fixes (employee corroboration, funding recency, CS cap, CX vendor) |
-| Enrich & Evaluate Pipeline v9.11 | **ACTIVE** | v9.11: P0 fix (allTextLower order). v9.10: Merger/rebrand detection |
+| Funding Alerts Rescore v4.9.2 | **ACTIVE** | v4.9.2: DQ tripling fix (isRescore <= 0, if/else detection skip). v4.9: Bucket enforcement, score floor detection |
+| Enrich & Evaluate Pipeline v9.13 | **ACTIVE** | v9.13: Bucket enforcement, VC category labels, score floor detection, business model classification |
 | Job Evaluation Pipeline v6.8 | **ACTIVE** | v6.8: P0 fix (isPEBacked order). v6.7: Merger/rebrand detection |
 | Enrich & Evaluate Pipeline v8.5 | **ROLLBACK** | Keep for rollback if needed |
+
+---
+
+## Session Hygiene
+
+At the end of any substantive session, generate a wrap-up before the user disconnects. This prevents knowledge from dying in the terminal.
+
+### End-of-Session Checklist
+
+1. **Artifacts:** List every file created or modified this session with version numbers (before → after). New files need an Artifact Registry entry in Airtable (base appFO5zLT7ZehXaBo, table tblcE723hIH692lSy).
+
+2. **Decisions:** Bullet any architectural, strategic, or design decisions made. One sentence each: what was decided and why.
+
+3. **CONTEXT update:** Draft the specific text to add or replace in this repo's CONTEXT file. Write the actual paragraph, not a vague reminder. For job_search, update CONTEXT-job-search.md (in Claude.ai Job Search 2 knowledge).
+
+4. **Commit:** Stage and commit with a descriptive message. Group related changes. Don't bundle unrelated work.
+
+5. **Memory flag:** If anything changed that should persist in Claude.ai memory (stable facts, tool configs, project structure), note it explicitly so the user can add it in their next Claude.ai session.
+
+### Versioning
+
+All artifacts use semantic versioning (v1.0, v1.1, v2.0). Track in filenames or internal version constants. Bump on every meaningful change.
+
+### What Goes Where
+
+- **Git (this repo):** Code, workflow JSON, specs, config, strategy docs
+- **Airtable Artifact Registry:** Row for every versioned artifact with location and git status
+- **Claude.ai CONTEXT files:** Living state summaries, updated via session wrap-up
+- **Claude.ai memory:** Stable personal facts, tool configs, project structure (slow-changing)
+- **Local only (gitignored):** Signed legal documents, credentials, API keys
