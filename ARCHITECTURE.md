@@ -29,12 +29,12 @@ This document details the technical architecture of the Tide Pool job search aut
 │                 STANDARDIZED EVALUATION SUB-ROUTINES                             │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │ JOBS: Job Evaluation Pipeline v6.6                                       │    │
+│  │ JOBS: Job Evaluation Pipeline v6.8                                       │    │
 │  │  JD Fetch → Parse → Build Prompt → Claude Evaluate → Parse Response     │    │
 │  └─────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │ COMPANIES: Enrich & Evaluate Pipeline v9.9                               │    │
+│  │ COMPANIES: Enrich & Evaluate Pipeline v9.13                              │    │
 │  │  Phase 0: Entity Validation                                              │    │
 │  │  Phase 1: Brave Search Enrichment                                        │    │
 │  │  Phase 2: Pre-Evaluation Gates (5 Tiers)                                │    │
@@ -66,9 +66,9 @@ This document details the technical architecture of the Tide Pool job search aut
 
 ---
 
-## Enrich & Evaluate Pipeline v9.9 Architecture
+## Enrich & Evaluate Pipeline v9.13 Architecture
 
-The v9.9 pipeline represents a **full redesign** addressing a 4% signal rate (1/25 companies worth pursuing).
+The v9.13 pipeline represents a **full redesign** addressing a 4% signal rate (1/25 companies worth pursuing).
 
 ### Six-Phase Flow
 
@@ -176,7 +176,7 @@ INPUT (company from scraper)
 
 ---
 
-## Job Evaluation Pipeline v6.6 Architecture
+## Job Evaluation Pipeline v6.8 Architecture
 
 ```
 INPUT (job from scraper/email parser)
@@ -206,8 +206,8 @@ INPUT (job from scraper/email parser)
     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ AIRTABLE UPSERT                                                              │
-│   • v6.6: Batch 4 fixes (employee corroboration, funding recency,          │
-│     CS readiness capping, CX tooling vendor detection)                      │
+│   • v6.8: Merger/rebrand detection, P0 bug fixes                           │
+│     Employee corroboration, funding recency, CS readiness capping           │
 │   • Source field preserved with fallback lookups                            │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -267,7 +267,7 @@ Prevent duplicate evaluations when the same job/company appears from multiple so
 
 ## Job Listings Cross-Reference
 
-The Enrich & Evaluate Pipeline v9.9 checks if a company already has active job postings.
+The Enrich & Evaluate Pipeline v9.13 checks if a company already has active job postings.
 
 **Fields in Funding Alerts:**
 - `Has Active Job Posting` (checkbox)
@@ -336,17 +336,17 @@ Output:
 | Enterprise | v27 | 15 VCs: Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead | Mon/Thu 8am |
 | Micro-VC | v15 | 5 VCs: Pear, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
 
-All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.9**.
+All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.13**.
 
 ### Shared Subworkflows
 
 | Workflow | Version | Purpose |
 |----------|---------|---------|
-| Enrich & Evaluate Pipeline | v9.9 | Company evaluation with 6-phase architecture |
-| Job Evaluation Pipeline | v6.6 | Job evaluation with JD fetching |
+| Enrich & Evaluate Pipeline | v9.13 | Company evaluation with 6-phase architecture |
+| Job Evaluation Pipeline | v6.8 | Job evaluation with JD fetching |
 | Dedup Check Subworkflow | v1 | Cross-source dedup lookup |
 | Dedup Register Subworkflow | v1 | Cross-source dedup registration |
-| Funding Alerts Rescore | v4.6 | Standalone rescore (HTTP Request bypass) |
+| Funding Alerts Rescore | v4.9.2 | Standalone rescore (HTTP Request bypass) |
 
 ---
 
@@ -380,8 +380,8 @@ All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.9**.
 
 | Workflow | ID | Used By |
 |----------|-----|---------|
-| **Enrich & Evaluate Pipeline v9.9** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
-| **Job Evaluation Pipeline v6.6** | `v24qHkIsp8GVCwFkscHP8` | Job scrapers |
+| **Enrich & Evaluate Pipeline v9.13** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
+| **Job Evaluation Pipeline v6.8** | `v24qHkIsp8GVCwFkscHP8` | Job scrapers |
 | **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
 | **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
 
@@ -401,6 +401,10 @@ Interactive diagrams for visual reference:
 
 | Date | Change |
 |------|--------|
+| 2026-03-23 | **v4.9.2**: DQ tripling fix (isRescore <= 0, if/else detection skip for pre-existing DQ reasons) |
+| 2026-03-22 | **v9.13**: Bucket enforcement, VC category labels, score floor detection, business model classification |
+| 2026-03-20 | **v9.11**: P0 fix (allTextLower order); **v9.10**: PE merger/rebrand detection (45+ keywords) |
+| 2026-03-20 | **v6.8**: P0 fix (isPEBacked order); **v6.7**: PE merger/rebrand detection |
 | 2026-03-16 | **v9.9 Batch 4 Fixes**: Employee corroboration (median), funding recency penalties, CS readiness capping, CX tooling vendor detection |
 | 2026-03-16 | VC scraper cleanup: Removed Essence, Costanoa, Golden (Enterprise v27), Floodgate (Micro-VC v15) |
 | 2026-03-16 | Job Evaluation Pipeline v6.6: Ported Batch 4 fixes from company pipeline |
@@ -417,4 +421,4 @@ Interactive diagrams for visual reference:
 
 ---
 
-*Last updated: March 16, 2026*
+*Last updated: March 23, 2026*
