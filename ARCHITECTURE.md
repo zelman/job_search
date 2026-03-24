@@ -323,6 +323,7 @@ Output:
 | Work at a Startup Scraper | v12 | YC Work at a Startup | Every 6 hours |
 | Indeed Job Scraper | v6 | Indeed search configs | Configurable |
 | First Round Jobs Scraper | v1 | First Round Capital talent network | Tue/Fri 7am |
+| Lightspeed Jobs Scraper | v1 | Lightspeed portfolio jobs (Consider) | Tue/Fri 7am |
 | Health Tech Nerds Scraper | v1 | jobs.healthtechnerds.com static JSON | Every 6 hours |
 | CS Insider Scraper | v1.7 | csinsider.co/job-board (Notion embed) | Tue/Fri 7am |
 

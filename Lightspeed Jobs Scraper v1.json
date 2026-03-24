@@ -1,0 +1,197 @@
+{
+  "name": "Lightspeed Jobs Scraper v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 2,5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule (Tue/Fri 7am)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jobs.lsvp.com/api-boards/search-jobs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Cookie",
+              "value": "REPLACE_WITH_SESSION_COOKIE"
+            },
+            {
+              "name": "Origin",
+              "value": "https://jobs.lsvp.com"
+            },
+            {
+              "name": "Referer",
+              "value": "https://jobs.lsvp.com/jobs"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"meta\": {},\n  \"board\": {\n    \"id\": \"lightspeed\",\n    \"isParent\": true\n  },\n  \"query\": {\n    \"locations\": [\"United States\"],\n    \"stages\": [\"Seed\", \"Series A\", \"Growth (Series B or later)\"],\n    \"staffCountRanges\": [\"1-10\", \"10-100\", \"100-1000\"],\n    \"jobTypes\": [\"Customer Success Manager\", \"Customer Support\", \"Customer Success Executive\", \"VP, Customer Success\"]\n  },\n  \"grouped\": true\n}",
+        "options": {}
+      },
+      "id": "fetch-jobs",
+      "name": "Fetch Lightspeed Jobs API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 380]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "jobs",
+        "options": {}
+      },
+      "id": "split-companies",
+      "name": "Split by Company",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [700, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Flatten grouped results: each company has multiple jobs\nconst results = [];\n\nfor (const item of $input.all()) {\n  const company = item.json.company || {};\n  const jobs = item.json.jobs || [];\n  \n  for (const job of jobs) {\n    // Filter for CX-relevant roles\n    const titleLower = (job.title || '').toLowerCase();\n    const isCxRelevant = \n      titleLower.includes('customer') ||\n      titleLower.includes('support') ||\n      titleLower.includes('success') ||\n      titleLower.includes('experience') ||\n      titleLower.includes('cx') ||\n      titleLower.includes('service') ||\n      titleLower.includes('solutions') ||\n      titleLower.includes('implementation') ||\n      titleLower.includes('onboarding') ||\n      titleLower.includes('account manager') ||\n      titleLower.includes('technical account') ||\n      titleLower.includes('client');\n    \n    // Skip non-CX roles to reduce noise\n    if (!isCxRelevant) continue;\n    \n    // Extract salary if available\n    let salaryText = '';\n    if (job.salary && job.salary.minValue) {\n      const min = job.salary.minValue.toLocaleString();\n      const max = job.salary.maxValue ? job.salary.maxValue.toLocaleString() : min;\n      const currency = job.salary.currency?.value || 'USD';\n      salaryText = `${currency} ${min} - ${max}`;\n    }\n    \n    // Extract location\n    const location = (job.locations || []).filter(l => l).join(', ') || 'Remote';\n    \n    results.push({\n      json: {\n        // Job fields - use pipeline-expected names\n        'Job Title': job.title,\n        'Job URL': job.applyUrl,\n        'Company': company.name,\n        'Location': location,\n        'Salary': salaryText,\n        'Department': (job.departments || []).join(', '),\n        \n        // Pre-enriched company data\n        'Company Description': company.description,\n        'Company Domain': company.domain,\n        'Company Website': company.website?.url || (company.domain ? `https://${company.domain}` : ''),\n        'Employee Count': company.staffCount,\n        'Markets': (company.markets || []).join(', '),\n        'Investors': (company.investors || []).join(', '),\n        'Stage': (company.stages || []).join(', '),\n        'Office Locations': (company.officeLocations || []).join(', '),\n        \n        // Source tracking\n        'Source': 'Lightspeed',\n        'Source Detail': 'lightspeed-jobs-board'\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "flatten-jobs",
+      "name": "Flatten & Filter CX Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 380]
+    },
+    {
+      "parameters": {
+        "workflowId": "v24qHkIsp8GVCwFkscHP8",
+        "options": {}
+      },
+      "id": "call-pipeline",
+      "name": "Job Evaluation Pipeline v6.8",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1360, 380]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "count",
+              "name": "jobs_processed",
+              "value": "={{ $input.all().length }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "summary",
+      "name": "Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1580, 380]
+    }
+  ],
+  "connections": {
+    "Schedule (Tue/Fri 7am)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Lightspeed Jobs API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Lightspeed Jobs API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Lightspeed Jobs API": {
+      "main": [
+        [
+          {
+            "node": "Split by Company",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split by Company": {
+      "main": [
+        [
+          {
+            "node": "Flatten & Filter CX Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten & Filter CX Jobs": {
+      "main": [
+        [
+          {
+            "node": "Job Evaluation Pipeline v6.8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Evaluation Pipeline v6.8": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0
+}

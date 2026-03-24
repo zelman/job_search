@@ -41,7 +41,7 @@ All workflow JSON files are stored in:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              JOB SCRAPERS                                    │
 │  Work at a Startup v12, Job Alert Email Parser v3-43, Indeed v8.1, First Round v1, │
-│  Health Tech Nerds v1                                                          │
+│  Health Tech Nerds v1, Lightspeed Jobs v1                                      │
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
@@ -191,6 +191,7 @@ Current versions (as of Mar 2026):
 - `Work at a Startup Scraper v12.json`
 - `Indeed Job Scraper v8.1.json` - v8.1: **Fixed staticData API**. v8 used `$workflow.staticData` which is undefined in n8n Cloud task runner. v8.1 uses correct API: `$getWorkflowStaticData('global')`. Architecture unchanged: Parse & Store writes to staticData, All Done? checks noItemsLeft, Extract All Jobs retrieves when loop complete.
 - `First Round Jobs Scraper v1.json` - v1: API-based scraper for First Round Capital talent network. Fetches from `jobs.firstround.com/api-boards/search-jobs` with session cookie auth. Filters for CX-relevant roles, includes salary data. Runs Tue/Fri 7am. **Note:** Session cookies expire; refresh from Chrome DevTools when 401 errors occur.
+- `Lightspeed Jobs Scraper v1.json` - v1: API-based scraper for Lightspeed portfolio jobs (jobs.lsvp.com). Consider platform, same pattern as First Round. Board ID: `lightspeed`. Session cookie auth. Filters for CX-relevant roles. Runs Tue/Fri 7am. **Note:** Session cookies expire; refresh from Chrome DevTools when 401 errors occur.
 - `Health Tech Nerds Scraper v1.json` - v1: Static JSON scraper for jobs.healthtechnerds.com. Fetches `/data/transformed_job_data.json` directly (no auth needed). Filters for CX leadership roles. Rich data includes job_description, company_description, salary, experience_level, function, keywords. Runs every 6 hours.
 - `VC Scraper - Healthcare.json` (v27) - 14 VC portfolios: Flare Capital, 7wireVentures, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund, Martin Ventures, Town Hall Ventures, Transformation Capital, Brewer Lane, Mainsail Partners, Five Elms. v27: Added Tier 2 healthcare VCs (Transformation Capital, Brewer Lane) and vertical SaaS VCs (Mainsail, Five Elms). Removed Optum Ventures (timeout). Uses token in URL - find/replace `YOUR_BROWSERLESS_TOKEN` before importing.
 - `VC Scraper - Enterprise v27.json` - v27: Removed 3 low-signal VCs (Essence VC, Costanoa Ventures, Golden Ventures) due to developer-tools focus and Canadian geography mismatch. Streamlined merge tree. 15 VCs: Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead.
@@ -216,6 +217,7 @@ All job workflows use the shared `Job Evaluation Pipeline v6.8.json` subworkflow
 - Work at a Startup Scraper v12
 - Job Alert Email Parser v3-43 (includes OmniJobs scraping, Gmail limit: 2)
 - First Round Jobs Scraper v1 (API-based, session cookie auth, CX roles only)
+- Lightspeed Jobs Scraper v1 (API-based, session cookie auth, CX roles only)
 - Health Tech Nerds Scraper v1 (static JSON, no auth)
 
 **Accelerator monitoring:**

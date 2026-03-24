@@ -120,6 +120,7 @@ The v9.13 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing
 | **Work at a Startup Scraper** | v12 | YC Work at a Startup job board | Every 6 hours |
 | **Indeed Job Scraper** | v6 | Indeed scraping with internal loop architecture | Configurable |
 | **First Round Jobs Scraper** | v1 | First Round Capital talent network API | Tue/Fri 7am |
+| **Lightspeed Jobs Scraper** | v1 | Lightspeed portfolio jobs (Consider API) | Tue/Fri 7am |
 | **Health Tech Nerds Scraper** | v1 | jobs.healthtechnerds.com static JSON | Every 6 hours |
 | **CS Insider Scraper** | v1.7 | csinsider.co/job-board (Notion embed) | Tue/Fri 7am |
 
