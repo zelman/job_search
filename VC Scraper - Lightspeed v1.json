@@ -43,7 +43,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"code\": \"module.exports = async ({ page }) => { await page.goto('https://jobs.lsvp.com/companies?stages=Seed+funded&stages=Series+A&stages=Growth&staffCountRanges=1-10&staffCountRanges=10-100&locations=United+States', { waitUntil: 'networkidle0', timeout: 60000 }); let prevHeight = 0; for (let i = 0; i < 20; i++) { await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await new Promise(r => setTimeout(r, 1500)); const newHeight = await page.evaluate(() => document.body.scrollHeight); if (newHeight === prevHeight) break; prevHeight = newHeight; } return { data: await page.content(), type: 'text/html' }; }\"\n}",
+        "jsonBody": "{\n  \"code\": \"export default async function({ page }) { await page.goto('https://jobs.lsvp.com/companies?stages=Seed+funded&stages=Series+A&stages=Growth&staffCountRanges=1-10&staffCountRanges=10-100&locations=United+States', { waitUntil: 'networkidle0', timeout: 60000 }); let prevHeight = 0; for (let i = 0; i < 20; i++) { await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)); await new Promise(r => setTimeout(r, 2500)); const newHeight = await page.evaluate(() => document.body.scrollHeight); if (newHeight === prevHeight) break; prevHeight = newHeight; } return { data: await page.content(), type: 'text/html' }; }\"\n}",
         "options": {
           "timeout": 180000
         }
