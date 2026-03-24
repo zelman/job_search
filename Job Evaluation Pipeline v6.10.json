@@ -1,5 +1,5 @@
 {
-  "name": "Job Evaluation Pipeline v6.8",
+  "name": "Job Evaluation Pipeline v6.10",
   "nodes": [
     {
       "parameters": {
@@ -388,48 +388,26 @@
     },
     {
       "parameters": {
-        "operation": "upsert",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tbl6ZV2rHjWz56pP3",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl6ZV2rHjWz56pP3",
-          "mode": "id"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Job Title": "={{ $json['Job Title'] }}",
-            "Company": "={{ $json['Company'] }}",
-            "Location": "={{ $json['Location'] }}",
-            "Source": "={{ $json['Source'] }}",
-            "Job URL": "={{ $json['Job URL'] }}",
-            "Job ID": "={{ $json['Job ID'] }}",
-            "Salary Info": "={{ $json['Salary Info'] }}",
-            "Date Found": "={{ $json['Date Found'] }}",
-            "Tide-Pool Score": "={{ $json['Tide-Pool Score'] }}",
-            "Tide-Pool Rationale": "={{ $json['Tide-Pool Rationale'] }}",
-            "Industry": "={{ $json['Industry'] }}",
-            "Company Stage": "={{ $json['Company Stage'] }}",
-            "Role Type": "={{ $json['Role Type'] }}",
-            "Builder Evidence": "={{ $json['Builder Evidence'] }}",
-            "Maintainer Evidence": "={{ $json['Maintainer Evidence'] }}",
-            "Recommendation": "={{ $json['Recommendation'] }}"
-          },
-          "matchingColumns": [
-            "Job URL"
-          ],
-          "schema": []
-        },
-        "options": {
-          "typecast": true
-        }
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ records: [{ fields: { 'Job Title': $json['Job Title'] || '', 'Company': $json['Company'] || '', 'Location': $json['Location'] || '', 'Source': $json['Source'] || '', 'Job URL': $json['Job URL'] || '', 'Job ID': $json['Job ID'] || '', 'Salary Info': $json['Salary Info'] || '', 'Date Found': $json['Date Found'] !== undefined ? $json['Date Found'] : null, 'Tide-Pool Score': $json['Tide-Pool Score'] !== undefined ? $json['Tide-Pool Score'] : null, 'Tide-Pool Rationale': $json['Tide-Pool Rationale'] || '', 'Industry': $json['Industry'] || '', 'Company Stage': $json['Company Stage'] || '', 'Role Type': $json['Role Type'] || '', 'Builder Evidence': $json['Builder Evidence'] || '', 'Maintainer Evidence': $json['Maintainer Evidence'] || '', 'Recommendation': $json['Recommendation'] || '' } }], performUpsert: { fieldsToMergeOn: ['Job URL'] }, typecast: true }) }}",
+        "options": {}
       },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2860,
         150
@@ -438,7 +416,7 @@
       "name": "Upsert to Airtable",
       "credentials": {
         "airtableTokenApi": {
-          "id": "airtable-token",
+          "id": "svcspqcZ9yGYzqGm",
           "name": "Airtable Token"
         }
       }
@@ -477,34 +455,26 @@
     },
     {
       "parameters": {
-        "operation": "upsert",
-        "base": {
-          "__rl": true,
-          "value": "appFEzXvPWvRtXgRY",
-          "mode": "id"
+        "method": "PATCH",
+        "url": "https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tbl6ZV2rHjWz56pP3",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         },
-        "table": {
-          "__rl": true,
-          "value": "tbl6ZV2rHjWz56pP3",
-          "mode": "id"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Job URL": "={{ $('Parse Response').item.json['Job URL'] }}",
-            "Review Status": "New"
-          },
-          "matchingColumns": [
-            "Job URL"
-          ],
-          "schema": []
-        },
-        "options": {
-          "typecast": true
-        }
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ records: [{ fields: { 'Job URL': $('Parse Response').item.json['Job URL'], 'Review Status': 'New' } }], performUpsert: { fieldsToMergeOn: ['Job URL'] }, typecast: true }) }}",
+        "options": {}
       },
-      "type": "n8n-nodes-base.airtable",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         3080,
         50
@@ -513,7 +483,7 @@
       "name": "Set Review Status New",
       "credentials": {
         "airtableTokenApi": {
-          "id": "airtable-token",
+          "id": "svcspqcZ9yGYzqGm",
           "name": "Airtable Token"
         }
       }
@@ -521,7 +491,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Prepare data for dedup registration\nconst airtableRecord = $json;\nlet parseResponseData = {};\nlet restoreData = {};\ntry { parseResponseData = $('Parse Response').item?.json || {}; } catch(e) { parseResponseData = {}; }\ntry { restoreData = $('Restore Job Data').item?.json || {}; } catch(e) { restoreData = {}; }\n\n// Normalize function for key generation\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\nconst company = parseResponseData['Company'] || '';\nconst title = parseResponseData['Job Title'] || '';\nconst source = parseResponseData['Source'] || 'Unknown';\nconst key = `job:${normalize(company)}:${normalize(title)}`;\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: title,\n    source: source,\n    recordType: 'job',\n    airtableRecordId: airtableRecord.id,\n    _emailId: parseResponseData._emailId,\n    _originalRecord: airtableRecord\n  }\n};"
+        "jsCode": "// Prepare data for dedup registration\nconst airtableRecord = $json;\nlet parseResponseData = {};\nlet restoreData = {};\ntry { parseResponseData = $('Parse Response').item?.json || {}; } catch(e) { parseResponseData = {}; }\ntry { restoreData = $('Restore Job Data').item?.json || {}; } catch(e) { restoreData = {}; }\n\n// Normalize function for key generation\nconst normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '').trim() : '';\n\nconst company = parseResponseData['Company'] || '';\nconst title = parseResponseData['Job Title'] || '';\nconst source = parseResponseData['Source'] || 'Unknown';\nconst key = `job:${normalize(company)}:${normalize(title)}`;\n\n// Handle both Airtable node format (id at root) and HTTP Request format (records[0].id)\nconst recordId = airtableRecord.id || (airtableRecord.records && airtableRecord.records[0]?.id) || '';\n\nreturn {\n  json: {\n    key: key,\n    company: company,\n    title: title,\n    source: source,\n    recordType: 'job',\n    airtableRecordId: recordId,\n    _emailId: parseResponseData._emailId,\n    _originalRecord: airtableRecord\n  }\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
