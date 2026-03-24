@@ -43,7 +43,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"url\": \"https://jobs.lsvp.com/companies?stages=Seed+funded&stages=Series+A&stages=Growth&staffCountRanges=1-10&staffCountRanges=10-100\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 },\n  \"waitForTimeout\": 5000\n}",
+        "jsonBody": "{\n  \"url\": \"https://jobs.lsvp.com/companies?stages=Seed+funded&stages=Series+A&stages=Growth&staffCountRanges=1-10&staffCountRanges=10-100&locations=United+States\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 },\n  \"waitForTimeout\": 5000\n}",
         "options": {
           "timeout": 120000
         }
