@@ -1,0 +1,212 @@
+{
+  "name": "VC Scraper - Lightspeed v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 2,5"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule (Tue/Fri 8am)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"url\": \"https://jobs.lsvp.com/companies?stages=Seed+funded&stages=Series+A&stages=Growth&staffCountRanges=1-10&staffCountRanges=10-100\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 },\n  \"waitForTimeout\": 5000\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "fetch-companies",
+      "name": "Browserless Lightspeed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 380],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "iatzkTu30nb6GVd9",
+          "name": "Browserless"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Lightspeed portfolio companies from Consider page HTML\nconst items = $input.all();\n// Browserless /content returns HTML in data field or directly\nconst html = String(items[0]?.json?.data || items[0]?.json || '');\nconst results = [];\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\nconst vcName = 'Lightspeed';\n\n// Consider renders company cards with links and names\n// Pattern 1: Look for company card links with company names\n// Consider uses Next.js with JSON data embedded in script tags\n\n// Try to extract from __NEXT_DATA__ script\nconst nextDataMatch = html.match(/<script[^>]*id=\"__NEXT_DATA__\"[^>]*>([\\s\\S]*?)<\\/script>/i);\nif (nextDataMatch) {\n  try {\n    const nextData = JSON.parse(nextDataMatch[1]);\n    // Navigate to companies data - try multiple known Consider paths\n    const pageProps = nextData?.props?.pageProps || {};\n    const companies = pageProps.companies || pageProps.data?.companies || pageProps.initialData?.companies || pageProps.dehydratedState?.queries?.[0]?.state?.data?.companies || pageProps.dehydratedState?.queries?.[0]?.state?.data?.results || [];\n    \n    for (const company of companies) {\n      const name = company.name || company.companyName || '';\n      if (!name || name.length < 2) continue;\n      \n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (seen.has(key)) continue;\n      seen.add(key);\n      \n      const domain = company.domain || '';\n      const website = company.website?.url || (domain ? `https://${domain}` : '');\n      const description = company.description || company.tagline || `${name} - Lightspeed portfolio company`;\n      const stage = (company.stages || []).join(', ') || company.stage || '';\n      const employees = company.staffCount || company.employeeCount || '';\n      \n      results.push({\n        json: {\n          'Company Name': name,\n          'VC Firm': vcName,\n          'Company Description': description,\n          'Company URL': website,\n          'Stage': stage,\n          'Employee Count': employees,\n          'Status': 'New',\n          'First Seen Date': today,\n          'Source': 'VC Portfolio'\n        }\n      });\n    }\n  } catch (e) {\n    // JSON parse failed, fall through to HTML parsing\n  }\n}\n\n// Fallback: Extract company slugs from HTML links and convert to names\nif (results.length === 0) {\n  const slugPattern = /href=\"\\/companies\\/([a-z0-9][a-z0-9-]{1,50}[a-z0-9])\"/gi;\n  const skipSlugs = new Set(['all', 'list', 'search', 'filter', 'page']);\n  \n  let match;\n  while ((match = slugPattern.exec(html)) !== null) {\n    const slug = match[1];\n    if (skipSlugs.has(slug)) continue;\n    \n    // Convert slug to title case name: 'acme-corp' -> 'Acme Corp'\n    const name = slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\n    const key = slug.replace(/-/g, '');\n    \n    if (!seen.has(key) && key.length >= 2) {\n      seen.add(key);\n      results.push({\n        json: {\n          'Company Name': name,\n          'VC Firm': vcName,\n          'Company Description': `${name} - Lightspeed portfolio company`,\n          'Company URL': '',\n          'Status': 'New',\n          'First Seen Date': today,\n          'Source': 'VC Portfolio'\n        }\n      });\n    }\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { _empty: true, _message: 'No companies found from Lightspeed', vcName, htmlLength: html.length, hasNextData: !!nextDataMatch, responseKeys: Object.keys(items[0]?.json || {}).slice(0, 5) } }];\n}\n\nreturn results;"
+      },
+      "id": "parse-companies",
+      "name": "Parse Companies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 380]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "not-empty",
+              "leftValue": "={{ $json._empty }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-empties",
+      "name": "Filter Empty Results",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [920, 380]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "batch-companies",
+      "name": "Split In Batches (10)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1140, 380]
+    },
+    {
+      "parameters": {
+        "workflowId": "UPDATE_AFTER_IMPORT",
+        "options": {}
+      },
+      "id": "call-pipeline",
+      "name": "Enrich & Evaluate Pipeline v9.13",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1360, 380]
+    }  ],
+  "connections": {
+    "Schedule (Tue/Fri 8am)": {
+      "main": [
+        [
+          {
+            "node": "Browserless Lightspeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Browserless Lightspeed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Lightspeed": {
+      "main": [
+        [
+          {
+            "node": "Parse Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Companies": {
+      "main": [
+        [
+          {
+            "node": "Filter Empty Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Empty Results": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (10)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches (10)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Enrich & Evaluate Pipeline v9.13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich & Evaluate Pipeline v9.13": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (10)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0
+}

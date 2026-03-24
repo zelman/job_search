@@ -336,6 +336,7 @@ Output:
 | Social Justice | v25 | Kapor, Backstage, Harlem, Collab | Wed/Sat 8am |
 | Enterprise | v27 | 15 VCs: Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead | Mon/Thu 8am |
 | Micro-VC | v15 | 5 VCs: Pear, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
+| Lightspeed | v1 | Lightspeed Venture Partners (Consider API) | Tue/Fri 8am |
 
 All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.13**.
 

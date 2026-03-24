@@ -42,10 +42,6 @@
               "value": "application/json"
             },
             {
-              "name": "Cookie",
-              "value": "REPLACE_WITH_SESSION_COOKIE"
-            },
-            {
               "name": "Origin",
               "value": "https://jobs.lsvp.com"
             },

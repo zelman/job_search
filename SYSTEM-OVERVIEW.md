@@ -133,6 +133,7 @@ The v9.13 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing
 | **Social Justice** | v25 | Kapor Capital, Backstage, Harlem, Collab |
 | **Enterprise** | v27 | 15 VCs: Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead |
 | **Micro-VC** | v15 | 5 VCs: Pear VC, Afore, Unshackled, 2048, **Y Combinator** |
+| **Lightspeed** | v1 | Lightspeed Venture Partners (Consider API, Seed-Growth, 1-100 emp) |
 
 All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.13**.
 
