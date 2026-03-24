@@ -79,7 +79,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Flatten grouped results: each company has multiple jobs\nconst results = [];\n\nfor (const item of $input.all()) {\n  const company = item.json.company || {};\n  const jobs = item.json.jobs || [];\n  \n  for (const job of jobs) {\n    // Filter for CX-relevant roles\n    const titleLower = (job.title || '').toLowerCase();\n    const isCxRelevant = \n      titleLower.includes('customer') ||\n      titleLower.includes('support') ||\n      titleLower.includes('success') ||\n      titleLower.includes('experience') ||\n      titleLower.includes('cx') ||\n      titleLower.includes('service') ||\n      titleLower.includes('solutions') ||\n      titleLower.includes('implementation') ||\n      titleLower.includes('onboarding') ||\n      titleLower.includes('account manager') ||\n      titleLower.includes('technical account');\n    \n    // Skip non-CX roles to reduce noise\n    if (!isCxRelevant) continue;\n    \n    // Extract salary if available\n    let salaryText = '';\n    if (job.salary && job.salary.minValue) {\n      const min = job.salary.minValue.toLocaleString();\n      const max = job.salary.maxValue ? job.salary.maxValue.toLocaleString() : min;\n      const currency = job.salary.currency?.value || 'USD';\n      salaryText = `${currency} ${min} - ${max}`;\n    }\n    \n    // Extract location\n    const location = (job.locations || []).filter(l => l).join(', ') || 'Remote';\n    \n    results.push({\n      json: {\n        // Job fields - use pipeline-expected names\n        'Job Title': job.title,\n        'Job URL': job.applyUrl,\n        'Company': company.name,\n        'Location': location,\n        'Salary': salaryText,\n        'Department': (job.departments || []).join(', '),\n        \n        // Pre-enriched company data\n        'Company Description': company.description,\n        'Company Domain': company.domain,\n        'Company Website': company.website?.url || `https://${company.domain}`,\n        'Employee Count': company.staffCount,\n        'Markets': (company.markets || []).join(', '),\n        'Investors': (company.investors || []).join(', '),\n        'Stage': (company.stages || []).join(', '),\n        'Office Locations': (company.officeLocations || []).join(', '),\n        \n        // Source tracking\n        'Source': 'First Round Jobs',\n        'Source Detail': 'first-round-capital'\n      }\n    });\n  }\n}\n\nreturn results;"
+        "jsCode": "// Flatten grouped results: each company has multiple jobs\nconst results = [];\n\nfor (const item of $input.all()) {\n  const company = item.json.company || {};\n  const jobs = item.json.jobs || [];\n  \n  for (const job of jobs) {\n    // Filter for CX-relevant roles\n    const titleLower = (job.title || '').toLowerCase();\n    const isCxRelevant = \n      titleLower.includes('customer') ||\n      titleLower.includes('support') ||\n      titleLower.includes('success') ||\n      titleLower.includes('experience') ||\n      titleLower.includes('cx') ||\n      titleLower.includes('service') ||\n      titleLower.includes('solutions') ||\n      titleLower.includes('implementation') ||\n      titleLower.includes('onboarding') ||\n      titleLower.includes('account manager') ||\n      titleLower.includes('technical account') ||\n      titleLower.includes('client');\n    \n    // Skip non-CX roles to reduce noise\n    if (!isCxRelevant) continue;\n    \n    // Extract salary if available\n    let salaryText = '';\n    if (job.salary && job.salary.minValue) {\n      const min = job.salary.minValue.toLocaleString();\n      const max = job.salary.maxValue ? job.salary.maxValue.toLocaleString() : min;\n      const currency = job.salary.currency?.value || 'USD';\n      salaryText = `${currency} ${min} - ${max}`;\n    }\n    \n    // Extract location\n    const location = (job.locations || []).filter(l => l).join(', ') || 'Remote';\n    \n    results.push({\n      json: {\n        // Job fields - use pipeline-expected names\n        'Job Title': job.title,\n        'Job URL': job.applyUrl,\n        'Company': company.name,\n        'Location': location,\n        'Salary': salaryText,\n        'Department': (job.departments || []).join(', '),\n        \n        // Pre-enriched company data\n        'Company Description': company.description,\n        'Company Domain': company.domain,\n        'Company Website': company.website?.url || `https://${company.domain}`,\n        'Employee Count': company.staffCount,\n        'Markets': (company.markets || []).join(', '),\n        'Investors': (company.investors || []).join(', '),\n        'Stage': (company.stages || []).join(', '),\n        'Office Locations': (company.officeLocations || []).join(', '),\n        \n        // Source tracking\n        'Source': 'First Round Jobs',\n        'Source Detail': 'first-round-capital'\n      }\n    });\n  }\n}\n\nreturn results;"
       },
       "id": "flatten-jobs",
       "name": "Flatten & Filter CX Jobs",
@@ -93,7 +93,7 @@
         "options": {}
       },
       "id": "call-pipeline",
-      "name": "Job Evaluation Pipeline v6",
+      "name": "Job Evaluation Pipeline v6.8",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [1360, 380]
@@ -168,14 +168,14 @@
       "main": [
         [
           {
-            "node": "Job Evaluation Pipeline v6",
+            "node": "Job Evaluation Pipeline v6.8",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Job Evaluation Pipeline v6": {
+    "Job Evaluation Pipeline v6.8": {
       "main": [
         [
           {
