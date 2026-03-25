@@ -34,7 +34,7 @@ This document details the technical architecture of the Tide Pool job search aut
 │  └─────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐    │
-│  │ COMPANIES: Enrich & Evaluate Pipeline v9.13                              │    │
+│  │ COMPANIES: Enrich & Evaluate Pipeline v9.14                              │    │
 │  │  Phase 0: Entity Validation                                              │    │
 │  │  Phase 1: Brave Search Enrichment                                        │    │
 │  │  Phase 2: Pre-Evaluation Gates (5 Tiers)                                │    │
@@ -66,9 +66,9 @@ This document details the technical architecture of the Tide Pool job search aut
 
 ---
 
-## Enrich & Evaluate Pipeline v9.13 Architecture
+## Enrich & Evaluate Pipeline v9.14 Architecture
 
-The v9.13 pipeline represents a **full redesign** addressing a 4% signal rate (1/25 companies worth pursuing).
+The v9.14 pipeline represents a **full redesign** addressing a 4% signal rate (1/25 companies worth pursuing).
 
 ### Six-Phase Flow
 
@@ -267,7 +267,7 @@ Prevent duplicate evaluations when the same job/company appears from multiple so
 
 ## Job Listings Cross-Reference
 
-The Enrich & Evaluate Pipeline v9.13 checks if a company already has active job postings.
+The Enrich & Evaluate Pipeline v9.14 checks if a company already has active job postings.
 
 **Fields in Funding Alerts:**
 - `Has Active Job Posting` (checkbox)
@@ -338,17 +338,17 @@ Output:
 | Micro-VC | v15 | 5 VCs: Pear, Afore, Unshackled, 2048, **Y Combinator** | Tue/Fri 8am |
 | Lightspeed | v1 | Lightspeed Venture Partners (Consider API) | Tue/Fri 8am |
 
-All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.13**.
+All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.14**.
 
 ### Shared Subworkflows
 
 | Workflow | Version | Purpose |
 |----------|---------|---------|
-| Enrich & Evaluate Pipeline | v9.13 | Company evaluation with 6-phase architecture |
+| Enrich & Evaluate Pipeline | v9.14 | Company evaluation with 6-phase architecture |
 | Job Evaluation Pipeline | v6.8 | Job evaluation with JD fetching |
 | Dedup Check Subworkflow | v1 | Cross-source dedup lookup |
 | Dedup Register Subworkflow | v1 | Cross-source dedup registration |
-| Funding Alerts Rescore | v4.9.2 | Standalone rescore (HTTP Request bypass) |
+| Funding Alerts Rescore | v4.10 | Standalone rescore (HTTP Request bypass) |
 
 ---
 
@@ -382,7 +382,7 @@ All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.13**.
 
 | Workflow | ID | Used By |
 |----------|-----|---------|
-| **Enrich & Evaluate Pipeline v9.13** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
+| **Enrich & Evaluate Pipeline v9.14** | `UPDATE_AFTER_IMPORT` | All VC scrapers |
 | **Job Evaluation Pipeline v6.8** | `v24qHkIsp8GVCwFkscHP8` | Job scrapers |
 | **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
 | **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
@@ -393,9 +393,10 @@ All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.13**.
 
 Interactive diagrams for visual reference:
 
-- **[System Architecture v9.5](https://www.figma.com/online-whiteboard/create-diagram/b857c91d-d47d-4e6b-a2ff-352e76022940)** - Overview of all scrapers, pipelines, and Airtable tables
-- **[v9.5 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/8f8d33b6-7b5f-44ce-b606-45a74ef3e2d8)** - 5-phase architecture with decision points
-- **[v9.5 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/916baf11-8e56-4d7a-a2f7-5def6b74042f)** - 100-point scoring with domain distance
+- **[v9.14 Pipeline Gate Flow](https://www.figma.com/online-whiteboard/create-diagram/cb5c5eb9-5060-499f-81d5-7292d946ef07)** - 6-phase architecture with updated gates (employee 200, funding $150M, data sufficiency 2/5)
+- **[Rescore v4.10 Flow](https://www.figma.com/online-whiteboard/create-diagram/19495a8f-0112-4279-9c84-b27652948a06)** - Standalone rescore workflow with cross-reference and evaluation
+- **[System Architecture v9.5](https://www.figma.com/online-whiteboard/create-diagram/b857c91d-d47d-4e6b-a2ff-352e76022940)** - Overview of all scrapers, pipelines, and Airtable tables (legacy)
+- **[v9.5 Scoring Architecture](https://www.figma.com/online-whiteboard/create-diagram/916baf11-8e56-4d7a-a2f7-5def6b74042f)** - 100-point scoring with domain distance (legacy)
 
 ---
 
@@ -403,7 +404,9 @@ Interactive diagrams for visual reference:
 
 | Date | Change |
 |------|--------|
+| 2026-03-24 | **v4.10**: Gate tightening (employee cap 200, funding cap $150M), data sufficiency gate (2/5), CS Readiness ceiling (25), fixed duplicate output bug |
 | 2026-03-23 | **v4.9.2**: DQ tripling fix (isRescore <= 0, if/else detection skip for pre-existing DQ reasons) |
+| 2026-03-24 | **v9.14**: Gate tightening (employee cap 200, funding cap $150M), data sufficiency gate (2/5), CS Readiness ceiling (25), aligned with SCORING-THRESHOLDS.md |
 | 2026-03-22 | **v9.13**: Bucket enforcement, VC category labels, score floor detection, business model classification |
 | 2026-03-20 | **v9.11**: P0 fix (allTextLower order); **v9.10**: PE merger/rebrand detection (45+ keywords) |
 | 2026-03-20 | **v6.8**: P0 fix (isPEBacked order); **v6.7**: PE merger/rebrand detection |

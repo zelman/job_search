@@ -35,7 +35,7 @@ The system is designed around a unique personal positioning framework called "Ti
 │                    ENRICHMENT & EVALUATION LAYER                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │ COMPANIES: Enrich & Evaluate Pipeline v9.13 (6-Phase Architecture)    │  │
+│  │ COMPANIES: Enrich & Evaluate Pipeline v9.14 (6-Phase Architecture)    │  │
 │  │  Phase 0: Entity Validation (is this a company?)                      │  │
 │  │  Phase 1: Brave Search Enrichment + Enhanced Detection                │  │
 │  │  Phase 2: Pre-Evaluation Gates (5 Tiers)                             │  │
@@ -75,11 +75,11 @@ The system is designed around a unique personal positioning framework called "Ti
 
 ---
 
-## v9.13 Pipeline Highlights
+## v9.14 Pipeline Highlights
 
-The v9.13 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing) from v8.5 through a full redesign:
+The v9.14 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing) from v8.5 through a full redesign:
 
-### Key Features (v9 → v9.13)
+### Key Features (v9 → v9.14)
 
 | Feature | Purpose | Impact |
 |---------|---------|--------|
@@ -96,7 +96,7 @@ The v9.13 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing
 | **Funding Recency Penalty** (v9.9) | 2yr=-5pts, 3yr=-10pts, 4yr=-15pts | Penalizes zombie startups |
 | **CX Tooling Detection** (v9.9) | Helpdesk/chatbot vendors flagged | They sell to CS, don't need CS leadership |
 | **PE Merger/Rebrand Detection** (v9.10) | 45+ merger keywords, predecessor name extraction | Catches PE roll-ups masquerading as startups |
-| **Bucket Enforcement** (v9.13) | Score floor detection, VC category labels | Ensures PASS/WATCH/APPLY consistency |
+| **Bucket Enforcement** (v9.14) | Score floor detection, VC category labels | Ensures PASS/WATCH/APPLY consistency |
 
 ### Gate Tiers
 
@@ -135,17 +135,17 @@ The v9.13 pipeline addresses a **4% signal rate** (1/25 companies worth pursuing
 | **Micro-VC** | v15 | 5 VCs: Pear VC, Afore, Unshackled, 2048, **Y Combinator** |
 | **Lightspeed** | v1 | Lightspeed Venture Partners (Consider API, Seed-Growth, 1-100 emp) |
 
-All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.13**.
+All VC scrapers use the shared **Enrich & Evaluate Pipeline v9.14**.
 
 ### Shared Subworkflows
 
 | Workflow | Version | Purpose |
 |----------|---------|---------|
-| **Enrich & Evaluate Pipeline** | v9.13 | Company evaluation (6-phase architecture) |
+| **Enrich & Evaluate Pipeline** | v9.14 | Company evaluation (6-phase architecture) |
 | **Job Evaluation Pipeline** | v6.8 | Job evaluation with JD fetching |
 | **Dedup Check Subworkflow** | v1 | Cross-source dedup lookup |
 | **Dedup Register Subworkflow** | v1 | Cross-source dedup registration |
-| **Funding Alerts Rescore** | v4.9.2 | Standalone rescore workflow |
+| **Funding Alerts Rescore** | v4.10 | Standalone rescore workflow |
 
 ---
 
@@ -278,5 +278,5 @@ Interactive diagrams for visual reference:
 
 ---
 
-*Document updated: March 23, 2026*
-*System Version: Enrich & Evaluate Pipeline v9.13, Job Evaluation Pipeline v6.8, Funding Alerts Rescore v4.9.2, Job Alert Email Parser v3-43, VC Scrapers v15-v27*
+*Document updated: March 24, 2026*
+*System Version: Enrich & Evaluate Pipeline v9.14, Job Evaluation Pipeline v6.8, Funding Alerts Rescore v4.10, Job Alert Email Parser v3-43, VC Scrapers v15-v27*

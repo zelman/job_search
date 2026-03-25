@@ -1,0 +1,153 @@
+{
+  "name": "Config Fetcher Subworkflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start",
+      "name": "When Called By Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tblofzQpzGEN8igVS",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendQuery": false,
+        "options": {}
+      },
+      "id": "fetch-config",
+      "name": "Fetch Config Table",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.airtable.com/v0/appFEzXvPWvRtXgRY/tblU2izcb0wnCNMuV",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filterByFormula",
+              "value": "{Active}=TRUE()"
+            },
+            {
+              "name": "fields[]",
+              "value": "Firm Name"
+            },
+            {
+              "name": "fields[]",
+              "value": "Aliases"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-pe-firms",
+      "name": "Fetch PE Firms",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Config Fetcher Subworkflow - Transform to Config Object\n// Version: 1.1 - Fixed field names (Key not Config Key)\n\nconst configRecords = $input.first().json.records || [];\nconst peFirmsRecords = $input.last().json.records || [];\n\n// Build config object from Config table\nconst config = {};\nfor (const record of configRecords) {\n  const key = record.fields['Key'];\n  const value = record.fields['Value'];\n  \n  if (key) {\n    // Auto-detect type: if it looks like a number, parse it\n    const numValue = parseFloat(value);\n    if (!isNaN(numValue) && value && value.trim() !== '') {\n      config[key] = numValue;\n    } else if (value === 'true' || value === 'TRUE') {\n      config[key] = true;\n    } else if (value === 'false' || value === 'FALSE') {\n      config[key] = false;\n    } else {\n      config[key] = value;\n    }\n  }\n}\n\n// Build PE firms list with aliases\nconst peFirms = [];\nconst peAliasMap = {};\n\nfor (const record of peFirmsRecords) {\n  const firmName = record.fields['Firm Name'];\n  const aliases = record.fields['Aliases'] || '';\n  \n  if (firmName) {\n    peFirms.push(firmName);\n    \n    // Add aliases\n    if (aliases) {\n      const aliasList = aliases.split(',').map(s => s.trim());\n      for (const alias of aliasList) {\n        if (alias) {\n          peAliasMap[alias.toLowerCase()] = firmName;\n        }\n      }\n    }\n    \n    // Map firm name to itself (for direct matches)\n    peAliasMap[firmName.toLowerCase()] = firmName;\n  }\n}\n\n// Build PE regex pattern\nconst allPeTerms = [...peFirms];\nfor (const alias of Object.keys(peAliasMap)) {\n  if (!allPeTerms.some(t => t.toLowerCase() === alias)) {\n    allPeTerms.push(alias);\n  }\n}\n\n// Escape special regex characters and build pattern\nconst escapedTerms = allPeTerms.map(term => \n  term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')\n);\nconst peRegexPattern = new RegExp('\\\\b(' + escapedTerms.join('|') + ')\\\\b', 'i');\n\nreturn {\n  json: {\n    config: config,\n    peFirms: peFirms,\n    peAliasMap: peAliasMap,\n    peRegexPattern: peRegexPattern.source,\n    _fetchedAt: new Date().toISOString(),\n    _configCount: Object.keys(config).length,\n    _peFirmCount: peFirms.length\n  }\n};"
+      },
+      "id": "transform",
+      "name": "Transform to Config Object",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "When Called By Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Fetch Config Table",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch PE Firms",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Config Table": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PE Firms": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Transform to Config Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-25T00:00:00.000Z",
+  "versionId": "1.1"
+}

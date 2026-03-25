@@ -20,7 +20,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │ Enrich & Evaluate Pipeline v9.13  │◄── UPDATE_AFTER_IMPORT
+│                    │ Enrich & Evaluate Pipeline v9.14  │◄── UPDATE_AFTER_IMPORT
 │                    │   (100-point company scoring) │    (UPDATE after import)
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -68,22 +68,36 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │  Funding Alerts Rescore v4.9.2│ (standalone)           │
-│                    │  HTTP Request → Airtable API  │ (every 1 min)          │
+│                    │  Funding Alerts Rescore v4.13 │ (standalone)           │
+│                    │  Config-driven gates          │ (every 2 min)          │
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
-│              ┌─────────────────────┼─────────────────────┐                  │
-│              ▼                     ▼                     ▼                  │
-│   ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐          │
-│   │ Brave Search    │   │ Claude API      │   │ HTTP Request    │          │
-│   │ (enrichment)    │   │ (evaluation)    │   │ (Airtable PATCH)│          │
-│   └─────────────────┘   └─────────────────┘   └─────────────────┘          │
-│                                                         │                   │
-│                                                         ▼                   │
-│                                               ┌─────────────────┐          │
-│                                               │ Funding Alerts  │          │
-│                                               │ (Airtable)      │          │
-│                                               └─────────────────┘          │
+│       ┌────────────────────────────┼────────────────────────────┐           │
+│       ▼                            ▼                            ▼           │
+│ ┌───────────────┐     ┌─────────────────┐          ┌─────────────────┐     │
+│ │ Config Fetcher│     │ Brave Search    │          │ Claude API      │     │
+│ │ (thresholds)  │     │ (enrichment)    │          │ (evaluation)    │     │
+│ └───────┬───────┘     └────────┬────────┘          └─────────────────┘     │
+│         │                      │                                            │
+│         └──────────┬───────────┘                                            │
+│                    ▼                                                        │
+│          ┌─────────────────┐                         ┌─────────────────┐   │
+│          │ Parse Enrich    │                         │ HTTP Request    │   │
+│          │ (config-driven) │────────────────────────▶│ (Airtable PATCH)│   │
+│          └─────────────────┘                         └─────────────────┘   │
+│                                                               │             │
+│                    ┌──────────────────────────────────────────┘             │
+│                    ▼                                                        │
+│          ┌─────────────────┐     ┌─────────────────┐                       │
+│          │ Config Table    │     │ PE Firms Table  │                       │
+│          │ (thresholds)    │     │ (43 firms)      │                       │
+│          └─────────────────┘     └─────────────────┘                       │
+│                    └──────────────┬─────────────────┘                       │
+│                                   ▼                                         │
+│                         ┌─────────────────┐                                │
+│                         │ Funding Alerts  │                                │
+│                         │ (Airtable)      │                                │
+│                         └─────────────────┘                                │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -115,13 +129,16 @@ The pipeline evaluates companies and jobs against this candidate profile:
 
 ## FigJam Diagrams
 
-Interactive diagrams for the Job Search system architecture (updated Mar 14, 2026):
+Interactive diagrams for the Job Search system architecture (updated Mar 25, 2026):
 
 | Diagram | Purpose | Link |
 |---------|---------|------|
 | **System Architecture v9.5** | Overview of all scrapers, pipelines, and Airtable tables | [View in FigJam](https://www.figma.com/online-whiteboard/create-diagram/b857c91d-d47d-4e6b-a2ff-352e76022940) |
 | **v9.5 Pipeline Gate Flow** | 5-phase gate architecture with decision points | [View in FigJam](https://www.figma.com/online-whiteboard/create-diagram/8f8d33b6-7b5f-44ce-b606-45a74ef3e2d8) |
 | **v9.5 Scoring Architecture** | 100-point scoring breakdown with domain distance modifiers | [View in FigJam](https://www.figma.com/online-whiteboard/create-diagram/916baf11-8e56-4d7a-a2f7-5def6b74042f) |
+| **v4.13 Config Architecture** | Config-driven gates with Airtable Config + PE Firms tables | [View in FigJam](https://www.figma.com/online-whiteboard/create-diagram/0c04ac94-2bd5-471c-b6fe-3f91a1194a8e) |
+
+**Note:** Mermaid Chart diagrams are deprecated. FigJam is the canonical diagram platform. Delete outdated Mermaid Chart diagrams in the "Job Search" project (keep only Feedback-Loop-Rejected-Jobs).
 
 ---
 
@@ -135,6 +152,7 @@ These IDs are assigned by n8n on import. Update Execute Workflow nodes when repl
 | **Job Evaluation Pipeline** | `v24qHkIsp8GVCwFkscHP8` | WaaS, Job Alert Parser, Indeed, First Round |
 | **Dedup Check Subworkflow** | `bBjeG_RXRI10eAA5TiN7n` | Both pipelines |
 | **Dedup Register Subworkflow** | `MDzcHPZMySqn1DrGh8J0-` | Both pipelines |
+| **Config Fetcher Subworkflow** | `aCym9UVO8b7Lz2Lt` | Rescore v4.13 |
 
 **After importing a new pipeline version:**
 1. Note the new workflow ID from n8n
@@ -153,13 +171,63 @@ These IDs are assigned by n8n on import. Update Execute Workflow nodes when repl
 | **Job Listings** | `tbl6ZV2rHjWz56pP3` | Job evaluations from job scrapers |
 | **LinkedIn Connections** | `tbliKHRPEVI6SceJX` | Imported from LinkedIn CSV |
 | **Seen Opportunities** | `tbll8igHTftSqsTtQ` | Cross-source dedup registry |
-| **Indeed Searches** | `tblofzQpzGEN8igVS` | Indeed job search configs |
+| **Config** | `tblofzQpzGEN8igVS` | Gate thresholds (config-driven architecture) |
+| **PE Firms** | `tblU2izcb0wnCNMuV` | 43 PE/Growth Equity firms with aliases |
 
 **MCP Limitation:** The Airtable MCP does not have a delete tool. To delete records, use the Airtable API directly:
 ```bash
 curl -X DELETE "https://api.airtable.com/v0/{baseId}/{tableId}/{recordId}" \
   -H "Authorization: Bearer {pat_token}"
 ```
+
+---
+
+## Config-Driven Architecture (v4.13)
+
+Gate thresholds are stored in Airtable instead of hardcoded in JavaScript. This allows non-engineer editing and single-source-of-truth management.
+
+**Config Table (`tblofzQpzGEN8igVS`):**
+
+| Key | Value | Purpose |
+|-----|-------|---------|
+| EMPLOYEE_HARD_CAP | 150 | DQ if employee count exceeds |
+| EMPLOYEE_SOFT_CAP | 100 | Penalty zone starts |
+| FUNDING_HARD_CAP | 75000000 | DQ if funding exceeds $75M |
+| FUNDING_SOFT_CAP | 50000000 | Soft warning zone |
+| FUNDING_PER_HEAD_THRESHOLD | 2000000 | DQ if >$2M/employee |
+| FUNDING_PER_HEAD_MIN_EMPLOYEES | 50 | Funding ratio only applies below this |
+| CS_READINESS_CAP | 25 | Max CS readiness score |
+| SCORE_APPLY_THRESHOLD | 70 | Score >= this = Apply bucket |
+| SCORE_WATCH_THRESHOLD | 40 | Score >= this = Monitor bucket |
+| HEADCOUNT_PENALTY | -10 | Penalty in soft zone |
+| REBUILD_BONUS | 20 | Bonus for rebuild signal detected |
+| COMPANY_AGE_HARD_CAP | 8 | DQ if older than 8 years |
+| COMPANY_AGE_SOFT_CAP | 5 | Warning if 5-8 years |
+| VALUATION_UNICORN | 1000000000 | DQ at $1B+ valuation |
+| VALUATION_HIGH | 500000000 | DQ at $500M+ valuation |
+
+**PE Firms Table (`tblU2izcb0wnCNMuV`):**
+
+43 PE/Growth Equity firms with:
+- `Firm Name` - Canonical name (e.g., "New Mountain Capital")
+- `Aliases` - Comma-separated alternatives (e.g., "New Mountain")
+- `Active` - Checkbox for filtering
+
+**Config Fetcher Subworkflow (`aCym9UVO8b7Lz2Lt`):**
+
+Fetches both tables and transforms to a config object:
+```javascript
+{
+  config: { EMPLOYEE_HARD_CAP: 150, ... },
+  peFirms: ["Vista Equity", "Thoma Bravo", ...],
+  peAliasMap: { "new mountain": "New Mountain Capital", ... },
+  peRegexPattern: "\\b(Vista Equity|Thoma Bravo|...)\\b"
+}
+```
+
+**To modify thresholds:**
+1. Edit the Config table in Airtable
+2. Changes take effect on next workflow run (no code deploy needed)
 
 ---
 
@@ -206,7 +274,7 @@ Current versions (as of Mar 2026):
 - `Dedup Register Subworkflow.json` (cross-source deduplication registration)
 - `Feedback Loop - Not a Fit.json` (weekly pattern analysis)
 - `Feedback Loop - Applied.json` (weekly calibration analysis)
-- `Funding Alerts Rescore v4.6-standalone.json` (**ACTIVE** - Standalone workflow using HTTP Request for Airtable updates. Runs every 2 min. **v4.6: BATCH 4 SCORING FIXES (Mar 16, 2026)** - 4 fixes targeting false positives/negatives: (1) Employee count corroboration (median of multiple mentions). (2) Funding recency graduated penalties (2yr=-5, 3yr=-10, 4yr=-15). (3) CS Hire Readiness score capping (unlikely=65, low=75). (4) CX Tooling company detection (helpdesk/chatbot vendors flagged). **v4.5: Job & Network Cross-Reference** - Added 3 new nodes to cross-reference companies against Job Listings and LinkedIn Connections tables. Populates 6 new fields: Has Active Job Posting, Has CX Job Posting, Matching Job Titles, Has Network Connection, Connection Name, Connection LinkedIn URL. CX job detection uses pattern matching for CS/Support/Implementation roles. Connection selection prioritizes senior roles. **v4.4: Aligned with v9.8 gates** - Added unicorn gate (>$1B valuation), company age gate (>8 years = DQ), known large companies list, v9.7 sector gates (fintech, construction tech, etc.), PLG-dominant gate, evidence-based CS readiness prompt. **v4.3:** Filter excludes all processed statuses. **v4.2:** Added v9 fields.)
+- `Funding Alerts Rescore v4.13-standalone.json` (**ACTIVE** - Config-driven standalone workflow. Runs every 2 min. **v4.13: CONFIG-DRIVEN ARCHITECTURE (Mar 25, 2026)** - All gate thresholds fetched from Airtable Config table. PE firms list fetched from PE Firms table. No hardcoded magic numbers. Uses Config Fetcher subworkflow (`aCym9UVO8b7Lz2Lt`). **v4.12: DQ DUPLICATION FIX** - Wrapped detection logic in `if (!existing_dq_reasons)` to prevent duplicate DQ reasons accumulating on rescore. **v4.11: GATE TIGHTENING** - Employee cap 150, funding cap $75M, PE acquisition detection, hardware/deeptech keywords, funding-per-head ratio gate. **v4.10: GATE TIGHTENING + FIXES** - Aligned with SCORING-THRESHOLDS.md. **v4.5: Job & Network Cross-Reference** - Cross-reference against Job Listings and LinkedIn Connections tables.)
 
 ## Workflow Architecture
 
@@ -472,8 +540,8 @@ https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_I
 **Workflow Status (Mar 2026):**
 | Workflow | Status | Notes |
 |----------|--------|-------|
-| Funding Alerts Rescore v4.9.2 | **ACTIVE** | v4.9.2: DQ tripling fix (isRescore <= 0, if/else detection skip). v4.9: Bucket enforcement, score floor detection |
-| Enrich & Evaluate Pipeline v9.13 | **ACTIVE** | v9.13: Bucket enforcement, VC category labels, score floor detection, business model classification |
+| Funding Alerts Rescore v4.10 | **ACTIVE** | v4.10: Gate tightening (employee 200, funding $150M), data sufficiency, duplicate output fix. v4.9.2: DQ tripling fix |
+| Enrich & Evaluate Pipeline v9.14 | **ACTIVE** | v9.14: Bucket enforcement, VC category labels, score floor detection, business model classification |
 | Job Evaluation Pipeline v6.8 | **ACTIVE** | v6.8: P0 fix (isPEBacked order). v6.7: Merger/rebrand detection |
 | Enrich & Evaluate Pipeline v8.5 | **ROLLBACK** | Keep for rollback if needed |
 
