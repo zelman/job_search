@@ -1,0 +1,301 @@
+{
+  "name": "SEC Form D Scraper v2.4",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "trigger",
+      "name": "Daily 8am ET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "aCym9UVO8b7Lz2Lt",
+          "mode": "id"
+        }
+      },
+      "id": "fetch-config",
+      "name": "Fetch Config",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Store config in workflow context and set date range\nconst configData = $input.first().json;\nconst today = new Date();\nconst yesterday = new Date(today);\nyesterday.setDate(yesterday.getDate() - 1);\nconst fmt = (d) => d.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    startdt: fmt(yesterday),\n    enddt: fmt(today),\n    _config: configData.config || {}\n  }\n}];"
+      },
+      "id": "set-date-range",
+      "name": "Set Date Range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://efts.sec.gov/LATEST/search-index",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            { "name": "q", "value": "" },
+            { "name": "forms", "value": "D,D/A" },
+            { "name": "dateRange", "value": "custom" },
+            { "name": "startdt", "value": "={{ $json.startdt }}" },
+            { "name": "enddt", "value": "={{ $json.enddt }}" },
+            { "name": "from", "value": "0" },
+            { "name": "size", "value": "200" }
+          ]
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "TidePool JobSearch eric.zelman@gmail.com" },
+            { "name": "Accept", "value": "application/json" }
+          ]
+        },
+        "options": {
+          "timeout": 30000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "efts-search",
+      "name": "EFTS Search Form D",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Parse EFTS response and extract filing data\nconst dateRangeData = $('Set Date Range').first().json;\nconst config = dateRangeData._config || {};\n\nconst data = $input.first().json;\nconst hits = data.hits?.hits || [];\n\nif (hits.length === 0) {\n  return [{ json: { _skip: true, message: 'No filings found', _config: config } }];\n}\n\n// Group by CIK, prefer D/A amendments\nconst entityMap = new Map();\nfor (const h of hits) {\n  const cik = h._source.ciks?.[0];\n  if (!cik) continue;\n  const existing = entityMap.get(cik);\n  if (!existing || h._source.form === 'D/A') entityMap.set(cik, h);\n}\n\nreturn Array.from(entityMap.values()).map(h => {\n  const src = h._source;\n  const cik = src.ciks?.[0] || '';\n  const cikNum = cik.replace(/^0+/, '');\n  const adsh = src.adsh || '';\n  const adshNoDashes = adsh.replace(/-/g, '');\n  let entityName = src.display_names?.[0] || 'Unknown';\n  entityName = entityName.replace(/\\s*\\(CIK\\s*\\d+\\)\\s*$/i, '').trim();\n  const filePath = `Archives/edgar/data/${cikNum}/${adshNoDashes}/primary_doc.xml`;\n  return {\n    json: {\n      entityName,\n      cik,\n      filePath,\n      fileDate: src.file_date,\n      formType: src.form || src.file_type,\n      location: src.biz_locations || 'unknown',\n      _config: config\n    }\n  };\n});"
+      },
+      "id": "parse-efts",
+      "name": "Parse EFTS Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json._skip }}",
+              "operator": { "type": "boolean", "operation": "notTrue" },
+              "rightValue": true
+            }
+          ]
+        }
+      },
+      "id": "filter-valid",
+      "name": "Filter Valid Filings",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "// v2.3: Prepare Form D data for Dedup Check subworkflow\n// Dedup Check expects: company, title, recordType, source, _originalJobData\nconst input = $json;\n\nreturn {\n  json: {\n    // Fields expected by Dedup Check\n    company: input.entityName || '',\n    title: '',  // Form D filings don't have job titles\n    recordType: 'company',\n    source: 'SEC Form D',\n    // Store ALL original Form D data in _originalJobData (preserved by Dedup Check)\n    _originalJobData: {\n      entityName: input.entityName,\n      cik: input.cik,\n      filePath: input.filePath,\n      fileDate: input.fileDate,\n      formType: input.formType,\n      location: input.location,\n      _config: input._config\n    }\n  }\n};"
+      },
+      "id": "prepare-dedup",
+      "name": "Prepare for Dedup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "bBjeG_RXRI10eAA5TiN7n",
+          "mode": "id"
+        },
+        "mode": "each"
+      },
+      "id": "dedup-check",
+      "name": "Dedup Check",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "language": "javaScript",
+        "jsCode": "// v2.3: Recover Form D data after Dedup Check\n// Dedup Check returns: isDuplicate, key, _originalJobData\n// We need to: map isDuplicate -> isNew, recover Form D fields\nconst input = $json;\nconst formDData = input._originalJobData || {};\n\nreturn {\n  json: {\n    // Map isDuplicate to isNew (inverted)\n    isNew: input.isDuplicate === false,\n    isDuplicate: input.isDuplicate,\n    dedupKey: input.key,\n    // Recover all Form D fields\n    entityName: formDData.entityName,\n    cik: formDData.cik,\n    filePath: formDData.filePath,\n    fileDate: formDData.fileDate,\n    formType: formDData.formType,\n    location: formDData.location,\n    _config: formDData._config\n  }\n};"
+      },
+      "id": "recover-formd",
+      "name": "Recover Form D Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1670, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.isNew }}",
+              "operator": { "type": "boolean", "operation": "true" },
+              "rightValue": true
+            }
+          ]
+        }
+      },
+      "id": "filter-new",
+      "name": "Filter New Only",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.sec.gov/{{ $json.filePath }}",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "TidePool JobSearch eric.zelman@gmail.com" },
+            { "name": "Accept", "value": "application/xml" }
+          ]
+        },
+        "options": {
+          "batching": { "batch": { "batchSize": 1, "batchInterval": 1000 } },
+          "response": { "response": { "responseFormat": "text", "outputPropertyName": "xmlData", "neverError": true } },
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-xml",
+      "name": "Fetch Form D XML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Parse Form D XML and extract key fields\n// v2.3: Input should have all Form D fields preserved by HTTP node (outputPropertyName)\nconst originalItems = $('Filter New Only').all();\nconst xmlItems = $input.all();\n\n// Build lookup map by filePath for safe matching\nconst originalByPath = new Map();\nfor (const orig of originalItems) {\n  if (orig.json.filePath) {\n    originalByPath.set(orig.json.filePath, orig.json);\n  }\n}\n\nreturn xmlItems.map((item, index) => {\n  const xml = item.json.data || item.json.xmlData || item.json.body || '';\n  \n  // Get original data - HTTP node with outputPropertyName should preserve input\n  let original = {};\n  if (item.json.filePath && item.json._config) {\n    // HTTP node preserved input - use directly\n    original = item.json;\n  } else if (item.json.filePath && originalByPath.has(item.json.filePath)) {\n    // Match by filePath (safe)\n    original = originalByPath.get(item.json.filePath);\n  } else {\n    // Fallback to index\n    original = originalItems[index]?.json || {};\n    console.log('WARNING: Using index-based fallback for item ' + index);\n  }\n  \n  function extract(tag) {\n    const patterns = [\n      new RegExp('<' + tag + '>([^<]*)</' + tag + '>', 'i'),\n      new RegExp('<com:' + tag + '>([^<]*)</com:' + tag + '>', 'i')\n    ];\n    for (const p of patterns) {\n      const m = xml.match(p);\n      if (m) return m[1].trim();\n    }\n    return null;\n  }\n  \n  const issuerName = extract('issuerName') || original.entityName || 'Unknown';\n  const industryGroup = extract('industryGroupType');\n  const totalOffering = parseFloat(extract('totalOfferingAmount')) || 0;\n  const totalSold = parseFloat(extract('totalAmountSold')) || 0;\n  const yearOfIncorp = extract('yearOfIncorporation');\n  const state = extract('issuerState');\n  const city = extract('issuerCity');\n  const fundingAmount = totalOffering > 0 ? totalOffering : totalSold;\n  \n  if (!issuerName || issuerName === 'Unknown') {\n    console.log('WARNING: Failed to extract issuerName from XML for ' + (original.filePath || 'unknown'));\n  }\n  \n  return {\n    json: {\n      issuerName,\n      industryGroup,\n      fundingAmount,\n      totalSold,\n      yearOfIncorp,\n      state,\n      city,\n      cik: original.cik,\n      fileDate: original.fileDate,\n      formType: original.formType,\n      filePath: original.filePath,\n      _config: original._config\n    }\n  };\n});"
+      },
+      "id": "parse-xml",
+      "name": "Parse Form D XML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Pre-filter Form D filings based on config-driven criteria\nconst items = $input.all();\nconst results = [];\n\n// Get config from first item (carried through from Fetch Config)\nconst config = items[0]?.json._config || {};\n\nconst FUNDING_MIN = config.FORM_D_FUNDING_MIN || 5000000;\nconst FUNDING_MAX = config.FUNDING_HARD_CAP || 75000000;\nconst AGE_HARD_CAP = config.COMPANY_AGE_HARD_CAP || 8;\n\nconst targetKeywords = [\n  'health care', 'technology', 'biotechnology', 'biotech',\n  'telecommunications', 'software', 'saas', 'ai',\n  'artificial intelligence', 'machine learning', 'data',\n  'cloud', 'cyber', 'medical', 'pharma', 'therapeutic', 'diagnostic'\n];\n\nconst excludeIndustries = [\n  'Pooled Investment Fund', 'Real Estate', 'Residential', 'Commercial',\n  'REITS', 'Oil & Gas', 'Energy', 'Mining', 'Agriculture',\n  'Lodging & Conventions', 'Restaurants', 'Banking', 'Commercial Banking',\n  'Insurance', 'Investing', 'Construction'\n];\n\nfunction isTargetIndustry(industry) {\n  if (!industry) return true;\n  if (industry === 'Other') return true;\n  const lower = industry.toLowerCase();\n  for (const ex of excludeIndustries) {\n    if (lower.includes(ex.toLowerCase())) return false;\n  }\n  for (const kw of targetKeywords) {\n    if (lower.includes(kw)) return true;\n  }\n  return false;\n}\n\nconst currentYear = new Date().getFullYear();\n\nfor (const item of items) {\n  const d = item.json;\n  \n  // Skip items with no funding data\n  if (!d.fundingAmount && !d.totalSold) continue;\n  \n  // Funding gate\n  if (d.fundingAmount < FUNDING_MIN || d.fundingAmount > FUNDING_MAX) continue;\n  \n  // Industry gate\n  if (!isTargetIndustry(d.industryGroup)) continue;\n  \n  // US only\n  if (d.state && d.state.length !== 2) continue;\n  \n  // Age gate\n  if (d.yearOfIncorp && (currentYear - parseInt(d.yearOfIncorp)) > AGE_HARD_CAP) continue;\n  \n  // Infer stage from funding amount\n  let inferredStage = 'Unknown';\n  if (d.fundingAmount <= 10000000) inferredStage = 'Seed';\n  else if (d.fundingAmount <= 30000000) inferredStage = 'Series A';\n  else if (d.fundingAmount <= 75000000) inferredStage = 'Series B';\n  \n  results.push({\n    json: {\n      ...d,\n      inferredStage,\n      source: 'SEC Form D'\n    }\n  });\n}\n\nif (results.length === 0) return [];\nreturn results;"
+      },
+      "id": "pre-filter",
+      "name": "Pre-Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Format output for Enrich & Evaluate Pipeline input schema\n// v2.4: Use lowercase 'source' (pipeline reads item.source)\nconst items = $input.all();\n\nif (items.length === 0) return [];\n\nreturn items.map(item => {\n  const d = item.json;\n  \n  const parts = [];\n  if (d.industryGroup) parts.push(d.industryGroup);\n  if (d.city && d.state) parts.push(d.city + ', ' + d.state);\n  if (d.inferredStage !== 'Unknown') parts.push(d.inferredStage);\n  \n  const fundingStr = (d.fundingAmount / 1000000).toFixed(1) + 'M';\n  const description = d.issuerName + ' - SEC Form D filing. ' +\n    fundingStr + ' raised. ' + parts.join('. ') + '.';\n  \n  // Build SEC EDGAR URL as fallback company URL\n  const cikNum = d.cik ? d.cik.replace(/^0+/, '') : '';\n  const secUrl = cikNum ? 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=' + cikNum : '';\n  \n  return {\n    json: {\n      'Company Name': d.issuerName,\n      'Company URL': secUrl,\n      'Company Description': description,\n      'source': 'SEC Form D',\n      'VC Firm': 'SEC Form D',\n      'Total Funding': fundingStr,\n      'Founded Year': d.yearOfIncorp ? parseInt(d.yearOfIncorp) : null,\n      'Stage': d.inferredStage,\n      'Employee Count': null\n    }\n  };\n});"
+      },
+      "id": "format-pipeline",
+      "name": "Format for Pipeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 300]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "rcMNDrfZR6csHRsYKFn0W",
+          "mode": "id"
+        },
+        "mode": "each"
+      },
+      "id": "enrich-evaluate",
+      "name": "Send to Enrich & Evaluate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [3100, 300]
+    }
+  ],
+  "connections": {
+    "Daily 8am ET": {
+      "main": [[{ "node": "Fetch Config", "type": "main", "index": 0 }]]
+    },
+    "Fetch Config": {
+      "main": [[{ "node": "Set Date Range", "type": "main", "index": 0 }]]
+    },
+    "Set Date Range": {
+      "main": [[{ "node": "EFTS Search Form D", "type": "main", "index": 0 }]]
+    },
+    "EFTS Search Form D": {
+      "main": [[{ "node": "Parse EFTS Response", "type": "main", "index": 0 }]]
+    },
+    "Parse EFTS Response": {
+      "main": [[{ "node": "Filter Valid Filings", "type": "main", "index": 0 }]]
+    },
+    "Filter Valid Filings": {
+      "main": [[{ "node": "Prepare for Dedup", "type": "main", "index": 0 }]]
+    },
+    "Prepare for Dedup": {
+      "main": [[{ "node": "Dedup Check", "type": "main", "index": 0 }]]
+    },
+    "Dedup Check": {
+      "main": [[{ "node": "Recover Form D Data", "type": "main", "index": 0 }]]
+    },
+    "Recover Form D Data": {
+      "main": [[{ "node": "Filter New Only", "type": "main", "index": 0 }]]
+    },
+    "Filter New Only": {
+      "main": [[{ "node": "Fetch Form D XML", "type": "main", "index": 0 }]]
+    },
+    "Fetch Form D XML": {
+      "main": [[{ "node": "Parse Form D XML", "type": "main", "index": 0 }]]
+    },
+    "Parse Form D XML": {
+      "main": [[{ "node": "Pre-Filter", "type": "main", "index": 0 }]]
+    },
+    "Pre-Filter": {
+      "main": [[{ "node": "Format for Pipeline", "type": "main", "index": 0 }]]
+    },
+    "Format for Pipeline": {
+      "main": [[{ "node": "Send to Enrich & Evaluate", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "versionId": "2.4"
+}
