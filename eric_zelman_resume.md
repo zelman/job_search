@@ -1,3 +1,28 @@
+# Eric Zelman - Resume Content Source of Truth
+
+**Last updated:** March 30, 2026
+**Purpose:** Single source of truth for resume content when generating tailored resumes.
+
+---
+
+## HARD RULES (never violate)
+
+- **No em-dashes** anywhere in any document
+- **No AI writing giveaways** -- no overly polished or consultant-style phrasing
+- **No Lean/Six Sigma** -- Eric does not have this training
+- **NEVER claim 25% cost-per-contact reduction** -- this metric is false
+- **No "3 data centers"** -- Bigtincan was not self-hosted
+- **Do not claim engineering team size** -- unknown/unverified
+- **KB/self-service deflection was weak** -- no deflection wins to claim
+- **Font: Calibri** -- explicitly set on every TextRun and at document level, never rely on docx defaults
+- **Apple tenure starts Sep 1998** (not 1999)
+- **AWS certification: Completed** -- no expected completion date on any resume
+- **Managing managers:** Eric managed 2 managers at Bigtincan, each with 5-12 direct reports (5+ years). Do not flag this as a gap.
+
+---
+
+## HEADER
+
 # Eric Zelman
 
 Founding CS Leader | Customer Success & Support | B2B SaaS
@@ -46,6 +71,23 @@ Bigtincan | Waltham, MA (Remote)
 - Deployed AI-powered agent assistance tools within Zendesk to enhance support team productivity and response quality
 - Owned $2M department budget, forecasted staffing requirements, and optimized resource allocation across global teams
 - Developed career paths and succession planning for team members from individual contributors through team lead roles
+
+**Key facts for this role:**
+- $130M company
+- 1,500+ customers total
+- 13 products (Agnitio, Bigtincan Hub, Clearslide, Zunos, VoiceVibes, Brainshark, SalesDirector AI, StorySlab, FatStax, Modus, Xinn, Veelo, Asdaq, plus custom micro-applications)
+- 250+ Fortune 1000 enterprise clients
+- 2M+ users
+- 15,000+ annual cases
+- 93%+ CSAT
+- 25+ person team
+- $2M budget
+- 24/7 coverage, three continents (North America, EMEA, APAC)
+- Customers ranged from 50 users/$20K annually to 65,000+ users/$2M+ annually
+- Industries: tech, consumer goods, pharmaceuticals, life sciences, manufacturing
+- Marquee customers: Thyssenkrupp, Red Bull, Eaton, Anheuser-Busch, British Telecom, WL Gore, Optus, Cardinal Health, T-Mobile, AT&T
+- Managed 2 managers, each with 5-12 direct reports (5+ years at this level)
+- Laid off June 2025 following Showpad's acquisition of Bigtincan
 
 ### Senior Director of Customer Support | Sep 2012 – Sep 2021
 Bigtincan | Waltham, MA
@@ -131,4 +173,30 @@ Hampshire College | Amherst, MA | May 1992
 
 ## Professional Development
 
+**Memberships:** Customer Success Collective, Pavilion
+
 **Technology:** Salesforce Service Cloud certified, Zendesk, CRM platform management, support automation tools
+
+---
+
+## SUMMARY VARIANTS
+
+**Default (builder/0-to-1 narrative):** Used in Professional Summary above.
+
+**AI-native variant (v2):**
+Summary leads with "designing what stays human, what gets automated." VP bullets lead with competitive advantage, not deflection. Use when targeting AI-forward companies or when the role description emphasizes AI/automation.
+
+---
+
+## TAILORING NOTES
+
+**When tailoring for specific roles:**
+- Adjust title line to match job posting language (e.g., "Head of Customer Success" or "Director of Support")
+- Reorder bullets within VP role to emphasize what the target company cares about most
+- For healthcare roles: emphasize Alliance HealthCare experience, regulated industry language, compliance awareness
+- For AI-forward roles: use AI-native summary variant, lead VP bullets with AI tooling deployment
+- For pure CS (not support) roles: emphasize retention, expansion, voice of customer, product partnership bullets
+- For support-heavy roles: emphasize team scaling, SLA framework, escalation management, tooling bullets
+- Earlier career (HP, Alliance, Apple) can be condensed to 1-2 bullets each for 2-page versions
+- 3 pages for senior roles where full career arc demonstrates progression
+- Honest gap acknowledgment outperforms papering over gaps -- cover letters name domain gaps directly and frame them as learning curves, not skills gaps
