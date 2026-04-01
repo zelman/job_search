@@ -211,23 +211,24 @@ At the end of any substantive session, generate a wrap-up before the user discon
 
 2. **Decisions:** Bullet any architectural, strategic, or design decisions made. One sentence each: what was decided and why.
 
-3. **CONTEXT update:** Draft the specific text to add or replace in CONTEXT-lens-project.md. Write the actual paragraph, not a vague reminder.
+3. **CONTEXT update:** Draft the specific text to add or replace in this repo's CONTEXT file. Write the actual paragraph, not a vague reminder. For job_search, update CONTEXT-job-search.md (in Claude.ai Job Search 2 knowledge).
 
 4. **Commit:** Stage and commit with a descriptive message. Group related changes. Don't bundle unrelated work.
 
 5. **Memory flag:** If anything changed that should persist in Claude.ai memory (stable facts, tool configs, project structure), note it explicitly so the user can add it in their next Claude.ai session.
 
+6. **Profile updates:** Note any review profile changes needed from this session. Format:
+   `Profile updates: none` or
+   `Profile updates: pipeline.md — add [bug name] to Known Bugs; scraper.md — update Healthcare to v29`
+   Triggers: new bug discovered, bug fixed (move to Previously Fixed), version bump on a pipeline/scraper/rescore component, threshold change, scraper added/removed/dedup status changed.
+
 ### Versioning
 
 All artifacts use semantic versioning (v1.0, v1.1, v2.0). Track in filenames or internal version constants. Bump on every meaningful change.
 
-### Legal Files
-
-Signed NDAs, patent application drafts, and attorney correspondence are local only — never committed to git. Strategy reasoning (IP-STRATEGY.md, competitive-landscape.md) is committed normally.
-
 ### What Goes Where
 
-- **Git (this repo):** Product code, specs, schemas, scorers, deliverables, strategy docs
+- **Git (this repo):** Code, workflow JSON, specs, config, strategy docs
 - **Airtable Artifact Registry:** Row for every versioned artifact with location and git status
 - **Claude.ai CONTEXT files:** Living state summaries, updated via session wrap-up
 - **Claude.ai memory:** Stable personal facts, tool configs, project structure (slow-changing)
