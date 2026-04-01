@@ -1,50 +1,41 @@
-# Review Context: Tide Pool Job Search System
+# Review Context: General
 
-## Project Summary
-AI-powered job search automation. VC portfolio scrapers and job board parsers feed companies/jobs through enrichment (Brave Search API) and scoring (Claude Haiku) pipelines, storing results in Airtable. Built on n8n cloud.
+## What This Code Does
+The Lens Project is an AI-powered career identity discovery and job-fit platform. Users complete a guided discovery process (8 sections, AI-facilitated or coach-facilitated) that produces a "lens document" — a portable markdown file with YAML frontmatter. This document governs automated job opportunity scoring via signal matching (not keyword matching). The product has a free tier (lens generation), paid tier ($50/mo briefings), coach channel (B2B2C), and planned enterprise tier (bidirectional matching).
 
-## Airtable
-Base: appFEzXvPWvRtXgRY
-- Funding Alerts (tbl7yU6QYfIFSC2nD): Company evaluations from VC scrapers
-- Job Listings (tbl6ZV2rHjWz56pP3): Job evaluations from job scrapers
-- Seen Opportunities (tbll8igHTftSqsTtQ): Cross-source dedup (BUG: not being populated by Dedup Register)
-- LinkedIn Connections (tbliKHRPEVI6SceJX): Network matching (feature disabled in v9)
-- Config (tblofzQpzGEN8igVS): Gate thresholds for config-driven architecture
-- PE Firms (tblU2izcb0wnCNMuV): 43 PE/Growth Equity firms with aliases
+## Architecture
+- **Repo:** `github.com/zelman/tidepool` — contains agent lens monolith (root), product code (`lens/`), user files (`users/`), scoring config (root)
+- **Product directory:** `lens/` — `src/` (JSX scorers), `app/` (Next.js intake), `schemas/` (LENS-SPEC, templates), `docs/` (enhancements, scoring engine), `deliverables/` (decks, reports), `public/` (static assets)
+- **User files:** `users/{name}/` — `lens.md`, `scoring.yaml`, `sources.yaml` per user
+- **Related repos:** `zelman/job_search` (n8n pipeline execution code), `zelman/work` (resume/career materials)
+- **Deployment:** Vercel auto-deploys from `main` branch. Active URLs: `lens-red-two.vercel.app`, `lens-feedback.vercel.app`
+- **Data:** Airtable base `appFO5zLT7ZehXaBo` — Artifact Registry, Testers (13 records), Lens Feedback, Lens Plan tables
+- **Pipeline:** n8n cloud (`zelman.app.n8n.cloud`) reads monolith (`tide-pool-agent-lens.md`) via raw GitHub URL
 
-## Key Workflow IDs
-- E&E Pipeline v9.17: rcMNDrfZR6csHRsYKFn0W
-- Job Eval Pipeline v6.8: v24qHkIsp8GVCwFkscHP8
-- Dedup Check: bBjeG_RXRI10eAA5TiN7n
-- Dedup Register: MDzcHPZMySqn1DrGh8J0- (BUG: not writing to Seen Opportunities)
-- Config Fetcher: aCym9UVO8b7Lz2Lt
-- Rescore v4.15: standalone, runs every 2 min
+## Key Patterns and Conventions
+- **Design language (Swiss Style):** White (#FFFFFF) background, black (#1A1A1A) type, red (#D93025) primary accent, orange (#E8590C) secondary, zero border-radius, hairline rules (1-2px). Helvetica Neue / DM Sans for product. All-caps spaced section labels in red. Green (#2D6A2D) for positive signals. Monospace for scores. DO NOT use wide character spacing on headers.
+- **Versioning:** Semantic versioning on filenames or internal version constants. Versions iterate with every build.
+- **Artifact registry:** Every artifact gets an Airtable row immediately (table `tblcE723hIH692lSy`). Workflow defined in `ARTIFACT-WORKFLOW.md`.
+- **Legal:** IP docs, NDAs are local-only (gitignored). Provisional patent filed 3/24/26, App #64/015,187. Convert to nonprovisional by 3/24/27.
+- **Principle:** "Deliver manual first" — build infrastructure only after validating demand.
 
-## Candidate Profile
-- Target: VP/Director/Head of CS at VC-backed B2B SaaS, Series A/B, 20-150 employees
-- 13 years at Bigtincan as founding CS hire, built 0-to-25 global team across 3 continents
-- Domains: enterprise SaaS, healthcare tech, AI platforms, regulated industries
-- Customer scale: 250+ Fortune 1000 accounts, 2M+ users, 15K+ annual cases, 93%+ CSAT
-- Hard rules: No PE-backed, no NRR-first framing, no developer-as-customer without enterprise motion
+## Current State
+- **Phase:** Active validation. 5 warm testers (Ravi, Nathan, Edith, Brendan, Graham). Tester walkthrough deck built (10 slides, Swiss Style).
+- **Patent:** Provisional filed. IP Summary v1.1 and Mutual NDA v1.0 ready. NDAs pending with James, Nathan, Todd, Ravi.
+- **Competitive:** Jack & Jill AI is primary reference ($20M seed, ~50K users). Conclusion: J&J ceiling is recruiter-level intelligence; Lens Project floor is coaching-level depth.
+- **Open items:** Guardrails.yaml extraction, Vercel deployment of updated components, signal library to replace flat bonus architecture, multi-tenant deferred.
 
-## Never Claim (Hard Rules)
-- No 25% cost-per-contact reduction (false metric)
-- No Lean/Six Sigma (no training)
-- No "3 data centers" (Bigtincan was not self-hosted)
-- KB/self-service deflection was weak (no deflection wins)
+## Known Bugs to Check Against
+- See form, scoring, coach, and config profiles for specific bugs.
+- **General pattern:** System prompts are hardcoded in JSX files. Any edit to scoring logic, coaching prompts, or gate parameters must be manually synced across files until guardrails extraction is complete.
 
-## Tech Stack
-n8n cloud (zelman.app.n8n.cloud), Claude Haiku 4.5 (scoring), Brave Search API (enrichment), Browserless.io (scraping), Airtable (storage), GitHub (code)
+## Previously Fixed (do not re-flag)
+- The dark theme aesthetic (warm neutrals, #a08060) is **tech debt, not a design choice** — Swiss Style migration is planned for all components including lens-scorer.jsx and lens-form.jsx. Flag any new code introducing dark-theme patterns.
+- The sample briefing page at `lens-red-two.vercel.app/weekly-inflection-briefing-sample.html` may use old styling. This is expected.
 
-## Known Bugs
-1. Dedup Register subworkflow not writing to Seen Opportunities table
-2. Airtable batch node scrambles record IDs (use HTTP Request for PATCH)
-3. Network Match Alerts disabled (duplicate record bug from parallel merge paths)
-
-## Current Status (April 2026)
-- E&E Pipeline: v9.17 (Pre-Brave Gate added)
-- Rescore: v4.15 (isRescore bug fix)
-- Job Eval: v6.8 (isPEBacked order fix)
-- Brave API cost reduction in progress (Tiers 1 & 2 done, Tier 1.5 partial, Tier 3 pending)
-- Dual-source dedup deployed to Growth Stage, Healthcare, Enterprise scrapers
-- Still needed: Micro-VC, Social Justice, Climate Tech, Lightspeed
+## Integration Points
+- **Claude API:** Sonnet for discovery and scoring. No proxy — client-side fetch.
+- **Airtable:** Feedback form writes via serverless proxy. Tester tracking and artifact registry via MCP.
+- **n8n:** Pipeline reads agent lens from GitHub raw URL. Scoring runs on Haiku 4.5.
+- **Vercel:** Static deployment. Serverless functions for Airtable proxy.
+- **GitHub:** 4 active repos. Cross-project context via `CONTEXT-cross-project.md` in `zelman/tidepool`.
