@@ -21,7 +21,7 @@ All workflow JSON files are stored in:
 │                                    │                                         │
 │                                    ▼                                         │
 │                    ┌───────────────────────────────┐                        │
-│                    │ Enrich & Evaluate Pipeline v9.16  │◄── rcMNDrfZR6csHRsYKFn0W
+│                    │ Enrich & Evaluate Pipeline v9.17  │◄── rcMNDrfZR6csHRsYKFn0W
 │                    │   (100-point company scoring) │
 │                    └───────────────┬───────────────┘                        │
 │                                    │                                         │
@@ -160,6 +160,63 @@ These IDs are assigned by n8n on import. Update Execute Workflow nodes when repl
 1. Note the new workflow ID from n8n
 2. Update the Execute Workflow nodes in parent workflows
 3. Update this table
+
+---
+
+## VC Scraper Inventory
+
+Complete scraper registry with dedup status. **Update this table when modifying any scraper.**
+
+| Scraper | ID | VCs | Schedule | Scraper-Level Dedup | Signal Rate | Notes |
+|---------|-----|-----|----------|---------------------|-------------|-------|
+| Growth Stage v2.7 | `u0rWl0T2SRZgfuJe` | 2 (Emergence, GC) | Wed/Sat 8am | Dual-source (Seen Opps + Funding Alerts) | Emergence 24%, GC 11% | v2.6: Removed Insight Partners, Iconiq, SignalFire (zero signal). v2.7: Added dual-source dedup. |
+| Healthcare v28 | `mwAsPafWzMtSqycYkEdjX` | 14 | Tue/Fri 8am | Dual-source (v28) | a16z Bio 53%, 7wire 36%, Oak 29%, Flare 24% | v28: Added dual-source dedup. v27 had hardcoded knownCompanies arrays. |
+| Enterprise v28 | `QhG1YU8-b2pTgrvAx-yrd` | 15 | Mon/Thu 8am | Dual-source (v28) | Varied | v28: Added dual-source dedup. v27 had no dedup. |
+| Bessemer/Battery v2.7 | `wF8Q5tgEJz1buzOI` | 2 | Weekly | Pipeline-only (paginated at 25/batch) | Bessemer 7% (32 Apply, highest absolute count) | Keep as-is. Weekly + pagination limits volume naturally. |
+| Micro-VC v15 | `UcK-xCze5eubBWnCHtyDT` | 5 (Pear, Afore, Unshackled, 2048, YC) | Tue/Fri 8am | **Likely NONE** | Needs verification | v15: Removed Floodgate. Needs v16 dual-source dedup. |
+| Social Justice v25 | `x0S2fhUfEKxG1Qj8NexDH` | 4 (Kapor, Backstage, Harlem, Collab) | Wed/Sat 8am | **Likely NONE** | Collab 0% | Needs verification. Needs v26 dual-source dedup. |
+| Climate Tech v23 | *(check n8n)* | 4 (Khosla, Congruent, Prelude, Lowercarbon) | Mon/Thu 8am | Unknown | Needs verification | Needs v24 dual-source dedup. |
+| Lightspeed v1 | `gHCiPqjUuOsMd0BF` | 1 | Tue/Fri 8am | Unknown | Needs verification | Needs v2 dual-source dedup. |
+| SEC Form D v2.4 | `rYnP4hC9QvP6LhPQ` | N/A | Daily 8am ET | Different architecture (daily EDGAR filings) | Low | Unique: parses XML filings, not portfolio pages. |
+
+### Dual-Source Dedup Pattern (Template)
+
+When adding dedup to a scraper, use this pattern (proven in Growth Stage v2.7, Healthcare v28, Enterprise v28):
+
+```
+Schedule Trigger
+    ├→ Fetch Seen Keys (Airtable: Seen Opportunities, filter: LEFT({Key}, 8) = "company:")
+    └→ Fetch Funding Alerts (Airtable: Funding Alerts, Company Name field only)
+           ↓
+    Merge Seen Sources (Merge node)
+           ↓
+    Store Seen Keys (Code node: normalize both sources into Set, store in workflow staticData)
+           ↓
+    ... existing scraper branches (Browserless, parse, merge chain) ...
+           ↓
+    Filter New Only (Code node: check each company against stored keys, deduplicate)
+           ↓
+    Has New Companies? (IF node) → Limit → Execute Workflow (Pipeline)
+```
+
+Full implementation code is in `BRAVE-COST-REDUCTION-PLAN.md` under Tier 1.5.
+
+---
+
+## Known Bugs & Active Issues
+
+### Dedup Register Not Writing to Seen Opportunities (OPEN)
+
+**Discovered:** April 1, 2026
+**Subworkflow:** Dedup Register (`MDzcHPZMySqn1DrGh8J0-`)
+**Symptom:** Companies written to Funding Alerts are never registered in Seen Opportunities table. Verified: Discord, Airbnb, Instacart all exist in Funding Alerts but NOT in Seen Opportunities.
+**Impact:** Scrapers without their own dedup rely on pipeline table dedup (which checks Funding Alerts directly), but the Seen Opportunities table -- the intended cross-source dedup registry -- is empty/stale.
+**Workaround:** Dual-source dedup at scraper level checks BOTH tables (see pattern above).
+**Root cause:** Unknown. Needs investigation: Is the subworkflow being called? Is the Airtable write failing silently? Is the connection from E&E pipeline broken?
+
+### Network Match Alerts Disabled (KNOWN, v9)
+
+LinkedIn cross-reference feature disabled due to duplicate record bug. Two parallel merge paths both feed downstream node. Needs single-path re-architecture to re-enable.
 
 ---
 
@@ -544,9 +601,90 @@ https://api.airtable.com/v0/appFEzXvPWvRtXgRY/Funding%20Alerts/{{ $json.RECORD_I
 | Workflow | Status | Notes |
 |----------|--------|-------|
 | Funding Alerts Rescore v4.15 | **ACTIVE** | v4.15: isRescore bug fix (preserves DQ status for previously DQ'd records). v4.14: Stage Gate (Series C+ = auto-PASS), Mature company detection. v4.13: Config-driven architecture. |
-| Enrich & Evaluate Pipeline v9.16 | **ACTIVE** | v9.16: Threshold alignment (employee 200->150, funding $150M->$75M), stage gate fallback (uses sourceStage from Airtable when Brave doesn't extract). v9.15: Stage Gate, mature company detection. v9.14: Bucket enforcement, VC category labels. |
+| Enrich & Evaluate Pipeline v9.17 | **ACTIVE** | v9.17: Added Pre-Brave Gate (8 nodes, 7 gates before Brave Search). v9.16: Threshold alignment (employee 200->150, funding $150M->$75M), stage gate fallback. |
 | Job Evaluation Pipeline v6.8 | **ACTIVE** | v6.8: P0 fix (isPEBacked order). v6.7: Merger/rebrand detection |
 | Enrich & Evaluate Pipeline v8.5 | **ROLLBACK** | Keep for rollback if needed |
+
+---
+
+## Current Implementation Status (April 2026)
+
+### Pipeline Versions
+
+| Component | Current Version | Last Change |
+|-----------|----------------|-------------|
+| Enrich & Evaluate Pipeline | **v9.17** | Apr 1: Added Pre-Brave Gate (8 nodes, 7 gates before Brave Search) |
+| Funding Alerts Rescore | v4.15 | Mar 30: isRescore bug fix |
+| Job Evaluation Pipeline | v6.8 | Mar 20: isPEBacked order fix |
+| Growth Stage Scraper | **v2.7** | Apr 1: Removed 3 zero-signal VCs + added dual-source dedup |
+| Healthcare Scraper | **v28** | Apr 1: Added dual-source dedup |
+| Enterprise Scraper | **v28** | Apr 1: Added dual-source dedup |
+
+### Brave API Cost Reduction (In Progress)
+
+**Goal:** Reduce from ~$208/month to under $100/month.
+**Plan document:** `BRAVE-COST-REDUCTION-PLAN.md` in this repo.
+
+| Tier | Description | Status |
+|------|-------------|--------|
+| Tier 1: Kill zero-signal sources | Removed Insight Partners, Iconiq, SignalFire from Growth Stage | **DONE** |
+| Tier 1.5: Scraper-level dedup | Propagate dual-source dedup to all scrapers | Growth Stage, Healthcare, Enterprise **DONE**. Micro-VC, Social Justice, Climate Tech, Lightspeed PENDING. |
+| Tier 2: Pre-Brave gate | 7 gates in E&E pipeline before Brave query | **DONE** (v9.17) |
+| Tier 3: Frequency reduction | Reduce schedule on low-signal scrapers | PENDING |
+
+**Next priority:** Tier 1.5 on remaining scrapers (Micro-VC v15, Social Justice v25, Climate Tech v23, Lightspeed v1).
+
+### Source Signal Analysis (from March 31 Airtable audit, 3,393 records)
+
+**Zero signal (removed):**
+- Insight Partners: 768 records, 100% DQ, 0 Apply
+- Iconiq Growth: 100 records, 100% DQ, 0 Apply
+- SignalFire: 12 records, 100% DQ, 0 Apply
+
+**Highest signal:**
+- a16z Bio+Health: 53% apply rate
+- 7wireVentures: 36%
+- Bessemer: 7% but 32 Apply (highest absolute)
+- Oak HC/FT: 29%
+- Emergence: 24%
+- Flare Capital: 24%
+
+---
+
+## Pre-Brave Gate (v9.17)
+
+Added April 1, 2026. 8 new nodes between "Has New Companies?" and "Build Search Query" in the E&E pipeline.
+
+**Gates (checked using scraper-provided data only, no API calls):**
+1. Late stage: Series C/D/E/F/Growth/IPO
+2. Employee cap: >150
+3. Company age: >10 years (from founded_year or YC batch)
+4. Funding cap: >$75M
+5. Known large companies: Stripe, Datadog, Snowflake, etc.
+6. PE ownership keywords
+7. Hard sector DQ: biotech, hardware, crypto, consumer, agtech (with SaaS escape hatch)
+
+Companies that fail are written to Airtable as "Pre-Brave DQ: {reason}" without consuming a Brave query.
+
+**Code:** `pre-brave-gate.js` in this repo.
+**Wiring guide:** `PRE-BRAVE-GATE-GUIDE.md` in this repo.
+
+---
+
+## What Lives Where (Context Architecture)
+
+This repo's CLAUDE.md is the primary source of truth for Claude Code sessions. But some context lives elsewhere:
+
+| Context | Location | When to check |
+|---------|----------|---------------|
+| Pipeline architecture, scoring, workflow IDs, bugs | **This file (CLAUDE.md)** | Always (read at session start) |
+| Scraper dedup status, cost reduction plan | **This file + BRAVE-COST-REDUCTION-PLAN.md** | When working on scrapers or cost |
+| Scoring thresholds (canonical) | **SCORING-THRESHOLDS.md** in this repo | When changing any gate threshold |
+| Job search strategy, target profile, warm paths | Claude.ai "Job Search 2" project | Not accessible from Claude Code |
+| Resume rules, cover letter voice, Airtable job app fields | Claude.ai "Job Search 2" project | Not accessible from Claude Code |
+| Lens Project, Archive, cross-project context | Claude.ai projects | Not accessible from Claude Code |
+
+**If you need context from Claude.ai projects during a Claude Code session:** Ask the user to paste the relevant section. Don't guess at resume rules, application fields, or strategic decisions that live in project memory.
 
 ---
 
