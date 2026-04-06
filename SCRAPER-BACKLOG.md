@@ -1,6 +1,6 @@
 # Job Scraper Backlog
 
-*Updated March 16, 2026*
+*Updated March 25, 2026*
 
 Tracking potential job sources, scrapability assessments, and implementation status.
 
@@ -19,8 +19,9 @@ Tracking potential job sources, scrapability assessments, and implementation sta
 | VC Scraper - Healthcare v27 | ✅ Working | Browserless | Tue/Fri 8am | 14 VCs: Flare, 7wire, Oak HC/FT, Digitalis, a16z Bio+Health, Healthworx, Cade, Hustle Fund (health), Martin, Town Hall, Transformation Capital, Brewer Lane, Mainsail, Five Elms |
 | VC Scraper - Enterprise v27 | ✅ Working | Browserless | Mon/Thu 8am | Unusual, First Round, Khosla, Kapor, WhatIf, WXR, Leadout, Notable, Headline, PSL, Trilogy, K9, Precursor, M25, GoAhead (15 VCs) |
 | VC Scraper - Social Justice v25 | ✅ Working | Browserless | Wed/Sat 8am | Kapor, Backstage, Harlem, Collab |
-| VC Scraper - Climate Tech v23 | ✅ Working | Browserless | Mon/Thu 8am | Khosla, Congruent, Prelude, Lowercarbon |
+| ~~VC Scraper - Climate Tech v23~~ | Archived | - | - | Low signal, hardware/deeptech DQs |
 | VC Scraper - Micro-VC v15 | ✅ Working | Browserless | Tue/Fri 8am | Pear, Afore, Unshackled, 2048, Y Combinator (5 VCs) |
+| VC Scraper - Growth Stage v2.6 | ✅ Working | Browserless | Wed/Sat 8am | Emergence, General Catalyst (2 VCs active). **v2.6: BRAVE COST REDUCTION** - Disconnected 3 zero-signal VCs (Insight Partners 0/768, Iconiq 0/100, SignalFire 0/12 Apply rate). Nodes left in place for documentation. ~26% query reduction. v1.3: Parser fixes. v1.2: Fixed Emergence URL. |
 
 ---
 
@@ -40,6 +41,21 @@ Removed 4 low-signal VCs that produced predominantly developer-as-customer compa
 ---
 
 ## Recommended Additions (Low Effort, High Signal)
+
+### ~~Priority 0: Enterprise B2B SaaS VCs~~ ✅ COMPLETED
+
+**Implemented:** `VC Scraper - Growth Stage v1.3.json` (Mar 25, 2026)
+
+| VC | Status |
+|----|--------|
+| Emergence Capital | ✅ Added |
+| Insight Partners | ✅ Added |
+| Iconiq Growth | ✅ Added |
+| General Catalyst | ✅ Added |
+| SignalFire | ✅ Added |
+
+**Schedule:** Wed/Sat 8am
+**Note:** Update `Execute Enrich & Evaluate Pipeline` workflow ID after importing to n8n.
 
 ### Priority 1: GTMfund Job Board (jobs.gtmfund.com)
 - **Why:** B2B SaaS-focused VC with 350+ GTM executives in network. Portfolio board frequently has CS/CX leadership roles. Role-first discovery like CS Insider and Health Tech Nerds.
@@ -63,6 +79,10 @@ Removed 4 low-signal VCs that produced predominantly developer-as-customer compa
 
 | Source | Why Skip |
 |---|---|
+| Transformation Capital | **Already in Healthcare VCs v27.** |
+| Catalyst Health Ventures | Diminishing returns - already scraping 14 healthcare VCs. |
+| TCV (Technology Crossover) | Late-stage focus (100-300 employees). High DQ rate expected. |
+| a16z Growth (separate scraper) | Already have a16z Bio+Health. Growth fund overlaps with other sources. Test if Priority 0 VCs underperform. |
 | TrueUp | Auth wall + surfaces too many late-stage companies. More noise, worse signal rate. |
 | Getro / Jobs in VC | Covers VC firm jobs, not portfolio company jobs. Previously evaluated and excluded. Re-evaluate only if Getro changes to aggregate portfolio roles. |
 | Wellfound direct scraper | Already get email alerts. Marginal gain vs. build effort. |
@@ -235,4 +255,4 @@ Cold outreach has produced near-zero responses across ~30 InMails. Warm intros a
 
 ---
 
-*Last updated: Mar 16, 2026 — Completed VC removals (Essence, Costanoa, Golden, Floodgate). Enterprise v27, Micro-VC v15. Updated active scraper inventory.*
+*Last updated: Mar 25, 2026 — Added Priority 0: Enterprise B2B SaaS VCs (Emergence, Insight Partners, Iconiq, General Catalyst, SignalFire). Noted Transformation Capital already covered. Deprioritized TCV, Catalyst Health Ventures, a16z Growth.*

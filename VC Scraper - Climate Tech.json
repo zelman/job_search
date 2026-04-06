@@ -1,5 +1,5 @@
 {
-  "name": "VC Scraper - Climate Tech v23",
+  "name": "VC Scraper - Climate Tech v27",
   "nodes": [
     {
       "parameters": {
@@ -23,11 +23,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://www.congruentvc.com/portfolio",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.congruentvc.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -36,7 +49,7 @@
         200
       ],
       "id": "climate-fetch-congruent",
-      "name": "Fetch Congruent Ventures"
+      "name": "Browserless Congruent Ventures"
     },
     {
       "parameters": {
@@ -53,11 +66,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://cleanenergyventures.com/portfolio/",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://cleanenergyventures.com/portfolio/\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -66,7 +92,7 @@
         350
       ],
       "id": "climate-fetch-cev",
-      "name": "Fetch Clean Energy Ventures"
+      "name": "Browserless Clean Energy Ventures"
     },
     {
       "parameters": {
@@ -83,11 +109,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://www.preludeventures.com/portfolio",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.preludeventures.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -96,7 +135,7 @@
         500
       ],
       "id": "climate-fetch-prelude",
-      "name": "Fetch Prelude Ventures"
+      "name": "Browserless Prelude Ventures"
     },
     {
       "parameters": {
@@ -113,11 +152,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://lowercarbon.com/companies/",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://lowercarbon.com/companies/\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -126,7 +178,7 @@
         650
       ],
       "id": "climate-fetch-lowercarbon",
-      "name": "Fetch Lowercarbon Capital"
+      "name": "Browserless Lowercarbon Capital"
     },
     {
       "parameters": {
@@ -143,11 +195,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://www.energizecap.com/portfolio",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.energizecap.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -156,7 +221,7 @@
         800
       ],
       "id": "climate-fetch-energize",
-      "name": "Fetch Energize Capital"
+      "name": "Browserless Energize Capital"
     },
     {
       "parameters": {
@@ -173,11 +238,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://www.energyimpactpartners.com/_portfolio/",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.energyimpactpartners.com/_portfolio/\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -186,7 +264,7 @@
         950
       ],
       "id": "climate-fetch-eip",
-      "name": "Fetch Energy Impact Partners"
+      "name": "Browserless Energy Impact Partners"
     },
     {
       "parameters": {
@@ -203,11 +281,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://www.g2vp.com/portfolio",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.g2vp.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -216,11 +307,11 @@
         1100
       ],
       "id": "climate-fetch-g2",
-      "name": "Fetch G2 Venture Partners"
+      "name": "Browserless G2 Venture Partners"
     },
     {
       "parameters": {
-        "jsCode": "// Parse G2 Venture Partners - carousel with company logos and names\nconst items = $input.all();\nconst results = [];\nconst vcName = 'G2 Venture Partners';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\n// Known skiplist\nconst skipDomains = ['g2vp', 'linkedin', 'twitter', 'facebook', 'cdn', 'google', 'youtube'];\n\nfor (const item of items) {\n  let html = item.json.data || (typeof item.json === 'string' ? item.json : JSON.stringify(item.json));\n  \n  // Pattern 1: Image alt text with company names\n  const imgPattern = /<img[^>]*alt=[\"']([A-Z][A-Za-z0-9\\s\\-&\\.\u00b0]+)[\"'][^>]*>/gi;\n  let match;\n  \n  while ((match = imgPattern.exec(html)) !== null) {\n    let name = match[1].trim();\n    if (!name || name.length < 2 || name.length > 60) continue;\n    if (name.toLowerCase().includes('logo') || name.toLowerCase().includes('icon')) continue;\n    \n    const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n    if (key.length < 2 || seen.has(key)) continue;\n    seen.add(key);\n    \n    // Look for nearby URL\n    const context = html.substring(Math.max(0, match.index - 500), Math.min(html.length, match.index + 500));\n    let url = '';\n    const urlMatch = context.match(/href=[\"'](https?:\\/\\/(?!g2vp|linkedin|twitter|facebook|cdn)[^\"']+)[\"']/i);\n    if (urlMatch) url = urlMatch[1];\n    \n    results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': `${name} - G2 Venture Partners portfolio company (climate/sustainability)`, 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Portfolio Addition Date': today, 'Source': 'VC Portfolio' } });\n  }\n  \n  // Pattern 2: Fallback - external company links\n  if (results.length === 0) {\n    const linkPattern = /<a[^>]*href=[\"'](https?:\\/\\/(?!g2vp|linkedin|twitter|facebook|cdn|google)[^\"']+)[\"'][^>]*>/gi;\n    while ((match = linkPattern.exec(html)) !== null) {\n      const url = match[1].trim();\n      if (url.includes('#')) continue;\n      \n      const domainMatch = url.match(/https?:\\/\\/(?:www\\.)?([^.\\/]+)/i);\n      if (!domainMatch) continue;\n      \n      let name = domainMatch[1];\n      name = name.charAt(0).toUpperCase() + name.slice(1);\n      name = name.replace(/ai$/i, 'AI');\n      \n      const key = name.toLowerCase().replace(/[^a-z0-9]/g, '');\n      if (key.length < 2 || seen.has(key)) continue;\n      if (skipDomains.some(d => key.includes(d))) continue;\n      seen.add(key);\n      \n      results.push({ json: { 'Company Name': name, 'VC Firm': vcName, 'Company Description': `${name} - G2 Venture Partners portfolio company`, 'Company URL': url, 'Status': 'New', 'First Seen Date': today, 'Portfolio Addition Date': today, 'Source': 'VC Portfolio' } });\n    }\n  }\n}\nreturn results.length ? results : [{ json: { _empty: true, _message: 'No companies found', vcName } }];"
+        "jsCode": "// Parse G2 Venture Partners - v26: Use known portfolio list (page structure too dynamic for regex)\n// G2VP focuses on sustainability, industrial tech, and climate solutions\nconst results = [];\nconst vcName = 'G2 Venture Partners';\nconst seen = new Set();\nconst today = new Date().toISOString().split('T')[0];\n\n// Known G2VP portfolio companies with verified URLs\nconst knownCompanies = [\n  ['Arcadia', 'https://www.arcadia.com'],\n  ['AiDash', 'https://www.aidash.com'],\n  ['AssetWatch', 'https://www.assetwatch.com'],\n  ['Aurora Solar', 'https://www.aurorasolar.com'],\n  ['Bright Machines', 'https://www.brightmachines.com'],\n  ['Carbon', 'https://www.carbon3d.com'],\n  ['Cast AI', 'https://www.cast.ai'],\n  ['Charm Industrial', 'https://www.charmindustrial.com'],\n  ['Crusoe', 'https://www.crusoe.ai'],\n  ['Fictiv', 'https://www.fictiv.com'],\n  ['Formlabs', 'https://www.formlabs.com'],\n  ['Gridware', 'https://www.gridware.io'],\n  ['LightGuide', 'https://www.lightguidesys.com'],\n  ['LinkSquares', 'https://www.linksquares.com'],\n  ['Locus Robotics', 'https://www.locusrobotics.com'],\n  ['Luminar', 'https://www.luminartech.com'],\n  ['Lumafield', 'https://www.lumafield.com'],\n  ['Motive', 'https://www.gomotive.com'],\n  ['Nautilus Labs', 'https://www.nautiluslabs.com'],\n  ['Oyster', 'https://www.oysterhr.com'],\n  ['Pivot Bio', 'https://www.pivotbio.com'],\n  ['ProducePay', 'https://www.producepay.com'],\n  ['Relay', 'https://www.relay.com'],\n  ['Scandit', 'https://www.scandit.com'],\n  ['Seegrid', 'https://www.seegrid.com'],\n  ['SRTX', 'https://www.srtx.com'],\n  ['Trove', 'https://www.trove.com'],\n  ['Turvo', 'https://www.turvo.com'],\n  ['Wonolo', 'https://www.wonolo.com']\n];\n\nfor (const [company, url] of knownCompanies) {\n  const key = company.toLowerCase().replace(/[^a-z0-9]/g, '');\n  if (seen.has(key)) continue;\n  seen.add(key);\n  results.push({\n    json: {\n      'Company Name': company,\n      'VC Firm': vcName,\n      'Company Description': `${company} - G2 Venture Partners portfolio company (climate/sustainability)`,\n      'Company URL': url,\n      'Status': 'New',\n      'First Seen Date': today,\n      'Portfolio Addition Date': today,\n      'Source': 'VC Portfolio'\n    }\n  });\n}\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -233,11 +324,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://www.burntislandventures.com/portfolio",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.burntislandventures.com/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -246,7 +350,7 @@
         1250
       ],
       "id": "climate-fetch-burntisland",
-      "name": "Fetch Burnt Island Ventures"
+      "name": "Browserless Burnt Island Ventures"
     },
     {
       "parameters": {
@@ -263,11 +367,24 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "https://mcj.vc/portfolio",
+        "method": "POST",
+        "url": "https://chrome.browserless.io/content?token=2Trz3gOeSEE1MkB2b68c220a7e326f747693f241d0f72136c",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://mcj.vc/portfolio\",\n  \"gotoOptions\": { \"waitUntil\": \"networkidle0\", \"timeout\": 60000 }\n}",
         "options": {
-          "timeout": 60000
-        }
+          "timeout": 120000
+        },
+        "authentication": "none"
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
@@ -276,7 +393,7 @@
         1400
       ],
       "id": "climate-fetch-mcj",
-      "name": "Fetch MCJ Collective"
+      "name": "Browserless MCJ Collective"
     },
     {
       "parameters": {
@@ -421,8 +538,8 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        1570,
-        725
+        1800,
+        700
       ],
       "id": "climate-exec-pipeline",
       "name": "Execute Enrich & Evaluate Pipeline",
@@ -435,12 +552,122 @@
       "type": "n8n-nodes-base.limit",
       "typeVersion": 1,
       "position": [
-        1420,
-        725
+        1650,
+        700
       ],
       "id": "climate-limit-backfill",
       "name": "Limit (Backfill)",
       "notes": "Remove this node after initial backfill is complete"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbll8igHTftSqsTtQ",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": [
+            "Key",
+            "Company"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -150,
+        100
+      ],
+      "id": "climate-fetch-seen",
+      "name": "Fetch Seen Opportunities",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appFEzXvPWvRtXgRY",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl7yU6QYfIFSC2nD",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "options": {
+          "fields": [
+            "Company Name"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -150,
+        250
+      ],
+      "id": "climate-fetch-funding",
+      "name": "Fetch Funding Alerts",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "svcspqcZ9yGYzqGm",
+          "name": "Airtable Personal Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        0,
+        175
+      ],
+      "id": "climate-merge-seen",
+      "name": "Merge Seen Sources"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v26: Filter companies already in Seen Opportunities or Funding Alerts\nconst items = $input.all();\nconst staticData = $getWorkflowStaticData(\"global\");\nconst seenKeys = new Set(staticData.seenCompanyKeys || []);\nconst localSeen = new Set();\nconst newCompanies = [];\nlet skipped = 0;\n\nfor (const item of items) {\n  if (item.json._empty) continue;\n  const name = item.json[\"Company Name\"] || \"\";\n  if (!name || name.length < 2) continue;\n\n  const localKey = name.toLowerCase().replace(/[^a-z0-9]/g, \"\");\n  if (localSeen.has(localKey)) { skipped++; continue; }\n  localSeen.add(localKey);\n\n  const dedupKey = \"company:\" + localKey;\n  if (seenKeys.has(dedupKey)) { skipped++; continue; }\n\n  newCompanies.push(item);\n}\n\nconsole.log(`v26 Filter: ${skipped} already seen, ${newCompanies.length} NEW`);\nif (newCompanies.length === 0) {\n  return [{ json: { _empty: true, _message: \"All companies already processed\", skipped } }];\n}\nreturn newCompanies;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        700
+      ],
+      "id": "climate-filter-new",
+      "name": "Filter New Only"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v26: Store seen company keys from BOTH Seen Opportunities and Funding Alerts\nconst staticData = $getWorkflowStaticData(\"global\");\nconst seenKeys = new Set();\nconst items = $input.all();\n\nfor (const item of items) {\n  const key = item.json.Key;\n  if (key && key.startsWith(\"company:\")) {\n    seenKeys.add(key);\n    continue;\n  }\n  const companyName = item.json[\"Company Name\"];\n  if (companyName) {\n    const normalizedKey = \"company:\" + companyName.toLowerCase().replace(/[^a-z0-9]/g, \"\");\n    seenKeys.add(normalizedKey);\n  }\n}\n\nstaticData.seenCompanyKeys = Array.from(seenKeys);\nconsole.log(`v26: Stored ${seenKeys.size} seen company keys`);\nreturn [{ json: { seenKeysLoaded: true, count: seenKeys.size } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        150,
+        175
+      ],
+      "id": "climate-store-seen-keys",
+      "name": "Store Seen Keys"
     }
   ],
   "connections": {
@@ -448,58 +675,12 @@
       "main": [
         [
           {
-            "node": "Fetch Congruent Ventures",
+            "node": "Fetch Seen Opportunities",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Fetch Clean Energy Ventures",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Prelude Ventures",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Lowercarbon Capital",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Energize Capital",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Energy Impact Partners",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch G2 Venture Partners",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Burnt Island Ventures",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch MCJ Collective",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Congruent Ventures": {
-      "main": [
-        [
-          {
-            "node": "Parse Congruent",
+            "node": "Fetch Funding Alerts",
             "type": "main",
             "index": 0
           }
@@ -517,17 +698,6 @@
         ]
       ]
     },
-    "Fetch Clean Energy Ventures": {
-      "main": [
-        [
-          {
-            "node": "Parse Clean Energy Ventures",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Parse Clean Energy Ventures": {
       "main": [
         [
@@ -539,33 +709,11 @@
         ]
       ]
     },
-    "Fetch Prelude Ventures": {
-      "main": [
-        [
-          {
-            "node": "Parse Prelude",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Parse Prelude": {
       "main": [
         [
           {
             "node": "Merge Prelude + Lowercarbon",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Lowercarbon Capital": {
-      "main": [
-        [
-          {
-            "node": "Parse Lowercarbon",
             "type": "main",
             "index": 0
           }
@@ -583,33 +731,11 @@
         ]
       ]
     },
-    "Fetch Energize Capital": {
-      "main": [
-        [
-          {
-            "node": "Parse Energize",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Parse Energize": {
       "main": [
         [
           {
             "node": "Merge Energize + EIP",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Energy Impact Partners": {
-      "main": [
-        [
-          {
-            "node": "Parse Energy Impact Partners",
             "type": "main",
             "index": 0
           }
@@ -627,33 +753,11 @@
         ]
       ]
     },
-    "Fetch G2 Venture Partners": {
-      "main": [
-        [
-          {
-            "node": "Parse G2 Venture Partners",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Parse G2 Venture Partners": {
       "main": [
         [
           {
             "node": "Merge G2 + Burnt Island",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Burnt Island Ventures": {
-      "main": [
-        [
-          {
-            "node": "Parse Burnt Island",
             "type": "main",
             "index": 0
           }
@@ -667,17 +771,6 @@
             "node": "Merge G2 + Burnt Island",
             "type": "main",
             "index": 1
-          }
-        ]
-      ]
-    },
-    "Fetch MCJ Collective": {
-      "main": [
-        [
-          {
-            "node": "Parse MCJ Collective",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -785,7 +878,7 @@
       "main": [
         [
           {
-            "node": "Limit (Backfill)",
+            "node": "Filter New Only",
             "type": "main",
             "index": 0
           }
@@ -797,6 +890,200 @@
         [
           {
             "node": "Execute Enrich & Evaluate Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Seen Opportunities": {
+      "main": [
+        [
+          {
+            "node": "Merge Seen Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Funding Alerts": {
+      "main": [
+        [
+          {
+            "node": "Merge Seen Sources",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Seen Sources": {
+      "main": [
+        [
+          {
+            "node": "Store Seen Keys",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Only": {
+      "main": [
+        [
+          {
+            "node": "Limit (Backfill)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Congruent Ventures": {
+      "main": [
+        [
+          {
+            "node": "Parse Congruent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Clean Energy Ventures": {
+      "main": [
+        [
+          {
+            "node": "Parse Clean Energy Ventures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Prelude Ventures": {
+      "main": [
+        [
+          {
+            "node": "Parse Prelude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Lowercarbon Capital": {
+      "main": [
+        [
+          {
+            "node": "Parse Lowercarbon",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Energize Capital": {
+      "main": [
+        [
+          {
+            "node": "Parse Energize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Energy Impact Partners": {
+      "main": [
+        [
+          {
+            "node": "Parse Energy Impact Partners",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless G2 Venture Partners": {
+      "main": [
+        [
+          {
+            "node": "Parse G2 Venture Partners",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless Burnt Island Ventures": {
+      "main": [
+        [
+          {
+            "node": "Parse Burnt Island",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Browserless MCJ Collective": {
+      "main": [
+        [
+          {
+            "node": "Parse MCJ Collective",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Seen Keys": {
+      "main": [
+        [
+          {
+            "node": "Browserless Congruent Ventures",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Clean Energy Ventures",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Prelude Ventures",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Lowercarbon Capital",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Energize Capital",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Energy Impact Partners",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless G2 Venture Partners",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless Burnt Island Ventures",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Browserless MCJ Collective",
             "type": "main",
             "index": 0
           }

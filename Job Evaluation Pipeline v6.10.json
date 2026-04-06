@@ -470,7 +470,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ records: [{ fields: { 'Job URL': $('Parse Response').item.json['Job URL'], 'Review Status': 'New' } }], performUpsert: { fieldsToMergeOn: ['Job URL'] }, typecast: true }) }}",
+        "jsonBody": "={{ JSON.stringify({ records: [{ id: $json.records[0].id, fields: { 'Review Status': 'New' } }], typecast: true }) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",

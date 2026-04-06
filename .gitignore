@@ -11,3 +11,8 @@ Meditation/
 
 # Temporary files
 *~
+
+# Code review logs
+review-logs/
+*-backup-*.json
+SESSION-REPORT-*.md
