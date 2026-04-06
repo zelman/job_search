@@ -1,7 +1,7 @@
 # SCORING-THRESHOLDS.md -- Single Source of Truth
 
-**Last updated:** March 30, 2026
-**Pipeline version at last update:** v9.16 / Rescore v4.15
+**Last updated:** April 5, 2026
+**Pipeline version at last update:** v9.18 / Rescore v4.15
 **Owner:** Eric Zelman
 
 This file is the canonical reference for every threshold, gate, cap, and business rule in the Tide Pool scoring pipeline. When code and this file disagree, this file wins. Every pipeline change that touches thresholds MUST update this file first.
@@ -235,19 +235,19 @@ In rescore workflow: if both extracted AND existing Airtable values fail sanity,
 
 The following workflows MUST use identical threshold values. When this file is updated, both must be updated in the same commit/deploy:
 
-| Threshold | v9.16 Location | v4.15 Location |
+| Threshold | v9.18 Location | v4.15 Location |
 |---|---|---|
-| HARD_EMPLOYEE_CAP (150) | `Parse Enrichment` constants (v9.16 aligned) | **Airtable Config table** |
-| HARD_FUNDING_CAP ($75M) | `Parse Enrichment` constants (v9.16 aligned) | **Airtable Config table** |
-| SOFT_EMPLOYEE_CAP (100) | `Parse Enrichment` constants (v9.16 aligned) | **Airtable Config table** |
-| SOFT_FUNDING_CAP ($50M) | `Parse Enrichment` constants (v9.16 aligned) | **Airtable Config table** |
+| HARD_EMPLOYEE_CAP (150) | `Parse Enrichment` constants (v9.18 aligned) | **Airtable Config table** |
+| HARD_FUNDING_CAP ($75M) | `Parse Enrichment` constants (v9.18 aligned) | **Airtable Config table** |
+| SOFT_EMPLOYEE_CAP (100) | `Parse Enrichment` constants (v9.18 aligned) | **Airtable Config table** |
+| SOFT_FUNDING_CAP ($50M) | `Parse Enrichment` constants (v9.18 aligned) | **Airtable Config table** |
 | Score thresholds (70/40) | `Parse Evaluation` lines ~64-66 | **Airtable Config table** |
 | CS Readiness ceiling (25) | `Parse CS Readiness` | **Airtable Config table** |
 | PE firm list | `Parse Enrichment` array | **Airtable PE Firms table** |
 | Known large companies | `Parse Enrichment` array | `Parse Enrich` array (hardcoded) |
 | Sector gate keywords | `Parse Enrichment` | `Parse Enrich` (hardcoded) |
 
-**Note:** v4.15 Rescore is config-driven. Edit Airtable Config table (`tblofzQpzGEN8igVS`) to change thresholds. Enrich & Evaluate Pipeline v9.16 hardcoded values are now aligned with Config table as of Mar 30, 2026.
+**Note:** v4.15 Rescore is config-driven. Edit Airtable Config table (`tblofzQpzGEN8igVS`) to change thresholds. Enrich & Evaluate Pipeline v9.18 hardcoded values are now aligned with Config table as of Mar 30, 2026.
 
 ---
 
@@ -256,7 +256,7 @@ The following workflows MUST use identical threshold values. When this file is u
 | Date | Version | Change | Reason |
 |---|---|---|---|
 | 2026-03-30 | v4.15 | **isRescore bug fix**. When record was previously DQ'd (score=0, DQ reasons populated), both pre-existing copy AND detection blocks were skipped, leaving disqualifiers empty. Record would go through scoring path, overwriting Status=Auto-Disqualified with Status=Monitor. Fix: Handle isRescore case explicitly to preserve DQ status. | InVision (Series D, unicorn, founded 2011) had 5 DQ reasons but Status=Monitor, Score=62 instead of Auto-Disqualified. |
-| 2026-03-30 | v9.16 | **Threshold alignment + stage gate fallback**. HARD_EMPLOYEE_CAP 200->150, HARD_FUNDING_CAP $150M->$75M, soft caps aligned. Stage gate now checks sourceStage (Airtable/source data) as fallback when Brave Search doesn't extract stage. | Companycam (Series C), People.ai (Series D), Reveal (Series E), Twin Health (Series E) passing through to Apply/Monitor despite stage gate existing in v9.15. Gate was blind to non-Brave stage data. Thresholds drifted from spec during v9.14 tightening. |
+| 2026-03-30 | v9.18 | **Threshold alignment + stage gate fallback**. HARD_EMPLOYEE_CAP 200->150, HARD_FUNDING_CAP $150M->$75M, soft caps aligned. Stage gate now checks sourceStage (Airtable/source data) as fallback when Brave Search doesn't extract stage. | Companycam (Series C), People.ai (Series D), Reveal (Series E), Twin Health (Series E) passing through to Apply/Monitor despite stage gate existing in v9.15. Gate was blind to non-Brave stage data. Thresholds drifted from spec during v9.14 tightening. |
 | 2026-03-29 | v9.15/v4.14 | **Stage Gate + Mature Company Detection**. Series C+ auto-PASS. Scale indicators gate (>500 emp, >$200M, >$500M valuation). Founded >12 years gate. | Bullhorn, Weights & Biases, Gtmhub scoring 52-62 instead of auto-PASS. Stage evaluated as scoring dimension instead of binary disqualifier. |
 | 2026-03-25 | v4.13 | **Config-driven architecture**. Thresholds moved to Airtable Config table. PE firms moved to PE Firms table. Employee cap 150, funding cap $75M, soft caps 100/$50M. | Single source of truth, non-engineer editable, no code deploys for threshold changes. |
 | 2026-03-25 | v4.12 | DQ duplication fix - detection wrapped in `if (!existing_dq_reasons)` | DQ reasons were accumulating on each rescore run. |
