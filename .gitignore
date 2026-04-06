@@ -16,3 +16,7 @@ Meditation/
 review-logs/
 *-backup-*.json
 SESSION-REPORT-*.md
+
+# Resume files (belong in work repo)
+Eric_Zelman_Resume*.pdf
+eric_zelman_resume.md
