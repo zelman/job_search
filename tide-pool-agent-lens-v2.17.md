@@ -5,7 +5,7 @@
 
 version: "2.17"
 schema_version: 1
-last_updated: "2026-03-21"
+last_updated: "2026-04-11"
 
 # Identity
 name: Eric Zelman
@@ -15,7 +15,7 @@ github: zelman
 # Current State (update frequently - see "Current State" section below)
 status: job_searching
 pipeline_urgency: high
-compensation_target: 125000
+compensation_target: 110000
 target_roles:
   - Director of Customer Support
   - VP of Customer Support
