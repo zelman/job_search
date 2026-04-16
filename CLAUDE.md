@@ -32,8 +32,13 @@ Same signals, same gates, same investor lookup. Different math. User's `scoring.
 JSX scorer and intake components call the Claude API directly (client-side, no proxy):
 
 - **Endpoint:** `https://api.anthropic.com/v1/messages`
-- **Model:** `claude-sonnet-4-20250514`
+- **Model:** `claude-sonnet-4-5-20251101` (successor to deprecated `claude-sonnet-4-20250514`)
 - **Auth:** API key in client-side fetch (no server proxy in current architecture)
+
+**Model Deprecation Rule:** When editing or creating code, always check for instances of `claude-sonnet-4-20250514` and replace with `claude-sonnet-4-5-20251101`. The old model was deprecated June 15, 2026.
+
+**Migration Tracking:** When you update any file to use the new model, also update `claude-sonnet-4-migration.md` in this repo — mark the file as migrated or remove it from the list. This ensures gradual, tracked migration.
+
 - **System prompt:** Hardcoded as `SYSTEM_PROMPT` const at top of component file
 - **Response parsing:** Filter `content` blocks for `type: "text"`, strip ```json fences, `JSON.parse`
 - **Streaming:** Used in lens-form.jsx discovery flow (typewriter effect). NOT used in lens-scorer.jsx (single completion).
@@ -144,6 +149,13 @@ The Next.js app in `lens/` deploys to Vercel. When Claude Code receives a JSX co
 2. If it's a page component, wire it into `lens/app/page.js` or create a new route
 3. If it has API dependencies (Claude API calls), add the route in `lens/app/api/`
 4. Commit, push, and Vercel auto-deploys from the `main` branch
+
+**Environment Variables Check:** Before deploying features that use external services, verify the required env vars are set in Vercel:
+- `ANTHROPIC_API_KEY` — Claude API calls
+- `AIRTABLE_API_KEY` — Airtable integrations
+- `AIRTABLE_BASE_ID` — Target base ID
+
+Missing env vars cause silent failures in production. Check Vercel dashboard → Project Settings → Environment Variables.
 
 ### Ideal Workflow
 
