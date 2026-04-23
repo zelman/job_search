@@ -20,19 +20,19 @@
 
 | File | Current | Target | Status |
 |------|---------|--------|--------|
-| `app/api/discover/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `app/api/rc-discover/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
+| `app/api/discover/route.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `app/api/rc-discover/route.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
 | `app/api/synthesize/route.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
-| `app/api/rc-synthesize/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `app/api/team-synthesize/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `app/api/chat/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `app/api/generate-session/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `app/api/score/route.js` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending |
-| `app/api/extract-dimensions/route.js` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending |
-| `app/api/merge/route.js` | sonnet-4-20250514 | `claude-haiku-4-5-20251001` | ⏳ Pending |
-| `app/api/_prompts/generate-session.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `config/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `components/role-lens-scorer/api/score.js` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending |
+| `app/api/rc-synthesize/route.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `app/api/team-synthesize/route.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `app/api/chat/route.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `app/api/generate-session/route.js` | ~~sonnet-4-20250514~~ | `claude-opus-4-7` | ✅ Migrated 2026-04-22 |
+| `app/api/score/route.js` | ~~sonnet-4-20250514~~ | `claude-opus-4-7` | ✅ Migrated 2026-04-22 |
+| `app/api/extract-dimensions/route.js` | ~~sonnet-4-20250514~~ | `claude-opus-4-7` | ✅ Migrated 2026-04-22 |
+| `app/api/merge/route.js` | ~~sonnet-4-20250514~~ | `claude-haiku-4-5-20251001` | ✅ Migrated 2026-04-22 |
+| `app/api/_prompts/generate-session.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `config/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⚠️ File not found |
+| `components/role-lens-scorer/api/score.js` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending (standalone) |
 
 ### Lens Project — Components
 
@@ -74,11 +74,11 @@
 
 | Category | Pending | Completed |
 |----------|---------|-----------|
-| Lens API Routes | 12 | 1 |
+| Lens API Routes | 1 | 11 |
 | Lens Components | 5 | 0 |
 | Lens Docs | 0 | 8 |
 | Job Search | 5 | 0 |
-| **Total** | **22** | **9** |
+| **Total** | **11** | **19** |
 
 ---
 
