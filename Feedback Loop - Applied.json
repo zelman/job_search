@@ -139,7 +139,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"system\": {{ JSON.stringify($json.systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }}}]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 4096,\n  \"system\": {{ JSON.stringify($json.systemPrompt) }},\n  \"messages\": [{\"role\": \"user\", \"content\": {{ JSON.stringify($json.userPrompt) }}}]\n}",
         "options": {
           "timeout": 120000
         }

@@ -38,11 +38,11 @@
 
 | File | Current | Target | Status |
 |------|---------|--------|--------|
-| `components/lens-scorer.jsx` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending |
-| `components/lens-scorer-compare.jsx` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending |
-| `components/role-lens-scorer.jsx` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending |
-| `components/lens-scorer-compare/public/index.html` | sonnet-4-20250514 | `claude-opus-4-7` | ⏳ Pending |
-| `app/components/LensExperience.jsx` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
+| `components/lens-scorer.jsx` | ~~sonnet-4-20250514~~ | `claude-opus-4-7` | ✅ Migrated 2026-04-22 |
+| `components/lens-scorer-compare.jsx` | ~~sonnet-4-20250514~~ | `claude-opus-4-7` | ✅ Migrated 2026-04-22 |
+| `components/role-lens-scorer.jsx` | ~~sonnet-4-20250514~~ | `claude-opus-4-7` | ✅ Migrated 2026-04-22 |
+| `components/lens-scorer-compare/public/index.html` | sonnet-4-20250514 | `claude-opus-4-7` | ⚠️ File not found |
+| `app/components/LensExperience.jsx` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
 
 ### Lens Project — Documentation (Low Priority)
 
@@ -62,11 +62,11 @@
 
 | File | Current | Target | Status |
 |------|---------|--------|--------|
-| `CLAUDE.md` | sonnet-4-20250514 | Update to model table | ⏳ Pending |
-| `code-review-skill-v2.md` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `code-review.mjs` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `Feedback Loop - Applied.json` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `Feedback Loop - Not a Fit.json` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
+| `CLAUDE.md` | ~~sonnet-4-20250514~~ | Model table | ✅ Migrated 2026-04-22 |
+| `code-review-skill-v2.md` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `code-review.mjs` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `Feedback Loop - Applied.json` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 (re-import to n8n) |
+| `Feedback Loop - Not a Fit.json` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 (re-import to n8n) |
 
 ---
 
@@ -74,11 +74,13 @@
 
 | Category | Pending | Completed |
 |----------|---------|-----------|
-| Lens API Routes | 1 | 11 |
-| Lens Components | 5 | 0 |
+| Lens API Routes | 0 | 12 |
+| Lens Components | 0 | 5 |
 | Lens Docs | 0 | 8 |
-| Job Search | 5 | 0 |
-| **Total** | **11** | **19** |
+| Job Search | 0 | 5 |
+| **Total** | **0** | **30** |
+
+🎉 **Migration complete!**
 
 ---
 

@@ -36,7 +36,7 @@ import { execSync } from 'child_process';
 
 const MODELS = {
   opus:   'claude-opus-4-6',
-  sonnet: 'claude-sonnet-4-20250514',
+  sonnet: 'claude-sonnet-4-6',
 };
 
 const DEFAULT_MODEL = 'sonnet';

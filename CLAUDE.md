@@ -32,12 +32,18 @@ Same signals, same gates, same investor lookup. Different math. User's `scoring.
 JSX scorer and intake components call the Claude API directly (client-side, no proxy):
 
 - **Endpoint:** `https://api.anthropic.com/v1/messages`
-- **Model:** `claude-sonnet-4-5-20251101` (successor to deprecated `claude-sonnet-4-20250514`)
 - **Auth:** API key in client-side fetch (no server proxy in current architecture)
 
-**Model Deprecation Rule:** When editing or creating code, always check for instances of `claude-sonnet-4-20250514` and replace with `claude-sonnet-4-5-20251101`. The old model was deprecated June 15, 2026.
+**Model Selection:**
+| Model | Use Case |
+|-------|----------|
+| `claude-opus-4-7` | Heavy reasoning (complex scoring logic, architectural decisions) |
+| `claude-sonnet-4-6` | General synthesis (lens generation, discovery conversations) |
+| `claude-haiku-4-5-20251001` | Fast/cheap operations (validation, simple transforms) |
 
-**Migration Tracking:** When you update any file to use the new model, also update `claude-sonnet-4-migration.md` in this repo — mark the file as migrated or remove it from the list. This ensures gradual, tracked migration.
+**Note:** Temperature parameter is deprecated in Claude 4.5+ models — do not include it in API calls.
+
+**Migration Tracking:** See `claude-sonnet-4-migration.md` for migration status.
 
 - **System prompt:** Hardcoded as `SYSTEM_PROMPT` const at top of component file
 - **Response parsing:** Filter `content` blocks for `type: "text"`, strip ```json fences, `JSON.parse`

@@ -173,7 +173,7 @@ Structured JSON to stdout. Logs status messages to stderr (so stdout stays parse
     "minor": 1,
     "suggestions": 1
   },
-  "model": "claude-sonnet-4-20250514",
+  "model": "claude-sonnet-4-6",
   "context_tokens": 2847,
   "reviewed_at": "2026-04-01T14:30:00.000Z"
 }
