@@ -22,7 +22,7 @@
 |------|---------|--------|--------|
 | `app/api/discover/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
 | `app/api/rc-discover/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
-| `app/api/synthesize/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
+| `app/api/synthesize/route.js` | ~~sonnet-4-20250514~~ | `claude-sonnet-4-6` | ✅ Migrated 2026-04-22 |
 | `app/api/rc-synthesize/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
 | `app/api/team-synthesize/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
 | `app/api/chat/route.js` | sonnet-4-20250514 | `claude-sonnet-4-6` | ⏳ Pending |
