@@ -1,7 +1,7 @@
 # SCORING-THRESHOLDS.md -- Single Source of Truth
 
-**Last updated:** April 11, 2026
-**Pipeline version at last update:** v10.0 / Rescore v5.0
+**Last updated:** April 27, 2026
+**Pipeline version at last update:** v10.1 / Rescore v5.0
 **Owner:** Eric Zelman
 
 This file is the canonical reference for every threshold, gate, cap, and business rule in the Tide Pool scoring pipeline. When code and this file disagree, this file wins. Every pipeline change that touches thresholds MUST update this file first.
@@ -287,8 +287,10 @@ Same title-tier logic from the Title Gate applies to these functions.
 | Score Range | Bucket | Airtable Status |
 |---|---|---|
 | >= 70 | APPLY | Apply |
-| 40-69 | WATCH | Monitor |
-| < 40 | PASS | Passed |
+| 25-69 | WATCH | Monitor |
+| < 25 | PASS | Passed |
+
+**v10.1 Change:** WATCH threshold lowered from 40 to 25. This catches more false negatives from healthcare and regulated sector companies that were incorrectly scoring low due to domain distance and age penalties.
 
 **Overrides:**
 - CX Job Posting found OR Network Connection found: Status escalated to `Apply` regardless of score
@@ -307,6 +309,24 @@ Same title-tier logic from the Title Gate applies to these functions.
 | Outreach Feasibility | 15 | 15% |
 
 **Domain distance modifier:** +5 (healthcare B2B SaaS) to -10 (physical security)
+
+**v10.1 Target Domain Expansion:**
+- Healthcare B2B SaaS (provider-side): +5
+- Clinical Operations: +5
+- Healthcare Analytics/Intelligence: +4
+- Surgical/Procedural Workflow: +4
+- Care Coordination: +4
+- Healthcare AI/ML (clinical applications): +3
+- Patient Engagement (B2B2C): +3
+- Developer Tools/DevOps (enterprise): +2
+
+**Company age modifier (v10.1 NEW):**
+Sector-aware age tolerance. Healthcare/RegTech companies need longer runway to product-market fit.
+
+| Sector Type | No Penalty | -3 pts | -5 pts |
+|---|---|---|---|
+| Healthcare, RegTech, Clinical | <15 years | 15-20 years | >20 years |
+| Default sectors | <5 years | 5-8 years | >8 years |
 
 ---
 
@@ -414,6 +434,7 @@ The following workflows MUST use identical threshold values. When this file is u
 
 | Date | Version | Change | Reason |
 |---|---|---|---|
+| 2026-04-27 | v10.1 | **SCORING CALIBRATION**. (1) WATCH threshold lowered from 40 to 25 - catches false negatives. (2) Healthcare sub-sectors added to TARGET DOMAINS: Healthcare Analytics/Intelligence (+4), Surgical/Procedural Workflow (+4), Healthcare AI/ML (+3). (3) Company age modifier now sector-aware: healthcare/RegTech companies get no penalty below 15 years vs 5 years for default sectors. | Avant-garde Health scored 22, Gamma scored 32 despite strong sector fit. Healthcare companies were penalized for age when regulatory requirements (HIPAA, FDA) justify longer runway. |
 | 2026-04-11 | v10.0 / v5.0 | **MAJOR APERTURE WIDENING**. (1) Title gate now context-dependent by company size - "Manager" at 20-person company gets no penalty. (2) Employee hard cap 150→1000, soft cap 100→200, new heavy penalty zone 300-1000. (3) Funding hard cap $75M→$200M, soft cap $200M-$500M. (4) Series C no longer auto-DQ if <300 employees - goes to manual review. (5) Incomplete data no longer zeros the score - scores 40-45 WATCH. (6) Function widening: Implementation, Professional Services, Solutions Consulting, Client Services, Customer Operations now valid. (7) Builder phrase override: +15 pts and title penalty waiver for "first hire", "greenfield", "0 to 1", etc. | 90-day job search deadline. Pattern analysis Feb-Apr 2026 showed pipeline burying good fits (Assort Health, Castor, PermitFlow, Baselayer) with 0-28 scores despite genuine fit. |
 | 2026-03-30 | v4.15 | **isRescore bug fix**. When record was previously DQ'd (score=0, DQ reasons populated), both pre-existing copy AND detection blocks were skipped, leaving disqualifiers empty. Record would go through scoring path, overwriting Status=Auto-Disqualified with Status=Monitor. Fix: Handle isRescore case explicitly to preserve DQ status. | InVision (Series D, unicorn, founded 2011) had 5 DQ reasons but Status=Monitor, Score=62 instead of Auto-Disqualified. |
 | 2026-03-30 | v9.18 | **Threshold alignment + stage gate fallback**. HARD_EMPLOYEE_CAP 200->150, HARD_FUNDING_CAP $150M->$75M, soft caps aligned. Stage gate now checks sourceStage (Airtable/source data) as fallback when Brave Search doesn't extract stage. | Companycam (Series C), People.ai (Series D), Reveal (Series E), Twin Health (Series E) passing through to Apply/Monitor despite stage gate existing in v9.15. Gate was blind to non-Brave stage data. Thresholds drifted from spec during v9.14 tightening. |
