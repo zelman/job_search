@@ -78,3 +78,63 @@ if (item.json['VC Backed'] === true) {
 **Doc inconsistencies caught while triaging:**
 - File `Enrich & Evaluate Pipeline v10.2.json` has internal `name: "v10.0"` and writes `Last Scored Version: "v9.18"` to Airtable. Three version stamps disagree.
 - `CONTEXT-job-search.md` (lives in Claude.ai Job Search 2 knowledge, not local repo) references v9 / `ENHANCEMENT-IDEAS.md` — refresh to v10.2 / `SCORING-ENHANCEMENTS.md` in next Claude.ai session.
+
+---
+
+### Credential Management Hygiene (n8n)
+**Severity:** Low (operational)
+**Filed:** 2026-05-06
+
+**Lesson learned:** When n8n credentials need rotation, **always update the existing credential's value in place. Never delete and recreate.** Recreating generates a new internal entity ID, orphaning all node references that pointed at the old one.
+
+**Symptom when violated:** Workflow appears active, schedule fires every cycle, but every execution fails at credential-using nodes with `Authorization failed - please check your credentials` (initially) or `Credential with ID "<old_id>" does not exist for type "<type>"` (more diagnostic). Read-side workings nodes (Airtable native nodes using `airtableTokenApi`) are unaffected since they reference a different credential entity; only HTTP-based write nodes break. Result is silent partial-failure: reads work, writes don't, no records get updated, schedule runs forever.
+
+**Verified by today's troubleshooting:** Rescorer workflow `Funding Alerts Rescore v5.0 (Standalone)` was silently dead since at least 2026-04-25 due to orphaned credential reference (ID `LCYvQYofV9XXnPrk` no longer existed). Three iterations of token rotation + Bearer prefix addition all failed with the same symptom until the actual fix — re-linking the three HTTP write nodes (`Update DQ`, `Update Dev`, `Update Eval`) to the working credential in n8n UI.
+
+**If recreation is unavoidable:** every consuming node must be re-linked. Audit by searching the workflow JSON for the old credential ID and updating references via `update_workflow` MCP or UI.
+
+---
+
+### Score Variability Across Rescore Runs
+**Severity:** Medium (affects validation methodology)
+**Filed:** 2026-05-06
+
+**Symptom:** Same record produces different scores across consecutive rescores with no input change.
+
+**Verified instance:** Influitive (`receDBJCFvHzp1tWG`) scored **72 → 58 → 62** across three rescores in 24h. CS Hire Likelihood shifted between `high`, `medium`, and back. Summary text varied each time.
+
+**Implication:** Scoring is not deterministic. Means "did this config edit improve scoring?" is hard to test rigorously when the control is itself unstable. Validation tests can be confounded by run-to-run drift indistinguishable from actual config-edit effects. A 14-point drift on a single record across runs is not noise floor — it's the difference between APPLY and WATCH bucket assignment.
+
+**Investigate (next session):**
+- Temperature setting on `Evaluate via Anthropic API` HTTP node's request body (likely missing → using model default which has some randomness).
+- Prompt non-determinism: are any timestamp / random / batch-order values leaking into the eval prompt?
+- Brave Search result variance: does Brave return stably ordered top-10 results for the same query? If not, `allText` differs run-to-run, feeding different inputs to Claude.
+- Airtable record fetch order: rescorer fetches "next stale" via filterByFormula — order isn't guaranteed across runs.
+
+**Mitigation pending fix:** When validating config edits, run each test record through 3 rescores and look at score median/range, not single-point comparisons.
+
+---
+
+### PE Backed False Positives
+**Severity:** High (affects top of score distribution decisions)
+**Filed:** 2026-05-06
+
+**Symptom:** `PE Backed = true` is set on records whose actual investors are VC firms, not PE firms. Confirmed for HouseRx (First Round Capital lead), Brellium (First Round Capital), Cadence (Oak HC/FT, then General Catalyst per bug doc verification), Influitive (Golden Ventures historically; Influitive was acquired by ESW Capital Dec 2023 but that's a separate detection failure).
+
+**Likely cause:** Parse Enrich's `isPEBacked` detection runs `peRegex.test(allText)` where `allText` is the concatenation of Brave Search results for the company. If any PE firm name appears anywhere in the search snippets (e.g., a news article mentioning a PE firm in unrelated context, a competitor comparison, an industry analysis), the test passes — without verifying whether the firm has any actual investor relationship with the company.
+
+**Examples of how this fires falsely:**
+- "Battery Ventures" (in PE Firms table) is a VC firm by most definitions; mention of it in any tech-news context flags non-portfolio companies.
+- "Insight Partners" appears in many SaaS investment news articles; any company mentioned in the same article gets flagged.
+- "NEA" (in PE Firms table as "New Enterprise Associates" — debatable whether NEA belongs there at all) is a major VC; references in startup news flag countless companies.
+
+**Implication:** The rescorer's hard PE-DQ gate is firing on these false positives. **Some legitimate VC-funded targets may have been auto-disqualified silently.** Worth a retrospective query of records with `Status: Auto-Disqualified` and `Disqualify Reasons LIKE 'PE-backed%'` to estimate the false-positive rate.
+
+**Fix direction:** Detection needs investor-context matching, not bare name presence. Candidates:
+- Require proximity to investor-relationship phrases: "led by", "investment from", "backed by", "raised from", "round led by", "participated in", "co-led".
+- Use a small Claude classification call instead of regex: pass the snippet and the candidate firm name, ask "is this firm an investor in [company]?" before flagging.
+- Maintain a structured investor list per company in Airtable (populated during enrichment) rather than text-presence detection.
+
+**Related to and partially blocked by:** Phase 1 enrichment staleness — even with better detection, if Brave Search returns outdated snippets, current investor relationships won't be visible.
+
+**Verified by 2026-05-06 rescore validation:** 4 of 5 test records showed `PE Backed: true` post-rescore despite none being actually PE-backed. theCut correctly flipped to `false` on this rescore — suggesting the detection is brittle even when functioning, not consistently wrong.
